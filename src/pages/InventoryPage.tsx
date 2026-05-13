@@ -75,8 +75,16 @@ export function InventoryPage() {
       return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
     });
 
-  const lowStock = data.items.filter((item) => item.quantity_on_hand <= item.reorder_point);
-  const ancillaryCount = data.items.filter((item) => item.inventory_category !== "Core").length;
+  const lowStock = data.items.filter((item) => {
+    const threshold = Math.max(item.reorder_point, item.products?.safety_stock ?? 0);
+    return item.quantity_on_hand <= threshold;
+  });
+  const ancillaryCount = data.items.filter((item) => {
+    if (item.inventory_category !== "Core") return true;
+    return Boolean(item.products?.ancillary_category);
+  }).length;
+  const totalRecords = data.items.length;
+  const missingCostCount = data.items.filter((item) => Number(item.products?.unit_cost ?? 0) <= 0).length;
   const inventoryValue = data.items.reduce(
     (sum, item) => sum + item.quantity_on_hand * Number(item.products?.unit_cost ?? 0),
     0,
@@ -91,10 +99,10 @@ export function InventoryPage() {
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="card-grid">
-        <DashboardCard label="Inventory Records" value={data.items.length} />
+        <DashboardCard label="Inventory Records" value={totalRecords} />
         <DashboardCard label="Low Stock" value={lowStock.length} footnote="At or below reorder point" />
-        <DashboardCard label="Ancillary / Packaging" value={ancillaryCount} footnote="Sock cards, packaging, inserts" />
-        <DashboardCard label="Inventory Value" value={formatCurrency(inventoryValue)} />
+        <DashboardCard label="Ancillary / Packaging" value={ancillaryCount} footnote={`${ancillaryCount} tagged out of ${totalRecords} total records`} />
+        <DashboardCard label="Inventory Value" value={formatCurrency(inventoryValue)} footnote={missingCostCount > 0 ? `${missingCostCount} records missing unit cost` : "Calculated from product unit cost"} />
       </div>
       <div className="panel">
         <div className="filter-row">
@@ -139,19 +147,29 @@ export function InventoryPage() {
               ),
             },
             { key: "location", title: "Location", render: (row) => row.locations?.name ?? "Unknown Location" },
-            { key: "inventory_category", title: "Category", render: (row) => row.inventory_category ?? "Core" },
+            {
+              key: "inventory_category",
+              title: "Category",
+              render: (row) => {
+                if (row.inventory_category && row.inventory_category !== "Core") return row.inventory_category;
+                if (row.products?.ancillary_category) return row.products.ancillary_category;
+                return "Core";
+              },
+            },
             { key: "quantity_on_hand", title: "On Hand", render: (row) => row.quantity_on_hand },
             { key: "reorder_point", title: "Reorder Point", render: (row) => row.reorder_point },
             { key: "target_stock", title: "Target Stock", render: (row) => row.target_stock },
             {
               key: "status",
               title: "Status",
-              render: (row) =>
-                row.quantity_on_hand <= row.reorder_point ? (
+              render: (row) => {
+                const threshold = Math.max(row.reorder_point, row.products?.safety_stock ?? 0);
+                return row.quantity_on_hand <= threshold ? (
                   <StatusBadge label="Low Stock" />
                 ) : (
                   <StatusBadge label="Healthy" />
-                ),
+                );
+              },
             },
             {
               key: "actions",
@@ -249,10 +267,11 @@ export function InventoryPage() {
           <div className="detail-grid">
             <div className="detail-card"><span>SKU</span><strong>{viewing.products?.sku ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{viewing.products?.vendors?.name ?? "Unassigned"}</strong></div>
-            <div className="detail-card"><span>Category</span><strong>{viewing.inventory_category ?? "Core"}</strong></div>
+            <div className="detail-card"><span>Category</span><strong>{viewing.inventory_category !== "Core" ? viewing.inventory_category : viewing.products?.ancillary_category ?? "Core"}</strong></div>
             <div className="detail-card"><span>On Hand</span><strong>{viewing.quantity_on_hand}</strong></div>
             <div className="detail-card"><span>Reorder Point</span><strong>{viewing.reorder_point}</strong></div>
             <div className="detail-card"><span>Target Stock</span><strong>{viewing.target_stock}</strong></div>
+            <div className="detail-card"><span>Unit Cost</span><strong>{formatCurrency(Number(viewing.products?.unit_cost ?? 0))}</strong></div>
             <div className="detail-card"><span>Last Updated</span><strong>{new Date(viewing.updated_at).toLocaleString()}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{viewing.notes ?? "No notes added."}</strong></div>
           </div>

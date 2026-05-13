@@ -16,6 +16,10 @@ type ShopifyVariantNode = {
   inventoryItem: {
     id: string;
     sku: string | null;
+    unitCost: {
+      amount: string;
+      currencyCode: string;
+    } | null;
     inventoryLevels: {
       edges: Array<{
         node: {
@@ -68,6 +72,10 @@ const SHOPIFY_VARIANTS_QUERY = `
           inventoryItem {
             id
             sku
+            unitCost {
+              amount
+              currencyCode
+            }
             inventoryLevels(first: 20) {
               edges {
                 node {
@@ -184,6 +192,13 @@ function chunkArray<T>(items: T[], size: number) {
 
 function shortenShopifyGid(gid: string) {
   return gid.split("/").pop() ?? gid;
+}
+
+function getInventoryCategoryFromAncillaryCategory(ancillaryCategory: string | null | undefined) {
+  if (!ancillaryCategory) return "Core";
+  const normalized = ancillaryCategory.toLowerCase();
+  if (normalized.includes("pack")) return "Packaging";
+  return "Ancillary";
 }
 
 async function fetchShopifyGraphql({
@@ -369,7 +384,7 @@ async function syncVariant(
     category: existingProduct?.category ?? "Shopify",
     description: existingProduct?.description ?? `Synced from Shopify product ${variant.product.title}.`,
     vendor_id: existingProduct?.vendor_id ?? null,
-    unit_cost: existingProduct?.unit_cost ?? 0,
+    unit_cost: Number(variant.inventoryItem?.unitCost?.amount ?? existingProduct?.unit_cost ?? 0),
     unit_price: Number(variant.price ?? existingProduct?.unit_price ?? 0),
     current_inventory: totalInventory,
     safety_stock: existingProduct?.safety_stock ?? 0,
@@ -412,7 +427,9 @@ async function syncVariant(
         quantity_on_hand: available,
         reorder_point: existingItem?.reorder_point ?? 0,
         target_stock: existingItem?.target_stock ?? 0,
-        inventory_category: existingItem?.inventory_category ?? "Core",
+        inventory_category:
+          existingItem?.inventory_category ??
+          getInventoryCategoryFromAncillaryCategory(savedProduct.ancillary_category),
         notes: existingItem?.notes ?? "Synced from Shopify inventory levels.",
       });
     if (inventoryError) throw inventoryError;
