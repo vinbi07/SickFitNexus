@@ -42,6 +42,8 @@ VITE_SUPABASE_ANON_KEY=...
 - [src/db/migrations/006_command_center_additions.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/006_command_center_additions.sql)
 - [src/db/migrations/007_shopify_order_history_sync.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/007_shopify_order_history_sync.sql)
 - [src/db/migrations/008_inventory_event_source_index_fix.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/008_inventory_event_source_index_fix.sql)
+- [src/db/migrations/009_shopify_orders.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/009_shopify_orders.sql)
+- [src/db/migrations/010_dashboard_baselines.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/010_dashboard_baselines.sql)
 - [src/db/seed.sql](/c:/Users/Vinbi/SickFitNexus/src/db/seed.sql)
 
 4. Start the app:
@@ -70,6 +72,7 @@ Deploy the function:
 
 ```bash
 supabase functions deploy shopify-sync
+supabase functions deploy shopify-dashboard-sync
 ```
 
 Set these Supabase function secrets before using `Sync Shopify` or `Sync All Shopify` from the Products page:
@@ -78,6 +81,7 @@ Set these Supabase function secrets before using `Sync Shopify` or `Sync All Sho
 supabase secrets set SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
 supabase secrets set SHOPIFY_ADMIN_ACCESS_TOKEN=shpat_...
 supabase secrets set SHOPIFY_ORDER_LOOKBACK_DAYS=120
+supabase secrets set SHOPIFY_DASHBOARD_LOOKBACK_DAYS=365
 ```
 
 The `shopify-sync` function will:
@@ -89,3 +93,10 @@ The `shopify-sync` function will:
 - sync inventory into `inventory_items` by Shopify location
 - convert Shopify order line items into negative `Usage` records in `inventory_events`
 - refresh `current_inventory` totals on synced products
+
+The `shopify-dashboard-sync` function will:
+
+- fetch up to a year of Shopify orders for dashboard reporting
+- persist Shopify orders into `shopify_orders`
+- persist Shopify order line items into `shopify_order_line_items`
+- write orders and line items in chunks so dashboard sync stays isolated from product sync

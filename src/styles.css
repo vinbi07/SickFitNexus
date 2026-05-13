@@ -528,6 +528,28 @@ textarea {
   gap: 12px;
 }
 
+.stat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #fafbfd);
+}
+
+.stat-row strong:last-child {
+  flex-shrink: 0;
+  text-align: right;
+}
+
 .quick-link-card {
   border: 1px solid var(--brand-border);
   border-radius: 8px;

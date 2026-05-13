@@ -36,7 +36,7 @@ export function SettingsPage() {
     <div className="section-stack">
       <PageHeader
         title="Branding Settings"
-        description="Adjust the app name, organization label, logo, and primary UI colors with a live preview."
+        description="Adjust the app name, organization label, logo, primary UI colors, and dashboard comparison baseline with a live preview."
       />
       <div className="split-grid">
         <div className="panel section-stack">
@@ -96,6 +96,21 @@ export function SettingsPage() {
                   setFormValues((current) => ({
                     ...(current ?? {}),
                     secondary_color: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="field field-half">
+              <label>Prior YTD Revenue</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formValues.prior_ytd_revenue ?? 0}
+                onChange={(event) =>
+                  setFormValues((current) => ({
+                    ...(current ?? {}),
+                    prior_ytd_revenue: Number(event.target.value || 0),
                   }))
                 }
               />

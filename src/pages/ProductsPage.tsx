@@ -170,9 +170,12 @@ export function ProductsPage() {
                   className="btn btn-ghost btn-small"
                   onClick={async () => {
                     try {
-                      await shopifyService.syncProduct(row);
+                      const result = await shopifyService.syncProduct(row);
                       await reload();
-                      setNotice({ tone: "success", message: `${row.name} synced with Shopify inventory and recent order usage.` });
+                      setNotice({
+                        tone: "success",
+                        message: `${row.name} synced with Shopify inventory and ${result.usageEventsSynced ?? 0} recent usage events.`,
+                      });
                     } catch (err) {
                       setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to sync Shopify metadata." });
                     }

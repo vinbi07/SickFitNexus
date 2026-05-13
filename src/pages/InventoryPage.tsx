@@ -13,6 +13,7 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { inventoryService } from "@/services/inventoryService";
 import { supportService } from "@/services/supportService";
 import type { InventoryItem } from "@/types/domain";
+import { calculateAverageDailyUsage } from "@/utils/forecasting";
 import { formatCurrency, formatDate } from "@/utils/format";
 
 type InventoryItemFormValues = Partial<InventoryItem>;
@@ -38,6 +39,7 @@ export function InventoryPage() {
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
   const [inventoryCategory, setInventoryCategory] = useState("");
+  const [riskFilter, setRiskFilter] = useState("");
   const [sort, setSort] = useState("updated");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data, loading, error, reload } = useAsyncData(
@@ -53,6 +55,14 @@ export function InventoryPage() {
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load inventory"} />;
 
+  const eventsByProductId = new Map<string, typeof data.events>();
+  data.events.forEach((event) => {
+    if (!event.product_id) return;
+    const current = eventsByProductId.get(event.product_id) ?? [];
+    current.push(event);
+    eventsByProductId.set(event.product_id, current);
+  });
+
   const filteredItems = data.items
     .filter((item) => {
       const query = search.trim().toLowerCase();
@@ -63,7 +73,21 @@ export function InventoryPage() {
         (item.locations?.name ?? "").toLowerCase().includes(query);
       const matchesLocation = !locationId || item.location_id === locationId;
       const matchesCategory = !inventoryCategory || item.inventory_category === inventoryCategory;
-      return matchesSearch && matchesLocation && matchesCategory;
+      const usageRate = calculateAverageDailyUsage(eventsByProductId.get(item.product_id) ?? []);
+      const daysRemaining = usageRate > 0 ? item.quantity_on_hand / usageRate : null;
+      const threshold = Math.max(item.reorder_point, item.products?.safety_stock ?? 0);
+      const isOosRisk =
+        item.quantity_on_hand <= threshold ||
+        (daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 30);
+      const isOverstock =
+        daysRemaining !== null
+          ? daysRemaining >= 365
+          : item.quantity_on_hand > Math.max(item.target_stock, item.products?.safety_stock ?? 0);
+      const matchesRisk =
+        !riskFilter ||
+        (riskFilter === "oos" && isOosRisk) ||
+        (riskFilter === "overstock" && isOverstock);
+      return matchesSearch && matchesLocation && matchesCategory && matchesRisk;
     })
     .sort((left, right) => {
       if (sort === "quantity") return right.quantity_on_hand - left.quantity_on_hand;
@@ -75,15 +99,28 @@ export function InventoryPage() {
       return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
     });
 
-  const lowStock = data.items.filter((item) => {
-    const threshold = Math.max(item.reorder_point, item.products?.safety_stock ?? 0);
-    return item.quantity_on_hand <= threshold;
+  const totalUnitsOnHand = data.items.reduce(
+    (sum, item) => sum + Number(item.quantity_on_hand ?? 0),
+    0,
+  );
+  const projectedOosIn30Days = data.items.filter((item) => {
+    if (!item.products) return false;
+    const usageRate = calculateAverageDailyUsage(eventsByProductId.get(item.product_id) ?? []);
+    if (usageRate <= 0) return false;
+    const daysRemaining = item.quantity_on_hand / usageRate;
+    return daysRemaining > 0 && daysRemaining <= 30;
+  });
+  const overstockOverOneYear = data.items.filter((item) => {
+    if (!item.products) return false;
+    const usageRate = calculateAverageDailyUsage(eventsByProductId.get(item.product_id) ?? []);
+    if (usageRate <= 0) return item.quantity_on_hand > Math.max(item.target_stock, item.products.safety_stock ?? 0);
+    const daysRemaining = item.quantity_on_hand / usageRate;
+    return daysRemaining >= 365;
   });
   const ancillaryCount = data.items.filter((item) => {
     if (item.inventory_category !== "Core") return true;
     return Boolean(item.products?.ancillary_category);
   }).length;
-  const totalRecords = data.items.length;
   const missingCostCount = data.items.filter((item) => Number(item.products?.unit_cost ?? 0) <= 0).length;
   const inventoryValue = data.items.reduce(
     (sum, item) => sum + item.quantity_on_hand * Number(item.products?.unit_cost ?? 0),
@@ -99,10 +136,19 @@ export function InventoryPage() {
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="card-grid">
-        <DashboardCard label="Inventory Records" value={totalRecords} />
-        <DashboardCard label="Low Stock" value={lowStock.length} footnote="At or below reorder point" />
-        <DashboardCard label="Ancillary / Packaging" value={ancillaryCount} footnote={`${ancillaryCount} tagged out of ${totalRecords} total records`} />
+        <DashboardCard label="Units on Hand" value={totalUnitsOnHand} footnote="Total units across all inventory records" />
+        <DashboardCard label="OOS <30 Days" value={projectedOosIn30Days.length} footnote={projectedOosIn30Days.length ? "Critical risk based on recent velocity" : "No near-term projected stockouts"} />
+        <DashboardCard label="Overstock >1 Yr" value={overstockOverOneYear.length} footnote={overstockOverOneYear.length ? "Slow-moving inventory flagged" : "No long-tail overstock flagged"} />
         <DashboardCard label="Inventory Value" value={formatCurrency(inventoryValue)} footnote={missingCostCount > 0 ? `${missingCostCount} records missing unit cost` : "Calculated from product unit cost"} />
+      </div>
+      <div className="panel">
+        <div className="panel-header">
+          <h3>Supporting Metrics</h3>
+        </div>
+        <div className="pill-row">
+          <StatusBadge label={`${ancillaryCount} ancillary / packaging`} />
+          <StatusBadge label={`${data.items.length} inventory records`} />
+        </div>
       </div>
       <div className="panel">
         <div className="filter-row">
@@ -120,6 +166,11 @@ export function InventoryPage() {
             <option value="Core">Core</option>
             <option value="Packaging">Packaging</option>
             <option value="Ancillary">Ancillary</option>
+          </select>
+          <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value)}>
+            <option value="">All inventory risks</option>
+            <option value="oos">OOS / near OOS</option>
+            <option value="overstock">Overstock</option>
           </select>
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="updated">Sort by recent updates</option>

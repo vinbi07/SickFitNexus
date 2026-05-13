@@ -333,6 +333,7 @@ export interface AppSettings {
   logo_url: string | null;
   primary_color: string;
   secondary_color: string;
+  prior_ytd_revenue: number;
   created_at: string;
   updated_at: string;
 }
@@ -379,6 +380,33 @@ export interface CapacitySnapshot {
   updated_at: string;
 }
 
+export interface ShopifyOrder {
+  id: string;
+  shopify_order_id: string;
+  order_name: string;
+  source_name: string | null;
+  currency_code: string | null;
+  order_created_at: string;
+  cancelled_at: string | null;
+  current_total_price: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShopifyOrderLineItem {
+  id: string;
+  shopify_line_item_id: string;
+  shopify_order_record_id: string;
+  product_id: string | null;
+  sku: string | null;
+  title: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NormalizedImportRow {
   po_number: string;
   vendor_name: string;
@@ -413,6 +441,29 @@ export interface DashboardSnapshot {
   quickSops: Sop[];
   stockTrend: Array<{ date: string; inventory: number }>;
   spendByVendor: Array<{ vendor: string; spend: number }>;
+  revenueYtd: number;
+  revenueYtdDeltaPercent: number;
+  activeWholesalePipelineValue: number;
+  activeWholesalePipelineCount: number;
+  awaitingActionCount: number;
+  awaitingPoSubmissionCount: number;
+  skuOosRisk90dCount: number;
+  skuOosRiskCriticalCount: number;
+  productionPosInFlightCount: number;
+  productionNextLandDate: string | null;
+  dtcOrdersTodayCount: number;
+  dtcOrdersTodayValue: number;
+  priorRevenueYtd: number;
+  projectedRevenueYearEnd: number;
+  revenuePaceDeltaPercent: number;
+  revenueByChannelYtd: Array<{ channel: string; value: number }>;
+  topSkusYtd: Array<{ sku: string; label: string; value: number; units: number }>;
+  revenueProjectionTrend: Array<{
+    label: string;
+    actualRevenue: number | null;
+    projectedRevenue: number;
+    priorBaselineRevenue: number;
+  }>;
   priorityFeed: Array<{
     id: string;
     title: string;
