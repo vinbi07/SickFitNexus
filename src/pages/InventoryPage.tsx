@@ -37,6 +37,7 @@ export function InventoryPage() {
   });
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [inventoryCategory, setInventoryCategory] = useState("");
   const [sort, setSort] = useState("updated");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data, loading, error, reload } = useAsyncData(
@@ -61,7 +62,8 @@ export function InventoryPage() {
         (item.products?.sku ?? "").toLowerCase().includes(query) ||
         (item.locations?.name ?? "").toLowerCase().includes(query);
       const matchesLocation = !locationId || item.location_id === locationId;
-      return matchesSearch && matchesLocation;
+      const matchesCategory = !inventoryCategory || item.inventory_category === inventoryCategory;
+      return matchesSearch && matchesLocation && matchesCategory;
     })
     .sort((left, right) => {
       if (sort === "quantity") return right.quantity_on_hand - left.quantity_on_hand;
@@ -74,6 +76,7 @@ export function InventoryPage() {
     });
 
   const lowStock = data.items.filter((item) => item.quantity_on_hand <= item.reorder_point);
+  const ancillaryCount = data.items.filter((item) => item.inventory_category !== "Core").length;
   const inventoryValue = data.items.reduce(
     (sum, item) => sum + item.quantity_on_hand * Number(item.products?.unit_cost ?? 0),
     0,
@@ -83,15 +86,15 @@ export function InventoryPage() {
     <div className="section-stack">
       <PageHeader
         title="Inventory"
-        description="Manage stock by product and location, with adjustments, transfers, low-stock visibility, and full movement history."
-        actions={<button className="btn btn-primary" onClick={() => setEditing({ product_id: "", location_id: "" })}>Add New Inventory</button>}
+        description="Manage stock by product and location, with adjustments, transfers, low-stock visibility, ancillary packaging inventory, and full movement history."
+        actions={<button className="btn btn-primary" onClick={() => setEditing({ product_id: "", location_id: "", inventory_category: "Core" })}>Add New Inventory</button>}
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="card-grid">
         <DashboardCard label="Inventory Records" value={data.items.length} />
         <DashboardCard label="Low Stock" value={lowStock.length} footnote="At or below reorder point" />
+        <DashboardCard label="Ancillary / Packaging" value={ancillaryCount} footnote="Sock cards, packaging, inserts" />
         <DashboardCard label="Inventory Value" value={formatCurrency(inventoryValue)} />
-        <DashboardCard label="Movement Events" value={data.events.length} footnote="Tracked event history" />
       </div>
       <div className="panel">
         <div className="filter-row">
@@ -103,6 +106,12 @@ export function InventoryPage() {
                 {location.name}
               </option>
             ))}
+          </select>
+          <select value={inventoryCategory} onChange={(event) => setInventoryCategory(event.target.value)}>
+            <option value="">All inventory categories</option>
+            <option value="Core">Core</option>
+            <option value="Packaging">Packaging</option>
+            <option value="Ancillary">Ancillary</option>
           </select>
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="updated">Sort by recent updates</option>
@@ -130,6 +139,7 @@ export function InventoryPage() {
               ),
             },
             { key: "location", title: "Location", render: (row) => row.locations?.name ?? "Unknown Location" },
+            { key: "inventory_category", title: "Category", render: (row) => row.inventory_category ?? "Core" },
             { key: "quantity_on_hand", title: "On Hand", render: (row) => row.quantity_on_hand },
             { key: "reorder_point", title: "Reorder Point", render: (row) => row.reorder_point },
             { key: "target_stock", title: "Target Stock", render: (row) => row.target_stock },
@@ -192,14 +202,16 @@ export function InventoryPage() {
           initialValues={{
             product_id: editing.product_id ?? "",
             location_id: editing.location_id ?? "",
+            inventory_category: editing.inventory_category ?? "Core",
             quantity_on_hand: editing.quantity_on_hand ?? 0,
             reorder_point: editing.reorder_point ?? 0,
             target_stock: editing.target_stock ?? 0,
             notes: editing.notes ?? "",
           }}
           fields={[
-            { key: "product_id", label: "Product", type: "select", required: true, options: data.products.map((product) => ({ label: `${product.sku} • ${product.name}`, value: product.id })) },
+            { key: "product_id", label: "Product", type: "select", required: true, options: data.products.map((product) => ({ label: `${product.sku} | ${product.name}`, value: product.id })) },
             { key: "location_id", label: "Location", type: "select", required: true, options: data.locations.map((location) => ({ label: location.name, value: location.id })) },
+            { key: "inventory_category", label: "Inventory Category", type: "select", options: [{ label: "Core", value: "Core" }, { label: "Packaging", value: "Packaging" }, { label: "Ancillary", value: "Ancillary" }] },
             { key: "quantity_on_hand", label: "On Hand Quantity", type: "number", step: 1 },
             { key: "reorder_point", label: "Reorder Point", type: "number", min: 0, step: 1 },
             { key: "target_stock", label: "Target Stock", type: "number", min: 0, step: 1 },
@@ -213,6 +225,7 @@ export function InventoryPage() {
               ...values,
               product_id: String(values.product_id),
               location_id: String(values.location_id),
+              inventory_category: (values.inventory_category ? String(values.inventory_category) : "Core") as InventoryItem["inventory_category"],
               quantity_on_hand: Number(values.quantity_on_hand ?? 0),
               reorder_point: Number(values.reorder_point ?? 0),
               target_stock: Number(values.target_stock ?? 0),
@@ -236,6 +249,7 @@ export function InventoryPage() {
           <div className="detail-grid">
             <div className="detail-card"><span>SKU</span><strong>{viewing.products?.sku ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{viewing.products?.vendors?.name ?? "Unassigned"}</strong></div>
+            <div className="detail-card"><span>Category</span><strong>{viewing.inventory_category ?? "Core"}</strong></div>
             <div className="detail-card"><span>On Hand</span><strong>{viewing.quantity_on_hand}</strong></div>
             <div className="detail-card"><span>Reorder Point</span><strong>{viewing.reorder_point}</strong></div>
             <div className="detail-card"><span>Target Stock</span><strong>{viewing.target_stock}</strong></div>
@@ -279,39 +293,23 @@ export function InventoryPage() {
                   }
                 }}
               >
-                Save
+                Save Adjustment
               </button>
             </>
           }
         >
           <div className="form-grid">
-            <div className="field">
-              <label>Current On Hand</label>
-              <input value={String(adjusting.quantity_on_hand)} disabled />
-            </div>
-            <div className="field">
+            <div className="field field-half">
               <label>Quantity Change</label>
-              <input
-                type="number"
-                value={String(adjustmentValues.quantity_change)}
-                onChange={(event) => setAdjustmentValues((current) => ({ ...current, quantity_change: Number(event.target.value) }))}
-              />
+              <input type="number" value={adjustmentValues.quantity_change} onChange={(event) => setAdjustmentValues((current) => ({ ...current, quantity_change: Number(event.target.value) }))} />
             </div>
-            <div className="field">
+            <div className="field field-half">
               <label>Event Date</label>
-              <input
-                type="date"
-                value={adjustmentValues.event_date}
-                onChange={(event) => setAdjustmentValues((current) => ({ ...current, event_date: event.target.value }))}
-              />
+              <input type="date" value={adjustmentValues.event_date} onChange={(event) => setAdjustmentValues((current) => ({ ...current, event_date: event.target.value }))} />
             </div>
             <div className="field field-wide">
               <label>Notes</label>
-              <textarea
-                rows={4}
-                value={adjustmentValues.notes}
-                onChange={(event) => setAdjustmentValues((current) => ({ ...current, notes: event.target.value }))}
-              />
+              <textarea rows={3} value={adjustmentValues.notes} onChange={(event) => setAdjustmentValues((current) => ({ ...current, notes: event.target.value }))} />
             </div>
           </div>
         </Modal>
@@ -330,16 +328,13 @@ export function InventoryPage() {
                 onClick={async () => {
                   try {
                     if (!transferValues.target_location_id) throw new Error("Target location is required.");
-                    if (transferValues.target_location_id === transferring.location_id) {
-                      throw new Error("Choose a different target location.");
-                    }
                     if (transferValues.quantity <= 0) throw new Error("Transfer quantity must be greater than zero.");
                     await inventoryService.transferItem({
                       inventoryItemId: transferring.id,
                       targetLocationId: transferValues.target_location_id,
                       quantity: Number(transferValues.quantity),
-                      eventDate: transferValues.event_date,
                       notes: transferValues.notes,
+                      eventDate: transferValues.event_date,
                     });
                     setTransferring(null);
                     setTransferValues({
@@ -355,60 +350,34 @@ export function InventoryPage() {
                   }
                 }}
               >
-                Save
+                Transfer
               </button>
             </>
           }
         >
           <div className="form-grid">
-            <div className="field">
-              <label>From Location</label>
-              <input value={transferring.locations?.name ?? ""} disabled />
+            <div className="field field-half">
+              <label>Quantity</label>
+              <input type="number" min="1" value={transferValues.quantity} onChange={(event) => setTransferValues((current) => ({ ...current, quantity: Number(event.target.value) }))} />
             </div>
-            <div className="field">
-              <label>Available Quantity</label>
-              <input value={String(transferring.quantity_on_hand)} disabled />
-            </div>
-            <div className="field">
-              <label>To Location</label>
-              <select
-                value={transferValues.target_location_id}
-                onChange={(event) => setTransferValues((current) => ({ ...current, target_location_id: event.target.value }))}
-              >
+            <div className="field field-half">
+              <label>Target Location</label>
+              <select value={transferValues.target_location_id} onChange={(event) => setTransferValues((current) => ({ ...current, target_location_id: event.target.value }))}>
                 <option value="">Select location...</option>
-                {data.locations
-                  .filter((location) => location.id !== transferring.location_id)
-                  .map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
+                {data.locations.filter((location) => location.id !== transferring.location_id).map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
               </select>
             </div>
-            <div className="field">
-              <label>Transfer Quantity</label>
-              <input
-                type="number"
-                min="1"
-                value={String(transferValues.quantity)}
-                onChange={(event) => setTransferValues((current) => ({ ...current, quantity: Number(event.target.value) }))}
-              />
-            </div>
-            <div className="field">
-              <label>Transfer Date</label>
-              <input
-                type="date"
-                value={transferValues.event_date}
-                onChange={(event) => setTransferValues((current) => ({ ...current, event_date: event.target.value }))}
-              />
+            <div className="field field-half">
+              <label>Event Date</label>
+              <input type="date" value={transferValues.event_date} onChange={(event) => setTransferValues((current) => ({ ...current, event_date: event.target.value }))} />
             </div>
             <div className="field field-wide">
               <label>Notes</label>
-              <textarea
-                rows={4}
-                value={transferValues.notes}
-                onChange={(event) => setTransferValues((current) => ({ ...current, notes: event.target.value }))}
-              />
+              <textarea rows={3} value={transferValues.notes} onChange={(event) => setTransferValues((current) => ({ ...current, notes: event.target.value }))} />
             </div>
           </div>
         </Modal>
@@ -416,7 +385,7 @@ export function InventoryPage() {
       {deleting ? (
         <ConfirmDialog
           title="Delete inventory record?"
-          message={`This will remove the inventory record for ${deleting.products?.name ?? "this product"} at ${deleting.locations?.name ?? "this location"}.`}
+          message={`This will remove the ${deleting.products?.name ?? "inventory"} record from ${deleting.locations?.name ?? "this location"}.`}
           busy={busyDelete}
           onClose={() => {
             if (!busyDelete) setDeleting(null);

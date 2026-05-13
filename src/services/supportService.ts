@@ -1,8 +1,10 @@
 import { assertSupabase } from "@/lib/supabase";
 import { deleteFromTable, listTable, updateTable, upsertTable } from "@/services/baseService";
+import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import type {
   AppSettings,
   Comment,
+  InventoryEvent,
   InventoryItem,
   Location,
   Person,
@@ -10,6 +12,7 @@ import type {
   Sop,
   TrainingModule,
   TrainingProgress,
+  Vendor,
   Win,
 } from "@/types/domain";
 
@@ -72,17 +75,41 @@ async function saveProduct(payload: Partial<Product>) {
 }
 
 export const supportService = {
-  listLocations: () => listTable<Location>("locations", "name", true),
+  listLocations: async () => {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("locations")
+      .select("*, retailers(*)")
+      .order("name", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as Location[];
+  },
   saveLocation: upsertSingle<Location>("locations"),
   deleteLocation: (id: string) => deleteFromTable("locations", id),
   listProducts: async () => {
     const supabase = assertSupabase();
-    const { data, error } = await supabase
-      .from("products")
-      .select("*, vendors:vendors!products_vendor_id_fkey(*)")
-      .order("name", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as Product[];
+    const [productsResponse, vendorsResponse, eventsResponse] = await Promise.all([
+      supabase
+        .from("products")
+        .select("*, vendors:vendors!products_vendor_id_fkey(*)")
+        .order("name", { ascending: true }),
+      supabase.from("vendors").select("*"),
+      supabase.from("inventory_events").select("*"),
+    ]);
+
+    if (productsResponse.error) throw productsResponse.error;
+    if (vendorsResponse.error) throw vendorsResponse.error;
+    if (eventsResponse.error) throw eventsResponse.error;
+
+    const products = (productsResponse.data ?? []) as Product[];
+    const vendors = (vendorsResponse.data ?? []) as Vendor[];
+    const events = (eventsResponse.data ?? []) as InventoryEvent[];
+    const calculated = applyCalculatedSafetyStock(
+      products,
+      vendors,
+      events,
+    );
+    return calculated;
   },
   saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),

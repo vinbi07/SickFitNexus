@@ -48,6 +48,20 @@ export function calculateForecastMetric(
   };
 }
 
+export function calculateRecommendedSafetyStock(
+  product: Product,
+  events: InventoryEvent[],
+  vendorLeadTimeDays: number,
+) {
+  const averageDailyUsage = calculateAverageDailyUsage(events);
+  if (averageDailyUsage <= 0) return Math.max(product.safety_stock ?? 0, 0);
+
+  const effectiveLeadTime = Math.max(vendorLeadTimeDays, 14);
+  const variabilityBufferDays = Math.max(Math.round(effectiveLeadTime * 0.35), 7);
+  const recommended = Math.ceil(averageDailyUsage * (effectiveLeadTime + variabilityBufferDays));
+  return Math.max(recommended, 0);
+}
+
 export function calculatePoAge(orderDate: string | null) {
   return daysBetween(orderDate, new Date().toISOString().slice(0, 10));
 }

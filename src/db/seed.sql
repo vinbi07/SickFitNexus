@@ -22,6 +22,13 @@ values
   ('Chicago Airport Lab', 'Lab', '1 Terminal Dr, Chicago, IL')
 on conflict do nothing;
 
+insert into public.retailers (name, status, primary_contact_name, primary_contact_email, ordering_cadence_days, next_reorder_start, next_reorder_end, notes)
+values
+  ('CVS Health', 'Active', 'Jajuan', 'jjohnson@cvs.com', 38, '2026-05-19', '2026-05-25', 'Healthcare retail channel'),
+  ('Navy Exchange', 'Active', 'Antoine', 'antoine@navyexchange.org', 45, '2026-05-27', '2026-06-02', '33 locations'),
+  ('Dollar General', 'Pilot', 'Antoine', 'supplierdiversity@dollargeneral.com', 30, '2026-05-21', '2026-05-28', 'Private label pilot')
+on conflict do nothing;
+
 insert into public.products (sku, name, category, unit_cost, current_inventory, safety_stock)
 values
   ('KIT-100', 'Everyday Compression Socks', 'Apparel', 42, 165, 60),
@@ -29,6 +36,29 @@ values
   ('MED-310', 'Medical Grade Compression Socks', 'Apparel', 7, 38, 50),
   ('LAB-410', 'Slouch Socks', 'Apparel', 58, 24, 30)
 on conflict (sku) do nothing;
+
+update public.products
+set
+  shopify_handle = lower(replace(name, ' ', '-')),
+  shopify_storefront_url = 'https://sickfitofficial.com/products/' || lower(replace(name, ' ', '-')),
+  shopify_admin_url = 'https://admin.shopify.com/store/sickfit/products/' || sku,
+  is_shopify_synced = true,
+  last_shopify_sync_at = now()
+where shopify_storefront_url is null;
+
+insert into public.compliance_requirement_types (name, description)
+values
+  ('COI', 'Certificate of insurance'),
+  ('W-9', 'Tax documentation'),
+  ('FDA', 'FDA related compliance'),
+  ('Packaging', 'Retailer packaging standards')
+on conflict (name) do nothing;
+
+insert into public.capacity_snapshots (snapshot_date, capacity_type, partner_name, lane_name, available_units, committed_units, notes)
+values
+  ('2026-05-10', 'Manufacturer', 'Redline Medical Supply', 'Compression socks', 12000, 7600, 'Stable lane'),
+  ('2026-05-10', '3PL', '3PL Discovery Placeholder', 'Outbound retail fulfillment', 8000, 0, 'Manual tracking until API confirmed')
+on conflict do nothing;
 
 insert into public.sops (title, category, description, external_url, tags, is_favorite)
 values

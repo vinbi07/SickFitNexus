@@ -1,7 +1,8 @@
 import { assertSupabase } from "@/lib/supabase";
 import { activityService } from "@/services/activityService";
 import { deleteFromTable, insertTable, listTable, upsertTable, updateTable } from "@/services/baseService";
-import type { InventoryEvent, InventoryItem, Product } from "@/types/domain";
+import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
+import type { InventoryEvent, InventoryItem, Product, Vendor } from "@/types/domain";
 
 async function syncProductInventory(productId: string) {
   const supabase = assertSupabase();
@@ -21,12 +22,28 @@ export const inventoryService = {
   listProducts: () => listTable<Product>("products", "name", true),
   listItems: async () => {
     const supabase = assertSupabase();
-    const { data, error } = await supabase
-      .from("inventory_items")
-      .select("*, products:products!inventory_items_product_id_fkey(*, vendors:vendors!products_vendor_id_fkey(*)), locations:locations!inventory_items_location_id_fkey(*)")
-      .order("updated_at", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as InventoryItem[];
+    const [itemsResponse, vendorsResponse, eventsResponse] = await Promise.all([
+      supabase
+        .from("inventory_items")
+        .select("*, products:products!inventory_items_product_id_fkey(*, vendors:vendors!products_vendor_id_fkey(*)), locations:locations!inventory_items_location_id_fkey(*)")
+        .order("updated_at", { ascending: false }),
+      supabase.from("vendors").select("*"),
+      supabase.from("inventory_events").select("*"),
+    ]);
+    if (itemsResponse.error) throw itemsResponse.error;
+    if (vendorsResponse.error) throw vendorsResponse.error;
+    if (eventsResponse.error) throw eventsResponse.error;
+
+    const items = (itemsResponse.data ?? []) as InventoryItem[];
+    const vendors = (vendorsResponse.data ?? []) as Vendor[];
+    const events = (eventsResponse.data ?? []) as InventoryEvent[];
+    const products = items.map((item) => item.products).filter(Boolean) as Product[];
+    const calculatedProducts = applyCalculatedSafetyStock(products, vendors, events);
+    const calculatedById = new Map(calculatedProducts.map((product) => [product.id, product]));
+    return items.map((item) => ({
+      ...item,
+      products: item.products ? calculatedById.get(item.products.id) ?? item.products : item.products,
+    }));
   },
   listEvents: async () => {
     const supabase = assertSupabase();
@@ -39,7 +56,10 @@ export const inventoryService = {
   },
   async saveItem(payload: Partial<InventoryItem>) {
     const { products: _products, locations: _locations, ...inventoryItemPayload } = payload;
-    const [saved] = (await upsertTable<InventoryItem>("inventory_items", inventoryItemPayload)) as InventoryItem[];
+    const [saved] = (await upsertTable<InventoryItem>("inventory_items", {
+      inventory_category: "Core",
+      ...inventoryItemPayload,
+    })) as InventoryItem[];
     await syncProductInventory(saved.product_id);
     await activityService.create({
       event_type: saved.id === payload.id ? "inventory_item_updated" : "inventory_item_created",
@@ -137,6 +157,7 @@ export const inventoryService = {
         quantity_on_hand: payload.quantity,
         reorder_point: 0,
         target_stock: 0,
+        inventory_category: source.inventory_category ?? "Core",
         notes: null,
       })) as InventoryItem[];
       targetItemId = createdTarget.id;
