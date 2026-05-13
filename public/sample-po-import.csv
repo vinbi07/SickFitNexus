@@ -1,0 +1,5 @@
+PO Number,Vendor,Warehouse,Item SKU,Item Description,Qty Ordered,Qty Received,Unit Price,Order Date,ETA,Delivered On,Shipment Status,Remarks
+PO-1001,Redline Medical Supply,Dallas DC,KIT-100,Recovery Starter Kit,120,60,42,2026-04-20,2026-04-28,2026-04-30,Partially Received,First delivery split due to demand spike
+PO-1001,Redline Medical Supply,Dallas DC,LAB-410,Portable Analyzer Cartridge,20,20,58,2026-04-20,2026-04-28,2026-04-30,Received,Delivered complete
+PO-1002,Peak Wellness Distributors,Austin Clinic,SUP-220,Compression Sleeves,90,90,11,2026-05-01,2026-05-05,2026-05-04,Received,On-time shipment
+PO-1003,AeroLab Recovery Systems,Chicago Airport Lab,MED-310,Hydration Electrolytes,200,0,7,2026-05-03,2026-05-09,,In Transit,Carrier updated ETA late
