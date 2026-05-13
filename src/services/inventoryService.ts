@@ -1,32 +1,90 @@
 import { assertSupabase } from "@/lib/supabase";
 import { activityService } from "@/services/activityService";
-import { insertTable, listTable, updateTable } from "@/services/baseService";
-import type { InventoryEvent, Product } from "@/types/domain";
+import { deleteFromTable, insertTable, listTable, upsertTable, updateTable } from "@/services/baseService";
+import type { InventoryEvent, InventoryItem, Product } from "@/types/domain";
+
+async function syncProductInventory(productId: string) {
+  const supabase = assertSupabase();
+  const { data: inventoryRows, error: inventoryError } = await supabase
+    .from("inventory_items")
+    .select("quantity_on_hand")
+    .eq("product_id", productId);
+  if (inventoryError) throw inventoryError;
+  const total = ((inventoryRows ?? []) as Array<{ quantity_on_hand: number | null }>).reduce(
+    (sum: number, row: { quantity_on_hand: number | null }) => sum + Number(row.quantity_on_hand ?? 0),
+    0,
+  );
+  await updateTable<Product>("products", productId, { current_inventory: total });
+}
 
 export const inventoryService = {
   listProducts: () => listTable<Product>("products", "name", true),
+  listItems: async () => {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("inventory_items")
+      .select("*, products:products!inventory_items_product_id_fkey(*, vendors:vendors!products_vendor_id_fkey(*)), locations:locations!inventory_items_location_id_fkey(*)")
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as InventoryItem[];
+  },
   listEvents: async () => {
     const supabase = assertSupabase();
     const { data, error } = await supabase
       .from("inventory_events")
-      .select("*, products(*), locations(*)")
+      .select("*, products:products!inventory_events_product_id_fkey(*), locations:locations!inventory_events_location_id_fkey(*)")
       .order("event_date", { ascending: false });
     if (error) throw error;
     return (data ?? []) as InventoryEvent[];
+  },
+  async saveItem(payload: Partial<InventoryItem>) {
+    const { products: _products, locations: _locations, ...inventoryItemPayload } = payload;
+    const [saved] = (await upsertTable<InventoryItem>("inventory_items", inventoryItemPayload)) as InventoryItem[];
+    await syncProductInventory(saved.product_id);
+    await activityService.create({
+      event_type: saved.id === payload.id ? "inventory_item_updated" : "inventory_item_created",
+      entity_type: "inventory_item",
+      entity_id: saved.id,
+      title: saved.id === payload.id ? "Inventory record updated" : "Inventory record created",
+      description: `${saved.quantity_on_hand} units tracked for inventory item.`,
+      metadata: { inventoryItemId: saved.id },
+    });
+    return saved;
+  },
+  async removeItem(id: string) {
+    const supabase = assertSupabase();
+    const { data: existing, error } = await supabase
+      .from("inventory_items")
+      .select("product_id")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    await deleteFromTable("inventory_items", id);
+    await syncProductInventory(existing.product_id as string);
+    await activityService.create({
+      event_type: "inventory_item_deleted",
+      entity_type: "inventory_item",
+      entity_id: id,
+      title: "Inventory record deleted",
+      description: "Inventory was removed from a location record.",
+      metadata: { inventoryItemId: id },
+    });
   },
   async createAdjustment(payload: Partial<InventoryEvent>) {
     const [created] = (await insertTable<InventoryEvent>("inventory_events", payload)) as InventoryEvent[];
     if (created.product_id) {
       const supabase = assertSupabase();
-      const { data: product, error } = await supabase
-        .from("products")
+      const { data: inventoryItem, error } = await supabase
+        .from("inventory_items")
         .select("*")
-        .eq("id", created.product_id)
+        .eq("product_id", created.product_id)
+        .eq("location_id", created.location_id)
         .single();
       if (error) throw error;
-      await updateTable<Product>("products", created.product_id, {
-        current_inventory: (product.current_inventory ?? 0) + created.quantity_change,
+      await updateTable<InventoryItem>("inventory_items", inventoryItem.id as string, {
+        quantity_on_hand: Number(inventoryItem.quantity_on_hand ?? 0) + Number(created.quantity_change ?? 0),
       });
+      await syncProductInventory(created.product_id);
     }
     await activityService.create({
       event_type: "inventory_adjusted",
@@ -34,8 +92,83 @@ export const inventoryService = {
       entity_id: created.id,
       title: "Inventory adjusted",
       description: `${created.event_type} (${created.quantity_change})`,
-      metadata: created,
+      metadata: created as unknown as Record<string, unknown>,
     });
     return created;
+  },
+  async transferItem(payload: {
+    inventoryItemId: string;
+    targetLocationId: string;
+    quantity: number;
+    notes?: string;
+    eventDate: string;
+  }) {
+    const supabase = assertSupabase();
+    const { data: source, error } = await supabase
+      .from("inventory_items")
+      .select("*")
+      .eq("id", payload.inventoryItemId)
+      .single();
+    if (error) throw error;
+    if (Number(source.quantity_on_hand ?? 0) < payload.quantity) {
+      throw new Error("Transfer quantity cannot exceed the available on-hand inventory.");
+    }
+
+    const { data: target } = await supabase
+      .from("inventory_items")
+      .select("*")
+      .eq("product_id", source.product_id)
+      .eq("location_id", payload.targetLocationId)
+      .maybeSingle();
+
+    await updateTable<InventoryItem>("inventory_items", source.id as string, {
+      quantity_on_hand: Number(source.quantity_on_hand ?? 0) - payload.quantity,
+    });
+
+    let targetItemId = target?.id as string | undefined;
+    if (targetItemId) {
+      await updateTable<InventoryItem>("inventory_items", targetItemId, {
+        quantity_on_hand: Number(target?.quantity_on_hand ?? 0) + payload.quantity,
+      });
+    } else {
+      const [createdTarget] = (await upsertTable<InventoryItem>("inventory_items", {
+        product_id: source.product_id,
+        location_id: payload.targetLocationId,
+        quantity_on_hand: payload.quantity,
+        reorder_point: 0,
+        target_stock: 0,
+        notes: null,
+      })) as InventoryItem[];
+      targetItemId = createdTarget.id;
+    }
+
+    await insertTable<InventoryEvent>("inventory_events", [
+      {
+        product_id: source.product_id,
+        location_id: source.location_id,
+        event_type: "Transfer Out",
+        quantity_change: payload.quantity * -1,
+        event_date: payload.eventDate,
+        notes: payload.notes ?? null,
+      },
+      {
+        product_id: source.product_id,
+        location_id: payload.targetLocationId,
+        event_type: "Transfer In",
+        quantity_change: payload.quantity,
+        event_date: payload.eventDate,
+        notes: payload.notes ?? null,
+      },
+    ]);
+
+    await syncProductInventory(source.product_id as string);
+    await activityService.create({
+      event_type: "inventory_transferred",
+      entity_type: "inventory_item",
+      entity_id: targetItemId,
+      title: "Inventory transferred",
+      description: `${payload.quantity} units moved between locations.`,
+      metadata: { sourceInventoryItemId: source.id, targetInventoryItemId: targetItemId },
+    });
   },
 };

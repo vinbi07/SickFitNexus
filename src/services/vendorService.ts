@@ -50,6 +50,7 @@ export const vendorService = {
 
       return {
         ...vendor,
+        lead_time_days: vendor.lead_time_days ?? 0,
         totalPos: vendorPos.length,
         totalSpend: spend,
         averageDeliveryDelay: averageDelay,

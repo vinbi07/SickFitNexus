@@ -304,6 +304,12 @@ textarea {
   box-shadow: 0 14px 28px rgba(231, 32, 39, 0.18);
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, #861219 0%, #b41f29 56%, #dd4c58 100%);
+  color: white;
+  box-shadow: 0 14px 28px rgba(180, 31, 41, 0.2);
+}
+
 .btn-secondary {
   background: linear-gradient(180deg, #f5f7f9, #e9edf1);
   color: var(--brand-secondary);
@@ -313,6 +319,11 @@ textarea {
 .btn-ghost {
   background: linear-gradient(180deg, #ffffff, #f4f6f8);
   border: 1px solid var(--brand-border);
+}
+
+.btn-small {
+  padding: 8px 12px;
+  font-size: 0.85rem;
 }
 
 .table-shell {
@@ -348,6 +359,17 @@ textarea {
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.table-link {
+  color: #b41f29;
+  font-weight: 700;
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .status-badge {
@@ -464,6 +486,11 @@ textarea {
   color: var(--brand-muted);
 }
 
+.helper-text {
+  color: var(--brand-muted);
+  font-size: 0.85rem;
+}
+
 .danger-text {
   color: #b41f29;
 }
@@ -491,6 +518,91 @@ textarea {
   padding: 22px;
   position: relative;
   overflow: hidden;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.modal-message {
+  margin: 0;
+  color: var(--brand-muted);
+}
+
+.notice-banner {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.notice-success {
+  background: linear-gradient(180deg, #ecf9f0, #dbf1e3);
+  border-color: #bee2cb;
+  color: #12703c;
+}
+
+.notice-error {
+  background: linear-gradient(180deg, #fdeced, #ffdadd);
+  border-color: #f2bfc4;
+  color: #b41f29;
+}
+
+.form-error {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff1f2;
+  border: 1px solid #f3c2c7;
+  color: #a61f2c;
+}
+
+.error-copy {
+  margin: 8px 0 0;
+  color: inherit;
+}
+
+.error-details {
+  margin-top: 10px;
+}
+
+.error-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.error-detail-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.detail-card {
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff, #fafbfd);
+}
+
+.detail-card strong,
+.detail-card span {
+  display: block;
+}
+
+.detail-card span {
+  color: var(--brand-muted);
+  font-size: 0.84rem;
+  margin-bottom: 6px;
+}
+
+.form-section-title {
+  grid-column: span 12;
+  margin: 6px 0 -2px;
 }
 
 .comment-list {

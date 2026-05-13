@@ -22,5 +22,5 @@ export function assertSupabase() {
     );
   }
 
-  return supabase;
+  return supabase as any;
 }

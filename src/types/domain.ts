@@ -3,6 +3,7 @@ export interface Vendor {
   name: string;
   contact_email: string | null;
   contact_phone: string | null;
+  lead_time_days: number;
   average_delay_days: number;
   reliability_score: number;
   notes: string | null;
@@ -24,19 +25,39 @@ export interface Product {
   sku: string;
   name: string;
   category: string | null;
+  description: string | null;
+  vendor_id: string | null;
   unit_cost: number;
+  unit_price: number;
   current_inventory: number;
   safety_stock: number;
   created_at: string;
   updated_at: string;
+  vendors?: Vendor | null;
+}
+
+export interface InventoryItem {
+  id: string;
+  product_id: string;
+  location_id: string;
+  quantity_on_hand: number;
+  reorder_point: number;
+  target_stock: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  products?: Product | null;
+  locations?: Location | null;
 }
 
 export type PurchaseOrderStatus =
   | "Draft"
+  | "Pending"
   | "Ordered"
   | "In Transit"
   | "Partially Received"
   | "Received"
+  | "Cancelled"
   | "Delayed"
   | "Issue Flagged"
   | "Closed";
@@ -116,6 +137,16 @@ export interface CsvImportError {
   row_number: number;
   error_message: string;
   raw_row: Record<string, string | number | null>;
+  created_at: string;
+}
+
+export interface CsvImportEntityLink {
+  id: string;
+  csv_import_id: string;
+  entity_type: string;
+  entity_id: string;
+  action_type: "created" | "updated";
+  previous_data: Record<string, unknown> | null;
   created_at: string;
 }
 

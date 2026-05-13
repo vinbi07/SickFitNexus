@@ -14,8 +14,10 @@ export interface Database {
       app_settings: { Row: any; Insert: any; Update: any };
       comments: { Row: any; Insert: any; Update: any };
       csv_import_errors: { Row: any; Insert: any; Update: any };
+      csv_import_entity_links: { Row: any; Insert: any; Update: any };
       csv_imports: { Row: any; Insert: any; Update: any };
       inventory_events: { Row: any; Insert: any; Update: any };
+      inventory_items: { Row: any; Insert: any; Update: any };
       locations: { Row: any; Insert: any; Update: any };
       mapping_presets: { Row: any; Insert: any; Update: any };
       people: { Row: any; Insert: any; Update: any };

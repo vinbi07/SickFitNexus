@@ -1,7 +1,9 @@
-import { deleteFromTable, listTable, upsertTable } from "@/services/baseService";
+import { assertSupabase } from "@/lib/supabase";
+import { deleteFromTable, listTable, updateTable, upsertTable } from "@/services/baseService";
 import type {
   AppSettings,
   Comment,
+  InventoryItem,
   Location,
   Person,
   Product,
@@ -18,12 +20,71 @@ function upsertSingle<T>(table: string) {
   };
 }
 
+async function getOrCreateDefaultLocation() {
+  const supabase = assertSupabase();
+  const { data: existingLocations, error: existingLocationsError } = await supabase
+    .from("locations")
+    .select("*")
+    .order("name", { ascending: true })
+    .limit(1);
+  if (existingLocationsError) throw existingLocationsError;
+
+  const location = (existingLocations ?? [])[0] as Location | undefined;
+  if (location) return location;
+
+  const [createdLocation] = (await upsertTable<Location>("locations", {
+    name: "Default Warehouse",
+    type: "Warehouse",
+    address: null,
+  })) as Location[];
+  return createdLocation;
+}
+
+async function saveProduct(payload: Partial<Product>) {
+  const { vendors: _vendors, ...productPayload } = payload;
+  const isCreate = !productPayload.id;
+  const startingInventory = Number(productPayload.current_inventory ?? 0);
+  const [saved] = (await upsertTable<Product>("products", {
+    ...productPayload,
+    current_inventory: isCreate ? 0 : productPayload.current_inventory,
+  })) as Product[];
+
+  if (isCreate && startingInventory > 0) {
+    const defaultLocation = await getOrCreateDefaultLocation();
+    await upsertTable<InventoryItem>("inventory_items", {
+      product_id: saved.id,
+      location_id: defaultLocation.id,
+      quantity_on_hand: startingInventory,
+      reorder_point: 0,
+      target_stock: 0,
+      notes: "Created automatically from product starting inventory.",
+    });
+    await updateTable<Product>("products", saved.id, {
+      current_inventory: startingInventory,
+    });
+    return {
+      ...saved,
+      current_inventory: startingInventory,
+    } as Product;
+  }
+
+  return saved;
+}
+
 export const supportService = {
   listLocations: () => listTable<Location>("locations", "name", true),
   saveLocation: upsertSingle<Location>("locations"),
   deleteLocation: (id: string) => deleteFromTable("locations", id),
-  listProducts: () => listTable<Product>("products", "name", true),
-  saveProduct: upsertSingle<Product>("products"),
+  listProducts: async () => {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("products")
+      .select("*, vendors:vendors!products_vendor_id_fkey(*)")
+      .order("name", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as Product[];
+  },
+  saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),
   listSops: () => listTable<Sop>("sops"),
   saveSop: upsertSingle<Sop>("sops"),
