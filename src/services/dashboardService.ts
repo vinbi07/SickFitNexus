@@ -17,6 +17,12 @@ import type {
   Vendor,
 } from "@/types/domain";
 import { calculateForecastMetric, calculateVendorReliability } from "@/utils/forecasting";
+import {
+  getAverageTimelineDays,
+  getProductionTimelineExceptionCount,
+  getProductionTimelineRows,
+  getProductionTimelineTrend,
+} from "@/utils/productionTimeline";
 import { daysBetween } from "@/utils/date";
 
 const SHOPIFY_DASHBOARD_SYNC_FUNCTION = "shopify-dashboard-sync";
@@ -218,15 +224,11 @@ export const dashboardService = {
         })),
     ];
 
-    const paidToDeliveredOrders = manufacturerOrders.filter((po) => po.invoice_paid_at && po.actual_delivery_date);
-    const avgPaidToDeliveredDays = paidToDeliveredOrders.length
-      ? Math.round(
-          paidToDeliveredOrders.reduce(
-            (sum, po) => sum + daysBetween(po.invoice_paid_at, po.actual_delivery_date),
-            0,
-          ) / paidToDeliveredOrders.length,
-        )
-      : 0;
+    const productionTimelineRows = getProductionTimelineRows(manufacturerOrders);
+    const avgOrderToArrivalDays = getAverageTimelineDays(productionTimelineRows, "orderToArrivalDays");
+    const avgPaidToArrivalDays = getAverageTimelineDays(productionTimelineRows, "paidToArrivalDays");
+    const productionTimelineExceptionCount = getProductionTimelineExceptionCount(productionTimelineRows);
+    const productionTimelineTrend = getProductionTimelineTrend(productionTimelineRows);
 
     const pipelineByRetailer = retailers
       .map((retailer) => ({
@@ -237,16 +239,6 @@ export const dashboardService = {
       }))
       .filter((item) => item.value > 0)
       .slice(0, 6);
-
-    const leadTimeTrend = manufacturerOrders
-      .filter((po) => po.invoice_paid_at || po.order_date)
-      .slice(0, 8)
-      .map((po) => ({
-        label: po.po_number,
-        days: po.actual_delivery_date
-          ? daysBetween(po.invoice_paid_at ?? po.order_date, po.actual_delivery_date)
-          : daysBetween(po.invoice_paid_at ?? po.order_date, new Date().toISOString().slice(0, 10)),
-      }));
 
     const reorderWindows = retailers
       .filter((retailer) => retailer.next_reorder_start || retailer.next_reorder_end)
@@ -453,7 +445,10 @@ export const dashboardService = {
       revenueProjectionTrend,
       dueIn14DaysCount,
       pendingIntakeCount,
-      avgPaidToDeliveredDays,
+      avgOrderToArrivalDays,
+      avgPaidToArrivalDays,
+      productionTimelineExceptionCount,
+      productionTimelineTrend,
       recentImports: imports,
       recentAlerts: alerts,
       recentActivity: activity,
@@ -473,7 +468,6 @@ export const dashboardService = {
         .slice(0, 6),
       priorityFeed,
       pipelineByRetailer,
-      leadTimeTrend,
       reorderWindows,
     };
   },

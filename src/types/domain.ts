@@ -434,7 +434,15 @@ export interface DashboardSnapshot {
   activePipelineValue: number;
   dueIn14DaysCount: number;
   pendingIntakeCount: number;
-  avgPaidToDeliveredDays: number;
+  avgOrderToArrivalDays: number;
+  avgPaidToArrivalDays: number;
+  productionTimelineExceptionCount: number;
+  productionTimelineTrend: Array<{
+    label: string;
+    orderToArrivalDays: number | null;
+    paidToArrivalDays: number | null;
+    projected: boolean;
+  }>;
   recentImports: CsvImport[];
   recentAlerts: Alert[];
   recentActivity: ActivityEvent[];
@@ -472,7 +480,6 @@ export interface DashboardSnapshot {
     actionLabel?: string;
   }>;
   pipelineByRetailer: Array<{ retailer: string; value: number }>;
-  leadTimeTrend: Array<{ label: string; days: number }>;
   reorderWindows: Array<{ retailer: string; window: string; productHint: string }>;
 }
 

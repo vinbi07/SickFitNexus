@@ -7,7 +7,7 @@ export function MultiLineChartCard({
   series,
 }: {
   title: string;
-  data: Array<Record<string, string | number | null>>;
+  data: Array<Record<string, string | number | boolean | null>>;
   xKey: string;
   series: Array<{
     dataKey: string;

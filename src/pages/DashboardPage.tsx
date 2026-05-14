@@ -187,7 +187,16 @@ export function DashboardPage() {
           <DashboardCard label="Due in 14 Days" value={data.dueIn14DaysCount} footnote="Retailer and manufacturer deadlines approaching" />
           <DashboardCard label="Pending Intake" value={data.pendingIntakeCount} footnote="Forwarded or unprocessed PO requests" />
           <DashboardCard label="Low Stock Items" value={data.lowStockCount} footnote="Current inventory at or below safety stock" />
-          <DashboardCard label="Paid to Delivery" value={`${data.avgPaidToDeliveredDays}d`} footnote="Average manufacturer lead time after invoice payment" />
+          <DashboardCard
+            label="Order to Arrival"
+            value={`${data.avgOrderToArrivalDays}d`}
+            footnote={`${data.productionTimelineExceptionCount} POs need date cleanup or arrival updates`}
+          />
+          <DashboardCard
+            label="Paid to Arrival"
+            value={`${data.avgPaidToArrivalDays}d`}
+            footnote="Completed manufacturer POs only"
+          />
         </div>
       </div>
       <div className="split-grid">
@@ -223,8 +232,17 @@ export function DashboardPage() {
       </div>
       <div className="split-grid">
         <BarChartCard title="Retailer Pipeline Value" data={data.pipelineByRetailer} xKey="retailer" dataKey="value" />
-        <LineChartCard title="Manufacturer Paid-to-Delivery Trend" data={data.leadTimeTrend} xKey="label" dataKey="days" />
+        <MultiLineChartCard
+          title="Production to Arrival Timeline"
+          data={data.productionTimelineTrend}
+          xKey="label"
+          series={[
+            { dataKey: "orderToArrivalDays", label: "Order to Arrival", stroke: "#111111" },
+            { dataKey: "paidToArrivalDays", label: "Paid to Arrival", stroke: "#e72027" },
+          ]}
+        />
       </div>
+      <div className="helper-text">Projected points use `expected_delivery_date` until an `actual_delivery_date` is captured.</div>
       <div className="split-grid">
         <LineChartCard title="Inventory by Record" data={data.stockTrend} xKey="date" dataKey="inventory" />
         <BarChartCard title="Spend by Vendor" data={data.spendByVendor} xKey="vendor" dataKey="spend" />

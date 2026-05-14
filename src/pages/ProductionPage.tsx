@@ -4,6 +4,7 @@ import { DataTable } from "@/components/DataTable";
 import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { MultiLineChartCard } from "@/components/MultiLineChartCard";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,6 +14,13 @@ import { purchaseOrderService } from "@/services/purchaseOrderService";
 import type { CapacitySnapshot } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
 import { formatDate } from "@/utils/format";
+import {
+  getAverageTimelineDays,
+  getProductionTimelineExceptionCount,
+  getProductionTimelineRows,
+  getProductionTimelineTrend,
+  type ProductionTimelineRow,
+} from "@/utils/productionTimeline";
 
 export function ProductionPage() {
   const [editing, setEditing] = useState<Partial<CapacitySnapshot> | null>(null);
@@ -32,6 +40,11 @@ export function ProductionPage() {
   const activeProduction = data.purchaseOrders.filter((po) => !["Received", "Closed", "Cancelled"].includes(po.status));
   const manufacturerCapacity = data.capacity.filter((snapshot) => snapshot.capacity_type === "Manufacturer");
   const threePlCapacity = data.capacity.filter((snapshot) => snapshot.capacity_type === "3PL");
+  const productionTimelineRows = getProductionTimelineRows(data.purchaseOrders);
+  const avgOrderToArrivalDays = getAverageTimelineDays(productionTimelineRows, "orderToArrivalDays");
+  const avgPaidToArrivalDays = getAverageTimelineDays(productionTimelineRows, "paidToArrivalDays");
+  const productionTimelineExceptionCount = getProductionTimelineExceptionCount(productionTimelineRows);
+  const productionTimelineTrend = getProductionTimelineTrend(productionTimelineRows);
 
   return (
     <div className="section-stack">
@@ -46,6 +59,36 @@ export function ProductionPage() {
         <DashboardCard label="Paid, No Tracking" value={paidNoTracking.length} footnote="Elevate these in vendor follow-up" />
         <DashboardCard label="Manufacturer Snapshots" value={manufacturerCapacity.length} />
         <DashboardCard label="3PL Snapshots" value={threePlCapacity.length} footnote="Manual / discovery-ready for now" />
+        <DashboardCard label="Order to Arrival" value={`${avgOrderToArrivalDays}d`} footnote="Completed manufacturer POs only" />
+        <DashboardCard label="Paid to Arrival" value={`${avgPaidToArrivalDays}d`} footnote={`${productionTimelineExceptionCount} POs missing timeline dates`} />
+      </div>
+      <div className="split-grid">
+        <MultiLineChartCard
+          title="Production to Arrival Timeline"
+          data={productionTimelineTrend}
+          xKey="label"
+          series={[
+            { dataKey: "orderToArrivalDays", label: "Order to Arrival", stroke: "#111111" },
+            { dataKey: "paidToArrivalDays", label: "Paid to Arrival", stroke: "#e72027" },
+          ]}
+        />
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Timeline Notes</h3></div>
+          <div className="timeline">
+            <div className="timeline-item">
+              <strong>Completed averages only</strong>
+              <p>Summary cards use manufacturer POs with an `actual_delivery_date` so projected arrivals do not skew performance history.</p>
+            </div>
+            <div className="timeline-item">
+              <strong>Projected open POs stay visible</strong>
+              <p>Open POs use `expected_delivery_date` in the chart and table until an actual arrival is recorded.</p>
+            </div>
+            <div className="timeline-item">
+              <strong>Date cleanup queue</strong>
+              <p>{productionTimelineExceptionCount} manufacturer POs are missing one or more dates needed for a complete production timeline.</p>
+            </div>
+          </div>
+        </div>
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
@@ -63,6 +106,41 @@ export function ProductionPage() {
             rows={activeProduction}
           />
         </div>
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Production Timeline Detail</h3></div>
+          <DataTable<ProductionTimelineRow>
+            emptyMessage="No manufacturer POs available for timeline tracking yet."
+            columns={[
+              { key: "po_number", title: "PO", render: (row) => row.poNumber },
+              { key: "manufacturer", title: "Manufacturer", render: (row) => row.manufacturerName },
+              { key: "order_date", title: "Order Date", render: (row) => formatDate(row.orderDate) },
+              { key: "invoice_paid_at", title: "Paid Date", render: (row) => formatDate(row.invoicePaidAt) },
+              {
+                key: "arrival",
+                title: "Arrival",
+                render: (row) => formatDate(row.actualArrivalDate ?? row.expectedArrivalDate),
+              },
+              {
+                key: "order_to_arrival",
+                title: "Order to Arrival",
+                render: (row) => row.orderToArrivalDays !== null ? `${row.orderToArrivalDays}d` : "Missing order date",
+              },
+              {
+                key: "paid_to_arrival",
+                title: "Paid to Arrival",
+                render: (row) => row.paidToArrivalDays !== null ? `${row.paidToArrivalDays}d` : "Missing paid date",
+              },
+              {
+                key: "timeline_status",
+                title: "Timeline Status",
+                render: (row) => <StatusBadge label={row.timelineStatus} />,
+              },
+            ]}
+            rows={productionTimelineRows}
+          />
+        </div>
+      </div>
+      <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header"><h3>Capacity Tracker</h3></div>
           <DataTable
