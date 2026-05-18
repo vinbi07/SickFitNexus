@@ -210,10 +210,14 @@ export const purchaseOrderService = {
     const [savedPo] = (await upsertTable<PurchaseOrder>("purchase_orders", {
       ...purchaseOrderPayload,
       order_date: normalizeOptionalDate(purchaseOrderPayload.order_date),
+      ship_date: normalizeOptionalDate(purchaseOrderPayload.ship_date),
       submitted_at: normalizeOptionalDate(purchaseOrderPayload.submitted_at),
+      eta_date: normalizeOptionalDate(purchaseOrderPayload.eta_date),
       expected_delivery_date: normalizeOptionalDate(purchaseOrderPayload.expected_delivery_date),
       actual_delivery_date: normalizeOptionalDate(purchaseOrderPayload.actual_delivery_date),
+      invoice_status: purchaseOrderPayload.invoice_status ?? null,
       invoice_paid_at: normalizeOptionalDate(purchaseOrderPayload.invoice_paid_at),
+      shipment_status: purchaseOrderPayload.shipment_status ? String(purchaseOrderPayload.shipment_status) : null,
       total_cost: totalCost,
       generated_form_url: generatedFormUrl,
     })) as PurchaseOrder[];

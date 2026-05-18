@@ -18,6 +18,12 @@ export interface Retailer {
   primary_contact_name: string | null;
   primary_contact_email: string | null;
   primary_contact_phone: string | null;
+  secondary_contacts: string | null;
+  account_number: string | null;
+  shipping_requirements: string | null;
+  sop_notes: string | null;
+  parent_retailer_id: string | null;
+  retailer_group: string | null;
   ordering_cadence_days: number | null;
   next_reorder_start: string | null;
   next_reorder_end: string | null;
@@ -48,6 +54,8 @@ export interface Product {
   unit_price: number;
   current_inventory: number;
   safety_stock: number;
+  image_url: string | null;
+  no_bundles: boolean;
   shopify_product_id: string | null;
   shopify_variant_id: string | null;
   shopify_handle: string | null;
@@ -55,7 +63,6 @@ export interface Product {
   shopify_storefront_url: string | null;
   is_shopify_synced: boolean;
   last_shopify_sync_at: string | null;
-  ancillary_category: string | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
@@ -103,11 +110,15 @@ export interface PurchaseOrder {
   status: PurchaseOrderStatus;
   po_type: PurchaseOrderType;
   order_date: string | null;
+  ship_date: string | null;
   submitted_at: string | null;
+  eta_date: string | null;
   expected_delivery_date: string | null;
   actual_delivery_date: string | null;
+  invoice_status: "Open" | "Shipped" | "In Route" | "Inventory in Route" | null;
   invoice_paid_at: string | null;
   tracking_number: string | null;
+  shipment_status: string | null;
   tracking_status: string | null;
   generated_form_url: string | null;
   source_channel: string | null;
@@ -410,6 +421,7 @@ export interface ShopifyOrderLineItem {
 export interface NormalizedImportRow {
   po_number: string;
   vendor_name: string;
+  retailer_name: string;
   location_name: string;
   sku: string;
   product_name: string;
@@ -417,9 +429,13 @@ export interface NormalizedImportRow {
   quantity_received: number;
   unit_cost: number;
   order_date: string | null;
+  ship_date: string | null;
+  eta_date: string | null;
   expected_delivery_date: string | null;
   actual_delivery_date: string | null;
   status: PurchaseOrderStatus;
+  shipment_status: string;
+  invoice_status: "Open" | "Shipped" | "In Route" | "Inventory in Route";
   notes: string;
 }
 
@@ -481,6 +497,48 @@ export interface DashboardSnapshot {
   }>;
   pipelineByRetailer: Array<{ retailer: string; value: number }>;
   reorderWindows: Array<{ retailer: string; window: string; productHint: string }>;
+  wholesaleRevenueTotal: number;
+  dangerSkuCount: number;
+  incomingInventoryUnits: number;
+  openInvoiceCount: number;
+  shippedInvoiceCount: number;
+  inventoryInRouteCount: number;
+  activeSkusInRoute: number;
+  manufacturingSnapshotRows: Array<{
+    poId: string;
+    poNumber: string;
+    manufacturer: string;
+    invoiceStatus: string;
+    shipmentStatus: string;
+    etaDate: string | null;
+    shipDate: string | null;
+    skuCount: number;
+    incomingUnits: number;
+    reorderWindowSummary: string;
+  }>;
+  wholesaleAccounts: Array<{
+    retailerId: string;
+    retailer: string;
+    openInvoices: number;
+    shippedInvoices: number;
+    recentPoCount: number;
+    nextWindow: string;
+  }>;
+  inventoryAlerts: Array<{
+    sku: string;
+    productName: string;
+    currentQuantity: number;
+    incomingQuantity: number;
+    status: "danger" | "warning" | "healthy";
+  }>;
+  skuReorderWindows: Array<{
+    sku: string;
+    productName: string;
+    recommendation: string;
+    reorderByDate: string | null;
+    currentQuantity: number;
+    incomingQuantity: number;
+  }>;
 }
 
 export interface ForecastMetric {

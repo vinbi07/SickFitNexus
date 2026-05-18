@@ -39,6 +39,13 @@ const purchaseOrderTypes: PurchaseOrderType[] = [
   "Customer Reorder",
 ];
 
+const invoiceStatuses: Array<NonNullable<PurchaseOrder["invoice_status"]>> = [
+  "Open",
+  "Shipped",
+  "In Route",
+  "Inventory in Route",
+];
+
 type PurchaseOrderEditor = {
   purchaseOrder: Partial<PurchaseOrder>;
   lineItems: Array<Partial<PoLineItem>>;
@@ -69,10 +76,14 @@ function PurchaseOrderModal({
     po_type: initialValue.purchaseOrder.po_type ?? "Retailer PO",
     status: initialValue.purchaseOrder.status ?? "Pending",
     order_date: initialValue.purchaseOrder.order_date ?? new Date().toISOString().slice(0, 10),
+    ship_date: initialValue.purchaseOrder.ship_date ?? "",
     submitted_at: initialValue.purchaseOrder.submitted_at ?? new Date().toISOString().slice(0, 10),
+    eta_date: initialValue.purchaseOrder.eta_date ?? "",
     expected_delivery_date: initialValue.purchaseOrder.expected_delivery_date ?? "",
     actual_delivery_date: initialValue.purchaseOrder.actual_delivery_date ?? "",
+    invoice_status: initialValue.purchaseOrder.invoice_status ?? "Open",
     invoice_paid_at: initialValue.purchaseOrder.invoice_paid_at ?? "",
+    shipment_status: initialValue.purchaseOrder.shipment_status ?? "",
     tracking_number: initialValue.purchaseOrder.tracking_number ?? "",
     tracking_status: initialValue.purchaseOrder.tracking_status ?? "",
     source_channel: initialValue.purchaseOrder.source_channel ?? "Email forward",
@@ -120,6 +131,10 @@ function PurchaseOrderModal({
                     retailer_id: purchaseOrder.retailer_id ? String(purchaseOrder.retailer_id) : null,
                     location_id: purchaseOrder.location_id ? String(purchaseOrder.location_id) : null,
                     notes: purchaseOrder.notes ? String(purchaseOrder.notes) : null,
+                    ship_date: purchaseOrder.ship_date ? String(purchaseOrder.ship_date) : null,
+                    eta_date: purchaseOrder.eta_date ? String(purchaseOrder.eta_date) : null,
+                    invoice_status: purchaseOrder.invoice_status ?? null,
+                    shipment_status: purchaseOrder.shipment_status ? String(purchaseOrder.shipment_status) : null,
                     tracking_number: purchaseOrder.tracking_number ? String(purchaseOrder.tracking_number) : null,
                     tracking_status: purchaseOrder.tracking_status ? String(purchaseOrder.tracking_status) : null,
                     source_channel: purchaseOrder.source_channel ? String(purchaseOrder.source_channel) : null,
@@ -191,8 +206,16 @@ function PurchaseOrderModal({
           <input type="date" value={String(purchaseOrder.order_date ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, order_date: event.target.value }))} />
         </div>
         <div className="field">
+          <label>Ship Date</label>
+          <input type="date" value={String(purchaseOrder.ship_date ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, ship_date: event.target.value }))} />
+        </div>
+        <div className="field">
           <label>Submitted</label>
           <input type="date" value={String(purchaseOrder.submitted_at ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, submitted_at: event.target.value }))} />
+        </div>
+        <div className="field">
+          <label>ETA</label>
+          <input type="date" value={String(purchaseOrder.eta_date ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, eta_date: event.target.value }))} />
         </div>
         <div className="field">
           <label>Expected Delivery</label>
@@ -203,8 +226,18 @@ function PurchaseOrderModal({
           <input type="date" value={String(purchaseOrder.actual_delivery_date ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, actual_delivery_date: event.target.value }))} />
         </div>
         <div className="field">
+          <label>Invoice Status</label>
+          <select value={String(purchaseOrder.invoice_status ?? "Open")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, invoice_status: event.target.value as PurchaseOrder["invoice_status"] }))}>
+            {invoiceStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </div>
+        <div className="field">
           <label>Invoice Paid</label>
           <input type="date" value={String(purchaseOrder.invoice_paid_at ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, invoice_paid_at: event.target.value }))} />
+        </div>
+        <div className="field">
+          <label>Shipment Status</label>
+          <input value={String(purchaseOrder.shipment_status ?? "")} onChange={(event) => setPurchaseOrder((current) => ({ ...current, shipment_status: event.target.value }))} />
         </div>
         <div className="field">
           <label>Tracking Number</label>
@@ -367,7 +400,10 @@ export function PurchaseOrdersPage() {
                     po_type: "Retailer PO",
                     status: "Pending",
                     order_date: new Date().toISOString().slice(0, 10),
+                    ship_date: "",
                     submitted_at: new Date().toISOString().slice(0, 10),
+                    eta_date: "",
+                    invoice_status: "Open",
                     source_channel: "Email forward",
                   },
                   lineItems: [],
@@ -434,8 +470,10 @@ export function PurchaseOrdersPage() {
           { key: "retailer", title: "Retailer", render: (row) => row.retailers?.name ?? "N/A" },
           { key: "vendor", title: "Vendor", render: (row) => row.vendors?.name ?? "Unassigned" },
           { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
-          { key: "expected_delivery_date", title: "ETA", render: (row) => formatDate(row.expected_delivery_date) },
-          { key: "tracking", title: "Tracking", render: (row) => row.tracking_status ?? row.tracking_number ?? "N/A" },
+          { key: "invoice_status", title: "Invoice", render: (row) => <StatusBadge label={row.invoice_status ?? "Open"} /> },
+          { key: "ship_date", title: "Ship Date", render: (row) => formatDate(row.ship_date) },
+          { key: "eta_date", title: "ETA", render: (row) => formatDate(row.eta_date ?? row.expected_delivery_date) },
+          { key: "tracking", title: "Shipment", render: (row) => row.shipment_status ?? row.tracking_status ?? row.tracking_number ?? "N/A" },
           { key: "total_cost", title: "Total Cost", render: (row) => formatCurrency(row.total_cost) },
           {
             key: "actions",

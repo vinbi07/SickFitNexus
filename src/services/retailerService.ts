@@ -1,7 +1,8 @@
 import { assertSupabase } from "@/lib/supabase";
 import { deleteFromTable, upsertTable } from "@/services/baseService";
-import type { PurchaseOrder, Retailer } from "@/types/domain";
+import type { PoLineItem, Product, PurchaseOrder, Retailer } from "@/types/domain";
 import { addDays, toDateInput } from "@/utils/date";
+import { getInvoiceStatus } from "@/utils/operations";
 
 function calculateCadence(purchaseOrders: PurchaseOrder[]) {
   const ordered = purchaseOrders
@@ -79,5 +80,82 @@ export const retailerService = {
         atRiskRequirements: requirements.filter((requirement) => requirement.retailer_id === retailer.id && requirement.status !== "Compliant").length,
       };
     });
+  },
+
+  async getProfile(id: string) {
+    const supabase = assertSupabase();
+    const [
+      retailerResponse,
+      retailersResponse,
+      locationsResponse,
+      purchaseOrdersResponse,
+      lineItemsResponse,
+      productsResponse,
+    ] = await Promise.all([
+      supabase.from("retailers").select("*").eq("id", id).single(),
+      supabase.from("retailers").select("*").order("name", { ascending: true }),
+      supabase.from("locations").select("*").eq("retailer_id", id).order("name", { ascending: true }),
+      supabase.from("purchase_orders").select("*").eq("retailer_id", id).order("order_date", { ascending: false }),
+      supabase.from("po_line_items").select("*"),
+      supabase.from("products").select("*"),
+    ]);
+
+    if (retailerResponse.error) throw retailerResponse.error;
+    if (retailersResponse.error) throw retailersResponse.error;
+    if (locationsResponse.error) throw locationsResponse.error;
+    if (purchaseOrdersResponse.error) throw purchaseOrdersResponse.error;
+    if (lineItemsResponse.error) throw lineItemsResponse.error;
+    if (productsResponse.error) throw productsResponse.error;
+
+    const retailer = retailerResponse.data as Retailer;
+    const allRetailers = (retailersResponse.data ?? []) as Retailer[];
+    const siblingLocations = (locationsResponse.data ?? []) as Array<{ id: string; name: string; address: string | null }>;
+    const purchaseOrders = (purchaseOrdersResponse.data ?? []) as PurchaseOrder[];
+    const lineItems = (lineItemsResponse.data ?? []) as PoLineItem[];
+    const products = (productsResponse.data ?? []) as Product[];
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const lineItemsByPo = new Map<string, PoLineItem[]>();
+    lineItems.forEach((item) => {
+      const current = lineItemsByPo.get(item.purchase_order_id) ?? [];
+      current.push(item);
+      lineItemsByPo.set(item.purchase_order_id, current);
+    });
+
+    const topSkuMap = new Map<string, { sku: string; name: string; units: number; revenue: number }>();
+    purchaseOrders.forEach((po) => {
+      (lineItemsByPo.get(po.id) ?? []).forEach((item) => {
+        const product = item.product_id ? productById.get(item.product_id) : null;
+        const current = topSkuMap.get(item.sku) ?? {
+          sku: item.sku,
+          name: item.product_name,
+          units: 0,
+          revenue: 0,
+        };
+        current.units += Number(item.quantity_ordered ?? 0);
+        current.revenue += Number(item.quantity_ordered ?? 0) * Number(product?.unit_price ?? item.unit_cost ?? 0);
+        topSkuMap.set(item.sku, current);
+      });
+    });
+
+    const openInvoices = purchaseOrders.filter((po) => getInvoiceStatus(po) === "Open");
+    const shippedInvoices = purchaseOrders.filter((po) => getInvoiceStatus(po) === "Shipped");
+    const inRouteInvoices = purchaseOrders.filter((po) => ["In Route", "Inventory in Route"].includes(getInvoiceStatus(po)));
+    const parentRetailer = retailer.parent_retailer_id
+      ? allRetailers.find((entry) => entry.id === retailer.parent_retailer_id) ?? null
+      : null;
+    const childRetailers = allRetailers.filter((entry) => entry.parent_retailer_id === retailer.id);
+
+    return {
+      retailer,
+      parentRetailer,
+      childRetailers,
+      locations: siblingLocations,
+      purchaseOrders,
+      openInvoices,
+      shippedInvoices,
+      inRouteInvoices,
+      topSkus: [...topSkuMap.values()].sort((left, right) => right.units - left.units).slice(0, 8),
+      recentPos: purchaseOrders.slice(0, 8),
+    };
   },
 };

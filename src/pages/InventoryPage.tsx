@@ -10,11 +10,12 @@ import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { dashboardService } from "@/services/dashboardService";
 import { inventoryService } from "@/services/inventoryService";
 import { supportService } from "@/services/supportService";
 import type { InventoryItem } from "@/types/domain";
-import { calculateAverageDailyUsage } from "@/utils/forecasting";
 import { formatCurrency, formatDate } from "@/utils/format";
+import { getInventoryHealthLabel, getMarginMetrics, isInventoryDanger } from "@/utils/operations";
 
 type InventoryItemFormValues = Partial<InventoryItem>;
 
@@ -38,9 +39,9 @@ export function InventoryPage() {
   });
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
-  const [inventoryCategory, setInventoryCategory] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
-  const [sort, setSort] = useState("updated");
+  const [bundleFilter, setBundleFilter] = useState("");
+  const [sort, setSort] = useState("danger");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
@@ -48,6 +49,7 @@ export function InventoryPage() {
       events: await inventoryService.listEvents(),
       products: await supportService.listProducts(),
       locations: await supportService.listLocations(),
+      snapshot: await dashboardService.getSnapshot(),
     }),
     [],
   );
@@ -55,13 +57,7 @@ export function InventoryPage() {
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load inventory"} />;
 
-  const eventsByProductId = new Map<string, typeof data.events>();
-  data.events.forEach((event) => {
-    if (!event.product_id) return;
-    const current = eventsByProductId.get(event.product_id) ?? [];
-    current.push(event);
-    eventsByProductId.set(event.product_id, current);
-  });
+  const reorderBySku = new Map(data.snapshot.skuReorderWindows.map((item) => [item.sku, item]));
 
   const filteredItems = data.items
     .filter((item) => {
@@ -72,83 +68,47 @@ export function InventoryPage() {
         (item.products?.sku ?? "").toLowerCase().includes(query) ||
         (item.locations?.name ?? "").toLowerCase().includes(query);
       const matchesLocation = !locationId || item.location_id === locationId;
-      const matchesCategory = !inventoryCategory || item.inventory_category === inventoryCategory;
-      const usageRate = calculateAverageDailyUsage(eventsByProductId.get(item.product_id) ?? []);
-      const daysRemaining = usageRate > 0 ? item.quantity_on_hand / usageRate : null;
-      const threshold = Math.max(item.reorder_point, item.products?.safety_stock ?? 0);
-      const isOosRisk =
-        item.quantity_on_hand <= threshold ||
-        (daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 30);
-      const isOverstock =
-        daysRemaining !== null
-          ? daysRemaining >= 365
-          : item.quantity_on_hand > Math.max(item.target_stock, item.products?.safety_stock ?? 0);
+      const danger = isInventoryDanger(item.quantity_on_hand);
       const matchesRisk =
         !riskFilter ||
-        (riskFilter === "oos" && isOosRisk) ||
-        (riskFilter === "overstock" && isOverstock);
-      return matchesSearch && matchesLocation && matchesCategory && matchesRisk;
+        (riskFilter === "danger" && danger) ||
+        (riskFilter === "low" && !danger && item.quantity_on_hand <= (item.products?.safety_stock ?? 0));
+      const matchesBundle =
+        !bundleFilter ||
+        (bundleFilter === "no-bundles" && Boolean(item.products?.no_bundles)) ||
+        (bundleFilter === "bundles-ok" && !item.products?.no_bundles);
+      return matchesSearch && matchesLocation && matchesRisk && matchesBundle;
     })
     .sort((left, right) => {
       if (sort === "quantity") return right.quantity_on_hand - left.quantity_on_hand;
-      if (sort === "low-stock") {
-        const leftDelta = left.quantity_on_hand - left.reorder_point;
-        const rightDelta = right.quantity_on_hand - right.reorder_point;
-        return leftDelta - rightDelta;
+      if (sort === "incoming") {
+        const leftIncoming = reorderBySku.get(left.products?.sku ?? "")?.incomingQuantity ?? 0;
+        const rightIncoming = reorderBySku.get(right.products?.sku ?? "")?.incomingQuantity ?? 0;
+        return rightIncoming - leftIncoming;
       }
-      return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+      const leftDanger = isInventoryDanger(left.quantity_on_hand) ? -1 : left.quantity_on_hand;
+      const rightDanger = isInventoryDanger(right.quantity_on_hand) ? -1 : right.quantity_on_hand;
+      return leftDanger - rightDanger;
     });
 
-  const totalUnitsOnHand = data.items.reduce(
-    (sum, item) => sum + Number(item.quantity_on_hand ?? 0),
-    0,
-  );
-  const projectedOosIn30Days = data.items.filter((item) => {
-    if (!item.products) return false;
-    const usageRate = calculateAverageDailyUsage(eventsByProductId.get(item.product_id) ?? []);
-    if (usageRate <= 0) return false;
-    const daysRemaining = item.quantity_on_hand / usageRate;
-    return daysRemaining > 0 && daysRemaining <= 30;
-  });
-  const overstockOverOneYear = data.items.filter((item) => {
-    if (!item.products) return false;
-    const usageRate = calculateAverageDailyUsage(eventsByProductId.get(item.product_id) ?? []);
-    if (usageRate <= 0) return item.quantity_on_hand > Math.max(item.target_stock, item.products.safety_stock ?? 0);
-    const daysRemaining = item.quantity_on_hand / usageRate;
-    return daysRemaining >= 365;
-  });
-  const ancillaryCount = data.items.filter((item) => {
-    if (item.inventory_category !== "Core") return true;
-    return Boolean(item.products?.ancillary_category);
-  }).length;
-  const missingCostCount = data.items.filter((item) => Number(item.products?.unit_cost ?? 0) <= 0).length;
-  const inventoryValue = data.items.reduce(
-    (sum, item) => sum + item.quantity_on_hand * Number(item.products?.unit_cost ?? 0),
-    0,
-  );
+  const totalUnitsOnHand = data.items.reduce((sum, item) => sum + Number(item.quantity_on_hand ?? 0), 0);
+  const dangerCount = data.items.filter((item) => isInventoryDanger(item.quantity_on_hand)).length;
+  const noBundlesCount = data.items.filter((item) => Boolean(item.products?.no_bundles)).length;
+  const inventoryValue = data.items.reduce((sum, item) => sum + item.quantity_on_hand * Number(item.products?.unit_cost ?? 0), 0);
 
   return (
     <div className="section-stack">
       <PageHeader
         title="Inventory"
-        description="Manage stock by product and location, with adjustments, transfers, low-stock visibility, ancillary packaging inventory, and full movement history."
+        description="Run inventory from the facts that matter: current quantity, incoming quantity, COGS, margin, bundle eligibility, and clear danger alerts."
         actions={<button className="btn btn-primary" onClick={() => setEditing({ product_id: "", location_id: "", inventory_category: "Core" })}>Add New Inventory</button>}
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="card-grid">
-        <DashboardCard label="Units on Hand" value={totalUnitsOnHand} footnote="Total units across all inventory records" />
-        <DashboardCard label="OOS <30 Days" value={projectedOosIn30Days.length} footnote={projectedOosIn30Days.length ? "Critical risk based on recent velocity" : "No near-term projected stockouts"} />
-        <DashboardCard label="Overstock >1 Yr" value={overstockOverOneYear.length} footnote={overstockOverOneYear.length ? "Slow-moving inventory flagged" : "No long-tail overstock flagged"} />
-        <DashboardCard label="Inventory Value" value={formatCurrency(inventoryValue)} footnote={missingCostCount > 0 ? `${missingCostCount} records missing unit cost` : "Calculated from product unit cost"} />
-      </div>
-      <div className="panel">
-        <div className="panel-header">
-          <h3>Supporting Metrics</h3>
-        </div>
-        <div className="pill-row">
-          <StatusBadge label={`${ancillaryCount} ancillary / packaging`} />
-          <StatusBadge label={`${data.items.length} inventory records`} />
-        </div>
+        <DashboardCard label="Units on Hand" value={totalUnitsOnHand} footnote="Across all tracked inventory records" />
+        <DashboardCard label="Danger Inventory" value={dangerCount} footnote="Products with 25 units or less on hand" />
+        <DashboardCard label="Incoming Units" value={data.snapshot.incomingInventoryUnits} footnote="Manufacturer inventory still in route" />
+        <DashboardCard label="Inventory Value" value={formatCurrency(inventoryValue)} footnote={`${noBundlesCount} no-bundles SKUs flagged`} />
       </div>
       <div className="panel">
         <div className="filter-row">
@@ -161,21 +121,20 @@ export function InventoryPage() {
               </option>
             ))}
           </select>
-          <select value={inventoryCategory} onChange={(event) => setInventoryCategory(event.target.value)}>
-            <option value="">All inventory categories</option>
-            <option value="Core">Core</option>
-            <option value="Packaging">Packaging</option>
-            <option value="Ancillary">Ancillary</option>
-          </select>
           <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value)}>
-            <option value="">All inventory risks</option>
-            <option value="oos">OOS / near OOS</option>
-            <option value="overstock">Overstock</option>
+            <option value="">All inventory health</option>
+            <option value="danger">Danger only</option>
+            <option value="low">Low but not danger</option>
+          </select>
+          <select value={bundleFilter} onChange={(event) => setBundleFilter(event.target.value)}>
+            <option value="">All bundle states</option>
+            <option value="no-bundles">No Bundles</option>
+            <option value="bundles-ok">Bundles Allowed</option>
           </select>
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
-            <option value="updated">Sort by recent updates</option>
+            <option value="danger">Sort by danger</option>
+            <option value="incoming">Sort by incoming quantity</option>
             <option value="quantity">Sort by quantity</option>
-            <option value="low-stock">Sort by low stock risk</option>
           </select>
           <button className="btn btn-secondary" onClick={() => void reload()}>
             Refresh
@@ -191,36 +150,34 @@ export function InventoryPage() {
               key: "product",
               title: "Product",
               render: (row) => (
-                <div className="cell-stack">
-                  <strong>{row.products?.name ?? "Unknown Product"}</strong>
-                  <span className="helper-text">{row.products?.sku ?? "No SKU"}</span>
+                <div className="inventory-product-cell">
+                  <div className="product-thumb-shell">
+                    {row.products?.image_url ? <img className="product-thumb" src={row.products.image_url} alt={row.products.name} /> : <span className="product-thumb-fallback">{row.products?.sku?.slice(0, 2) ?? "NA"}</span>}
+                  </div>
+                  <div className="cell-stack">
+                    <strong>{row.products?.name ?? "Unknown Product"}</strong>
+                    <span className="helper-text">{row.products?.sku ?? "No SKU"}</span>
+                  </div>
                 </div>
               ),
             },
             { key: "location", title: "Location", render: (row) => row.locations?.name ?? "Unknown Location" },
+            { key: "quantity_on_hand", title: "Current Qty", render: (row) => row.quantity_on_hand },
+            { key: "incoming", title: "Incoming Qty", render: (row) => reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0 },
+            { key: "cogs", title: "COGS", render: (row) => formatCurrency(Number(row.products?.unit_cost ?? 0)) },
             {
-              key: "inventory_category",
-              title: "Category",
+              key: "margin",
+              title: "Margin",
               render: (row) => {
-                if (row.inventory_category && row.inventory_category !== "Core") return row.inventory_category;
-                if (row.products?.ancillary_category) return row.products.ancillary_category;
-                return "Core";
+                const margin = getMarginMetrics(Number(row.products?.unit_cost ?? 0), Number(row.products?.unit_price ?? 0));
+                return `${formatCurrency(margin.marginDollars)} | ${margin.marginPercent.toFixed(0)}%`;
               },
             },
-            { key: "quantity_on_hand", title: "On Hand", render: (row) => row.quantity_on_hand },
-            { key: "reorder_point", title: "Reorder Point", render: (row) => row.reorder_point },
-            { key: "target_stock", title: "Target Stock", render: (row) => row.target_stock },
+            { key: "no_bundles", title: "No Bundles", render: (row) => row.products?.no_bundles ? <StatusBadge label="No Bundles" /> : "Allowed" },
             {
               key: "status",
               title: "Status",
-              render: (row) => {
-                const threshold = Math.max(row.reorder_point, row.products?.safety_stock ?? 0);
-                return row.quantity_on_hand <= threshold ? (
-                  <StatusBadge label="Low Stock" />
-                ) : (
-                  <StatusBadge label="Healthy" />
-                );
-              },
+              render: (row) => <StatusBadge label={getInventoryHealthLabel(row.quantity_on_hand, row.products?.safety_stock ?? 0)} />,
             },
             {
               key: "actions",
@@ -280,7 +237,7 @@ export function InventoryPage() {
           fields={[
             { key: "product_id", label: "Product", type: "select", required: true, options: data.products.map((product) => ({ label: `${product.sku} | ${product.name}`, value: product.id })) },
             { key: "location_id", label: "Location", type: "select", required: true, options: data.locations.map((location) => ({ label: location.name, value: location.id })) },
-            { key: "inventory_category", label: "Inventory Category", type: "select", options: [{ label: "Core", value: "Core" }, { label: "Packaging", value: "Packaging" }, { label: "Ancillary", value: "Ancillary" }] },
+            { key: "inventory_category", label: "Inventory Category", type: "select", options: [{ label: "Core", value: "Core" }, { label: "Packaging", value: "Packaging" }] },
             { key: "quantity_on_hand", label: "On Hand Quantity", type: "number", step: 1 },
             { key: "reorder_point", label: "Reorder Point", type: "number", min: 0, step: 1 },
             { key: "target_stock", label: "Target Stock", type: "number", min: 0, step: 1 },
@@ -318,11 +275,13 @@ export function InventoryPage() {
           <div className="detail-grid">
             <div className="detail-card"><span>SKU</span><strong>{viewing.products?.sku ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{viewing.products?.vendors?.name ?? "Unassigned"}</strong></div>
-            <div className="detail-card"><span>Category</span><strong>{viewing.inventory_category !== "Core" ? viewing.inventory_category : viewing.products?.ancillary_category ?? "Core"}</strong></div>
-            <div className="detail-card"><span>On Hand</span><strong>{viewing.quantity_on_hand}</strong></div>
-            <div className="detail-card"><span>Reorder Point</span><strong>{viewing.reorder_point}</strong></div>
-            <div className="detail-card"><span>Target Stock</span><strong>{viewing.target_stock}</strong></div>
-            <div className="detail-card"><span>Unit Cost</span><strong>{formatCurrency(Number(viewing.products?.unit_cost ?? 0))}</strong></div>
+            <div className="detail-card"><span>Current Quantity</span><strong>{viewing.quantity_on_hand}</strong></div>
+            <div className="detail-card"><span>Incoming Quantity</span><strong>{reorderBySku.get(viewing.products?.sku ?? "")?.incomingQuantity ?? 0}</strong></div>
+            <div className="detail-card"><span>COGS</span><strong>{formatCurrency(Number(viewing.products?.unit_cost ?? 0))}</strong></div>
+            <div className="detail-card"><span>Margin</span><strong>{getMarginMetrics(Number(viewing.products?.unit_cost ?? 0), Number(viewing.products?.unit_price ?? 0)).marginPercent.toFixed(0)}%</strong></div>
+            <div className="detail-card"><span>No Bundles</span><strong>{viewing.products?.no_bundles ? "Yes" : "No"}</strong></div>
+            <div className="detail-card"><span>Status</span><strong className={isInventoryDanger(viewing.quantity_on_hand) ? "danger-text" : ""}>{getInventoryHealthLabel(viewing.quantity_on_hand, viewing.products?.safety_stock ?? 0)}</strong></div>
+            <div className="detail-card"><span>Reorder Window</span><strong>{reorderBySku.get(viewing.products?.sku ?? "")?.recommendation ?? "Manual review"}</strong></div>
             <div className="detail-card"><span>Last Updated</span><strong>{new Date(viewing.updated_at).toLocaleString()}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{viewing.notes ?? "No notes added."}</strong></div>
           </div>

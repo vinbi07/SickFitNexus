@@ -1,12 +1,12 @@
 export function StatusBadge({ label }: { label: string }) {
   const normalized = label.toLowerCase();
-  const className = normalized.includes("critical") || normalized.includes("delay") || normalized.includes("issue")
+  const className = normalized.includes("critical") || normalized.includes("delay") || normalized.includes("issue") || normalized.includes("danger")
     ? "status-danger"
-    : normalized.includes("warning") || normalized.includes("partial") || normalized.includes("overdue")
+    : normalized.includes("warning") || normalized.includes("partial") || normalized.includes("overdue") || normalized.includes("low")
       ? "status-warning"
-      : normalized.includes("receive") || normalized.includes("resolved") || normalized.includes("complete")
-        ? "status-success"
-        : normalized.includes("transit") || normalized.includes("ordered")
+    : normalized.includes("receive") || normalized.includes("resolved") || normalized.includes("complete")
+      ? "status-success"
+      : normalized.includes("transit") || normalized.includes("ordered") || normalized.includes("ship") || normalized.includes("route")
           ? "status-info"
           : "status-neutral";
 

@@ -4,23 +4,14 @@ import { DataTable } from "@/components/DataTable";
 import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
-import { MultiLineChartCard } from "@/components/MultiLineChartCard";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { capacityService } from "@/services/capacityService";
-import { purchaseOrderService } from "@/services/purchaseOrderService";
+import { dashboardService } from "@/services/dashboardService";
 import type { CapacitySnapshot } from "@/types/domain";
-import { daysBetween } from "@/utils/date";
-import { formatDate } from "@/utils/format";
-import {
-  getAverageTimelineDays,
-  getProductionTimelineExceptionCount,
-  getProductionTimelineRows,
-  getProductionTimelineTrend,
-  type ProductionTimelineRow,
-} from "@/utils/productionTimeline";
+import { formatDate, formatNumber } from "@/utils/format";
 
 export function ProductionPage() {
   const [editing, setEditing] = useState<Partial<CapacitySnapshot> | null>(null);
@@ -28,132 +19,78 @@ export function ProductionPage() {
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       capacity: await capacityService.list(),
-      purchaseOrders: await purchaseOrderService.list({ poType: "Manufacturer PO" }),
+      snapshot: await dashboardService.getSnapshot(),
     }),
     [],
   );
 
   if (loading) return <LoadingState />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load production"} />;
+  if (error || !data) return <ErrorState message={error ?? "Unable to load manufacturing"} />;
 
-  const paidNoTracking = data.purchaseOrders.filter((po) => po.invoice_paid_at && !po.tracking_number);
-  const activeProduction = data.purchaseOrders.filter((po) => !["Received", "Closed", "Cancelled"].includes(po.status));
-  const manufacturerCapacity = data.capacity.filter((snapshot) => snapshot.capacity_type === "Manufacturer");
-  const threePlCapacity = data.capacity.filter((snapshot) => snapshot.capacity_type === "3PL");
-  const productionTimelineRows = getProductionTimelineRows(data.purchaseOrders);
-  const avgOrderToArrivalDays = getAverageTimelineDays(productionTimelineRows, "orderToArrivalDays");
-  const avgPaidToArrivalDays = getAverageTimelineDays(productionTimelineRows, "paidToArrivalDays");
-  const productionTimelineExceptionCount = getProductionTimelineExceptionCount(productionTimelineRows);
-  const productionTimelineTrend = getProductionTimelineTrend(productionTimelineRows);
+  const manufacturerCapacity = data.capacity.filter((entry) => entry.capacity_type === "Manufacturer");
 
   return (
     <div className="section-stack">
       <PageHeader
-        title="Production"
-        description="Track manufacturer capacity, active production POs, paid-without-tracking risk, and future 3PL readiness without replacing the current Nexus architecture."
+        title="Operations -> Manufacturing"
+        description="Track active SKUs in route, open and shipped invoices, incoming inventory, and reorder timing from actual shipment and invoice data."
         actions={<button className="btn btn-primary" onClick={() => setEditing({ snapshot_date: new Date().toISOString().slice(0, 10), capacity_type: "Manufacturer", partner_name: "" })}>Add Capacity Snapshot</button>}
       />
-      {notice ? <NotificationBanner tone={notice.tone} message={notice.tone === "success" ? notice.message : notice.message} onClose={() => setNotice(null)} /> : null}
+      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="card-grid">
-        <DashboardCard label="POs in Flight" value={activeProduction.length} />
-        <DashboardCard label="Paid, No Tracking" value={paidNoTracking.length} footnote="Elevate these in vendor follow-up" />
-        <DashboardCard label="Manufacturer Snapshots" value={manufacturerCapacity.length} />
-        <DashboardCard label="3PL Snapshots" value={threePlCapacity.length} footnote="Manual / discovery-ready for now" />
-        <DashboardCard label="Order to Arrival" value={`${avgOrderToArrivalDays}d`} footnote="Completed manufacturer POs only" />
-        <DashboardCard label="Paid to Arrival" value={`${avgPaidToArrivalDays}d`} footnote={`${productionTimelineExceptionCount} POs missing timeline dates`} />
+        <DashboardCard label="Active SKUs in Route" value={data.snapshot.activeSkusInRoute} footnote="Unique SKUs tied to active manufacturer invoices" />
+        <DashboardCard label="Units in Route" value={formatNumber(data.snapshot.incomingInventoryUnits)} footnote="Outstanding manufacturer quantity" />
+        <DashboardCard label="Open Invoices" value={data.snapshot.openInvoiceCount} />
+        <DashboardCard label="Shipped Invoices" value={data.snapshot.shippedInvoiceCount} />
+        <DashboardCard label="Inventory in Route" value={data.snapshot.inventoryInRouteCount} footnote="Invoices still moving toward inventory" />
+        <DashboardCard label="Reorder Windows" value={data.snapshot.skuReorderWindows.filter((item) => item.recommendation !== "Monitor window").length} footnote="SKUs needing active reorder review" />
       </div>
       <div className="split-grid">
-        <MultiLineChartCard
-          title="Production to Arrival Timeline"
-          data={productionTimelineTrend}
-          xKey="label"
-          series={[
-            { dataKey: "orderToArrivalDays", label: "Order to Arrival", stroke: "#111111" },
-            { dataKey: "paidToArrivalDays", label: "Paid to Arrival", stroke: "#e72027" },
-          ]}
-        />
         <div className="panel section-stack">
-          <div className="panel-header"><h3>Timeline Notes</h3></div>
+          <div className="panel-header"><h3>Invoice and Shipment Flow</h3></div>
+          <DataTable
+            emptyMessage="No active manufacturing invoices yet."
+            columns={[
+              { key: "poNumber", title: "PO", render: (row) => row.poNumber },
+              { key: "manufacturer", title: "Manufacturer", render: (row) => row.manufacturer },
+              { key: "invoiceStatus", title: "Invoice Status", render: (row) => <StatusBadge label={row.invoiceStatus} /> },
+              { key: "shipmentStatus", title: "Shipment Status", render: (row) => row.shipmentStatus || "N/A" },
+              { key: "shipDate", title: "Ship Date", render: (row) => formatDate(row.shipDate) },
+              { key: "etaDate", title: "ETA", render: (row) => formatDate(row.etaDate) },
+              { key: "incomingUnits", title: "Units", render: (row) => formatNumber(row.incomingUnits) },
+            ]}
+            rows={data.snapshot.manufacturingSnapshotRows}
+          />
+        </div>
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>SKU Reorder Queue</h3></div>
           <div className="timeline">
-            <div className="timeline-item">
-              <strong>Completed averages only</strong>
-              <p>Summary cards use manufacturer POs with an `actual_delivery_date` so projected arrivals do not skew performance history.</p>
-            </div>
-            <div className="timeline-item">
-              <strong>Projected open POs stay visible</strong>
-              <p>Open POs use `expected_delivery_date` in the chart and table until an actual arrival is recorded.</p>
-            </div>
-            <div className="timeline-item">
-              <strong>Date cleanup queue</strong>
-              <p>{productionTimelineExceptionCount} manufacturer POs are missing one or more dates needed for a complete production timeline.</p>
-            </div>
+            {data.snapshot.skuReorderWindows.slice(0, 10).map((item) => (
+              <div key={item.sku} className="timeline-item">
+                <strong>{item.productName}</strong>
+                <p>{item.sku}</p>
+                <span className="muted">
+                  {item.recommendation} | Reorder by {item.reorderByDate ? formatDate(item.reorderByDate) : "manual review"}
+                </span>
+                <span className="helper-text">On hand {item.currentQuantity} | Incoming {item.incomingQuantity}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
-          <div className="panel-header"><h3>Active Manufacturer POs</h3></div>
+          <div className="panel-header"><h3>Manufacturer Capacity Tracker</h3></div>
           <DataTable
-            emptyMessage="No manufacturer POs yet."
-            columns={[
-              { key: "po_number", title: "PO", render: (row) => row.po_number },
-              { key: "vendor", title: "Manufacturer", render: (row) => row.vendors?.name ?? "Unassigned" },
-              { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
-              { key: "invoice_paid_at", title: "Invoice Paid", render: (row) => formatDate(row.invoice_paid_at) },
-              { key: "tracking", title: "Tracking", render: (row) => row.tracking_number ?? row.tracking_status ?? "Missing" },
-              { key: "aging", title: "Age Since Paid", render: (row) => row.invoice_paid_at ? `${daysBetween(row.invoice_paid_at, new Date().toISOString().slice(0, 10))}d` : "N/A" },
-            ]}
-            rows={activeProduction}
-          />
-        </div>
-        <div className="panel section-stack">
-          <div className="panel-header"><h3>Production Timeline Detail</h3></div>
-          <DataTable<ProductionTimelineRow>
-            emptyMessage="No manufacturer POs available for timeline tracking yet."
-            columns={[
-              { key: "po_number", title: "PO", render: (row) => row.poNumber },
-              { key: "manufacturer", title: "Manufacturer", render: (row) => row.manufacturerName },
-              { key: "order_date", title: "Order Date", render: (row) => formatDate(row.orderDate) },
-              { key: "invoice_paid_at", title: "Paid Date", render: (row) => formatDate(row.invoicePaidAt) },
-              {
-                key: "arrival",
-                title: "Arrival",
-                render: (row) => formatDate(row.actualArrivalDate ?? row.expectedArrivalDate),
-              },
-              {
-                key: "order_to_arrival",
-                title: "Order to Arrival",
-                render: (row) => row.orderToArrivalDays !== null ? `${row.orderToArrivalDays}d` : "Missing order date",
-              },
-              {
-                key: "paid_to_arrival",
-                title: "Paid to Arrival",
-                render: (row) => row.paidToArrivalDays !== null ? `${row.paidToArrivalDays}d` : "Missing paid date",
-              },
-              {
-                key: "timeline_status",
-                title: "Timeline Status",
-                render: (row) => <StatusBadge label={row.timelineStatus} />,
-              },
-            ]}
-            rows={productionTimelineRows}
-          />
-        </div>
-      </div>
-      <div className="split-grid">
-        <div className="panel section-stack">
-          <div className="panel-header"><h3>Capacity Tracker</h3></div>
-          <DataTable
-            emptyMessage="No capacity snapshots yet."
+            emptyMessage="No manufacturer capacity snapshots yet."
             columns={[
               { key: "snapshot_date", title: "Date", render: (row) => formatDate(row.snapshot_date) },
-              { key: "capacity_type", title: "Type", render: (row) => row.capacity_type },
               { key: "partner_name", title: "Partner", render: (row) => row.partner_name },
               { key: "lane_name", title: "Lane", render: (row) => row.lane_name ?? "N/A" },
               { key: "available_units", title: "Available", render: (row) => row.available_units },
               { key: "committed_units", title: "Committed", render: (row) => row.committed_units },
             ]}
-            rows={data.capacity}
+            rows={manufacturerCapacity}
           />
         </div>
       </div>

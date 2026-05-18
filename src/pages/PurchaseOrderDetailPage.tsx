@@ -56,6 +56,10 @@ export function PurchaseOrderDetailPage() {
           <strong className="metric-value">{formatDate(data.purchaseOrder.expected_delivery_date)}</strong>
         </div>
         <div className="card metric-card">
+          <span className="metric-label">Invoice Status</span>
+          <strong className="metric-value">{data.purchaseOrder.invoice_status ?? "Open"}</strong>
+        </div>
+        <div className="card metric-card">
           <span className="metric-label">Paid to Delivered</span>
           <strong className="metric-value">{paidToDeliveredDays !== null ? `${paidToDeliveredDays}d` : "Open"}</strong>
         </div>
@@ -66,8 +70,12 @@ export function PurchaseOrderDetailPage() {
           <div className="detail-grid">
             <div className="detail-card"><span>Retailer</span><strong>{data.purchaseOrder.retailers?.name ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{data.purchaseOrder.vendors?.name ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Ship Date</span><strong>{formatDate(data.purchaseOrder.ship_date)}</strong></div>
+            <div className="detail-card"><span>ETA</span><strong>{formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date)}</strong></div>
+            <div className="detail-card"><span>Invoice Status</span><strong>{data.purchaseOrder.invoice_status ?? "Open"}</strong></div>
             <div className="detail-card"><span>Invoice Paid</span><strong>{formatDate(data.purchaseOrder.invoice_paid_at)}</strong></div>
-            <div className="detail-card"><span>Tracking</span><strong>{data.purchaseOrder.tracking_number ?? data.purchaseOrder.tracking_status ?? "None"}</strong></div>
+            <div className="detail-card"><span>Shipment Status</span><strong>{data.purchaseOrder.shipment_status ?? data.purchaseOrder.tracking_status ?? "None"}</strong></div>
+            <div className="detail-card"><span>Tracking</span><strong>{data.purchaseOrder.tracking_number ?? "None"}</strong></div>
             <div className="detail-card"><span>Source Channel</span><strong>{data.purchaseOrder.source_channel ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Generated Form</span><strong>{data.purchaseOrder.generated_form_url ? <a href={data.purchaseOrder.generated_form_url} target="_blank" rel="noreferrer">Open</a> : "Not generated"}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.purchaseOrder.notes ?? "No notes added."}</strong></div>

@@ -34,6 +34,9 @@ type ShopifyVariantNode = {
     title: string;
     handle: string;
     status: string;
+    featuredImage: {
+      url: string;
+    } | null;
   };
 };
 
@@ -95,6 +98,9 @@ const SHOPIFY_VARIANTS_QUERY = `
             title
             handle
             status
+            featuredImage {
+              url
+            }
           }
         }
       }
@@ -388,6 +394,8 @@ async function syncVariant(
     unit_price: Number(variant.price ?? existingProduct?.unit_price ?? 0),
     current_inventory: totalInventory,
     safety_stock: existingProduct?.safety_stock ?? 0,
+    image_url: variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
+    no_bundles: existingProduct?.no_bundles ?? false,
     shopify_product_id: variant.product.id,
     shopify_variant_id: variant.id,
     shopify_handle: variant.product.handle,

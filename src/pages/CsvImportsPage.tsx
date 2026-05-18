@@ -39,7 +39,7 @@ export function CsvImportsPage() {
     <div className="section-stack">
       <PageHeader
         title="CSV Import + Normalization"
-        description="Upload vendor PO files, map inconsistent headers, validate rows, and inspect import history with failures."
+        description="Upload wholesale PO files, preview and validate a Shields-style template, undo mistakes safely, and keep the app ready for future PDF-to-CSV intake."
         actions={
           <button className="btn btn-danger" onClick={() => setShowReset(true)}>
             Reset Imported Data
@@ -48,6 +48,21 @@ export function CsvImportsPage() {
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <CsvImportWorkflow onImported={reload} />
+      <div className="panel section-stack">
+        <div className="panel-header">
+          <h3>Future PDF Intake</h3>
+        </div>
+        <div className="timeline">
+          <div className="timeline-item">
+            <strong>AI-assisted PDF to CSV placeholder</strong>
+            <p>Converted PO data should land in the same CSV template used here so validation, preview, undo import, and error handling continue to work without a separate import path.</p>
+          </div>
+          <div className="timeline-item">
+            <strong>Audit trail structure reserved</strong>
+            <p>The data model now leaves room for record-level audit logging later without requiring authentication to ship first.</p>
+          </div>
+        </div>
+      </div>
       <div className="panel section-stack">
         <div className="panel-header">
           <h3>Saved Mapping Presets</h3>

@@ -15,6 +15,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { LocationsPage } from "@/pages/LocationsPage";
 import { ProductsPage } from "@/pages/ProductsPage";
 import { RetailersPage } from "@/pages/RetailersPage";
+import { RetailerDetailPage } from "@/pages/RetailerDetailPage";
 import { CompliancePage } from "@/pages/CompliancePage";
 import { ProductionPage } from "@/pages/ProductionPage";
 import { AppShell } from "@/components/AppShell";
@@ -26,9 +27,9 @@ const navItems = [
   { to: "/purchase-orders", label: "Purchase Orders" },
   { to: "/inventory", label: "Inventory" },
   { to: "/vendors", label: "Vendors" },
-  { to: "/retailers", label: "Retailers" },
+  { to: "/retailers", label: "Accounts" },
   { to: "/compliance", label: "Compliance" },
-  { to: "/production", label: "Production" },
+  { to: "/production", label: "Manufacturing" },
   { to: "/locations", label: "Locations" },
   { to: "/products", label: "Products" },
   { to: "/alerts", label: "Alerts" },
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/vendors" element={<VendorsPage />} />
         <Route path="/retailers" element={<RetailersPage />} />
+        <Route path="/retailers/:id" element={<RetailerDetailPage />} />
         <Route path="/compliance" element={<CompliancePage />} />
         <Route path="/production" element={<ProductionPage />} />
         <Route path="/locations" element={<LocationsPage />} />

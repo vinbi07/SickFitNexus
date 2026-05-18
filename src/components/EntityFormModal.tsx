@@ -15,7 +15,7 @@ export function EntityFormModal<T extends Record<string, unknown>>({
   fields: Array<{
     key: keyof T;
     label: string;
-    type?: "text" | "textarea" | "number" | "date" | "color" | "select";
+    type?: "text" | "textarea" | "number" | "date" | "color" | "select" | "checkbox";
     required?: boolean;
     min?: number;
     step?: number;
@@ -86,6 +86,17 @@ export function EntityFormModal<T extends Record<string, unknown>>({
                   </option>
                 ))}
               </select>
+            ) : field.type === "checkbox" ? (
+              <input
+                type="checkbox"
+                checked={Boolean(values[field.key])}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    [field.key]: event.target.checked,
+                  }))
+                }
+              />
             ) : (
               <input
                 type={field.type ?? "text"}

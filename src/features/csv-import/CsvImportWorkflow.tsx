@@ -46,7 +46,7 @@ export function CsvImportWorkflow({ onImported }: { onImported: () => Promise<vo
           <div className="panel-header">
             <div>
               <h3>Map CSV columns</h3>
-              <p className="muted">{fileName} • {rows.length} rows detected</p>
+              <p className="muted">{fileName} | {rows.length} rows detected</p>
             </div>
             <div className="btn-row">
               <input
@@ -96,6 +96,9 @@ export function CsvImportWorkflow({ onImported }: { onImported: () => Promise<vo
             />
           </div>
           <div className="btn-row">
+            <a className="btn btn-ghost" href="/sample-po-import.csv" target="_blank" rel="noreferrer">
+              Download Shields-Style Template
+            </a>
             <button
               className="btn btn-primary"
               disabled={importing}

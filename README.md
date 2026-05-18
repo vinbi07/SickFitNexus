@@ -1,6 +1,6 @@
 # SickFit Nexus
 
-SickFit Nexus is an Operational Command Center that turns messy PO CSVs into clean inventory intelligence, vendor visibility, forecasting alerts, and executive-ready reports.
+SickFit Nexus is an Operational Command Center that turns messy wholesale PO CSVs into clean inventory intelligence, manufacturing visibility, retailer account context, and operations-ready reporting.
 
 ## Stack
 
@@ -16,6 +16,78 @@ SickFit Nexus is an Operational Command Center that turns messy PO CSVs into cle
 - Inventory tracking with manual adjustments, inventory events, low-stock indicators, and rule-based forecasting calculations
 - Alerts, vendor scorecards, executive reporting, SOP library, wins board, people directory, training modules, and branding settings
 - Supabase SQL schema, seed data, and sample CSV import file
+
+## Operations Refresh
+
+This repo now includes a wholesale operations cleanup pass focused on real invoice, shipment, inventory, and account workflows instead of forecast-heavy dashboard metrics.
+
+### Dashboard and Manufacturing
+
+- Dashboard cleanup removed forecast/pipeline-heavy emphasis such as weighted forecast, active pipeline, 14-day forecast framing, recent CSV imports, and SOP links from the main command view
+- Revenue headline now reflects wholesale revenue only and excludes Shopify / DTC revenue
+- Manufacturing now uses actual invoice and shipment-based tracking for:
+  - active SKUs in route
+  - quantities in route
+  - open invoices
+  - shipped invoices
+  - inventory in route
+  - reorder windows
+
+### Inventory and Products
+
+- Inventory danger logic marks any SKU at `25` units or less as red / danger
+- Inventory views now surface:
+  - SKU
+  - product name
+  - product image
+  - current quantity
+  - incoming quantity
+  - COGS
+  - margin
+  - no-bundles status
+  - danger status
+- Products now support reusable `image_url` metadata and a `no_bundles` flag so product data can flow directly into inventory views
+
+### Accounts / Retailers
+
+- Retailers were reshaped into a more operational Accounts workflow
+- Each account can now store:
+  - contacts
+  - account numbers
+  - SOP notes
+  - shipping requirements
+  - notes
+  - group / parent account metadata
+- Retailer profile pages now show:
+  - top SKUs
+  - recent POs
+  - ship dates
+  - open invoices
+  - shipped invoices
+  - location coverage
+
+### CSV Import
+
+- CSV import now prefers a simpler Shields-style wholesale PO template
+- Import mapping and normalization now support:
+  - retailer/account
+  - shipment status
+  - invoice status
+  - order date
+  - ship date
+  - ETA
+  - pricing
+  - SKU
+  - quantity
+  - notes
+- Undo import, preview before commit, validation, duplicate detection, and failed-row review are still supported
+- A future-state placeholder was added for AI-assisted PDF-to-CSV conversion feeding into the same CSV import path
+
+### Schema / Files Added
+
+- New migration: [src/db/migrations/011_operations_dashboard_refresh.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/011_operations_dashboard_refresh.sql)
+- New account profile page: [src/pages/RetailerDetailPage.tsx](/c:/Users/Vinbi/SickFitNexus/src/pages/RetailerDetailPage.tsx)
+- New shared operations helpers: [src/utils/operations.ts](/c:/Users/Vinbi/SickFitNexus/src/utils/operations.ts)
 
 ## Setup
 
@@ -44,6 +116,7 @@ VITE_SUPABASE_ANON_KEY=...
 - [src/db/migrations/008_inventory_event_source_index_fix.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/008_inventory_event_source_index_fix.sql)
 - [src/db/migrations/009_shopify_orders.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/009_shopify_orders.sql)
 - [src/db/migrations/010_dashboard_baselines.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/010_dashboard_baselines.sql)
+- [src/db/migrations/011_operations_dashboard_refresh.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/011_operations_dashboard_refresh.sql)
 - [src/db/seed.sql](/c:/Users/Vinbi/SickFitNexus/src/db/seed.sql)
 
 4. Start the app:
@@ -55,6 +128,8 @@ npm run dev
 5. Import the sample file from:
 
 - [public/sample-po-import.csv](/c:/Users/Vinbi/SickFitNexus/public/sample-po-import.csv)
+
+The sample import is now shaped around the preferred Shields-style wholesale format.
 
 ## Notes
 

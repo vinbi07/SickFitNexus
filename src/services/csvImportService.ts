@@ -11,6 +11,7 @@ import type {
   NormalizedImportRow,
   Product,
   PurchaseOrder,
+  Retailer,
   Vendor,
 } from "@/types/domain";
 import { inferMapping, normalizeRows, parseCsvFile, validateNormalizedRows } from "@/utils/csv";
@@ -58,6 +59,27 @@ async function findOrCreateLocation(name: string, csvImportId?: string) {
     });
   }
   return location;
+}
+
+async function findOrCreateRetailer(name: string, csvImportId?: string) {
+  const supabase = assertSupabase();
+  const cleanName = name.trim();
+  if (!cleanName) return null;
+  const { data: existing } = await supabase.from("retailers").select("*").ilike("name", cleanName).limit(1).maybeSingle();
+  if (existing) return existing as Retailer;
+  const { data, error } = await supabase.from("retailers").insert({ name: cleanName, status: "Active" }).select().single();
+  if (error) throw error;
+  const retailer = data as Retailer;
+  if (csvImportId) {
+    await recordImportLink({
+      csv_import_id: csvImportId,
+      entity_type: "retailer",
+      entity_id: retailer.id,
+      action_type: "created",
+      previous_data: null,
+    });
+  }
+  return retailer;
 }
 
 async function findOrCreateProduct(row: NormalizedImportRow, csvImportId?: string) {
@@ -152,6 +174,8 @@ function getTableForEntityType(entityType: string) {
       return "vendors";
     case "location":
       return "locations";
+    case "retailer":
+      return "retailers";
     case "product":
       return "products";
     case "purchase_order":
@@ -241,6 +265,7 @@ export const csvImportService = {
       try {
         if (validationErrors.some((error) => error.rowNumber === index + 2)) continue;
         const vendor = await findOrCreateVendor(row.vendor_name, csvImport.id);
+        const retailer = await findOrCreateRetailer(row.retailer_name, csvImport.id);
         const location = await findOrCreateLocation(row.location_name || "Main Warehouse", csvImport.id);
         const product = await findOrCreateProduct(row, csvImport.id);
 
@@ -270,11 +295,17 @@ export const csvImportService = {
             .insert({
               po_number: row.po_number,
               vendor_id: vendor.id,
+              retailer_id: retailer?.id ?? null,
               location_id: location.id,
+              po_type: retailer ? "Retailer PO" : "Manufacturer PO",
               status: row.status,
               order_date: row.order_date,
+              ship_date: row.ship_date,
+              eta_date: row.eta_date,
               expected_delivery_date: row.expected_delivery_date,
               actual_delivery_date: row.actual_delivery_date,
+              invoice_status: row.invoice_status,
+              shipment_status: row.shipment_status || null,
               total_cost: row.quantity_ordered * row.unit_cost,
               source_file_name: fileName,
               notes: row.notes,
@@ -301,8 +332,12 @@ export const csvImportService = {
               previous_data: {
                 total_cost: purchaseOrder.total_cost,
                 status: purchaseOrder.status,
+                ship_date: purchaseOrder.ship_date,
+                eta_date: purchaseOrder.eta_date,
                 expected_delivery_date: purchaseOrder.expected_delivery_date,
                 actual_delivery_date: purchaseOrder.actual_delivery_date,
+                invoice_status: purchaseOrder.invoice_status,
+                shipment_status: purchaseOrder.shipment_status,
               },
             });
             restoredEntities.add(restoreKey);
@@ -310,8 +345,13 @@ export const csvImportService = {
           await updateTable<PurchaseOrder>("purchase_orders", purchaseOrder.id, {
             total_cost: purchaseOrder.total_cost + row.quantity_ordered * row.unit_cost,
             status: row.status,
+            retailer_id: retailer?.id ?? purchaseOrder.retailer_id,
+            ship_date: row.ship_date ?? purchaseOrder.ship_date,
+            eta_date: row.eta_date ?? purchaseOrder.eta_date,
             expected_delivery_date: row.expected_delivery_date ?? purchaseOrder.expected_delivery_date,
             actual_delivery_date: row.actual_delivery_date ?? purchaseOrder.actual_delivery_date,
+            invoice_status: row.invoice_status ?? purchaseOrder.invoice_status,
+            shipment_status: row.shipment_status || purchaseOrder.shipment_status,
           });
         }
 

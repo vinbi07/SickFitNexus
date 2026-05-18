@@ -1,21 +1,15 @@
-import { BarChartCard } from "@/components/BarChartCard";
+import { Link } from "react-router-dom";
 import { DashboardCard } from "@/components/DashboardCard";
 import { ErrorState } from "@/components/ErrorState";
-import { LineChartCard } from "@/components/LineChartCard";
 import { LoadingState } from "@/components/LoadingState";
-import { MultiLineChartCard } from "@/components/MultiLineChartCard";
-import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardService } from "@/services/dashboardService";
 import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
-import { useState } from "react";
 
 export function DashboardPage() {
-  const [syncingShopify, setSyncingShopify] = useState(false);
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const { data, loading, error, reload } = useAsyncData(() => dashboardService.getSnapshot(), []);
+  const { data, loading, error } = useAsyncData(() => dashboardService.getSnapshot(), []);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load dashboard"} />;
@@ -23,187 +17,43 @@ export function DashboardPage() {
   return (
     <div className="section-stack">
       <PageHeader
-        title="Command Dashboard"
-        description="Monitor revenue, wholesale pipeline, SKU risk, production flow, and operator priorities without changing the existing Nexus structure."
-        actions={(
-          <div className="btn-row">
-            <button
-              className="btn btn-secondary"
-              disabled={syncingShopify}
-              onClick={async () => {
-                try {
-                  setSyncingShopify(true);
-                  const result = await dashboardService.syncShopifyDashboard();
-                  await reload();
-                  setNotice({
-                    tone: "success",
-                    message: `Shopify dashboard sync completed. ${result.ordersSynced ?? 0} orders and ${result.lineItemsSynced ?? 0} line items refreshed from the last ${result.lookbackDays ?? 365} days.`,
-                  });
-                } catch (err) {
-                  setNotice({
-                    tone: "error",
-                    message: err instanceof Error ? err.message : "Shopify dashboard sync failed.",
-                  });
-                } finally {
-                  setSyncingShopify(false);
-                }
-              }}
-            >
-              {syncingShopify ? "Syncing Shopify Dashboard..." : "Sync Shopify Dashboard"}
-            </button>
-          </div>
-        )}
+        title="Operations Dashboard"
+        description="Focus the command center on wholesale revenue, incoming inventory, manufacturing invoice status, retailer visibility, and urgent inventory risks."
       />
-      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
-      {syncingShopify ? (
-        <div className="panel section-stack">
-          <div className="panel-header">
-            <h3>Shopify Dashboard Sync In Progress</h3>
-          </div>
-          <div className="sync-progress-shell" aria-live="polite" aria-busy="true">
-            <div className="sync-progress-bar" />
-          </div>
-          <p className="muted">Pulling a year of Shopify orders for dashboard revenue and DTC metrics in chunked batches.</p>
-        </div>
-      ) : null}
       <div className="card-grid">
-        <DashboardCard
-          label="Revenue YTD"
-          value={formatCurrency(data.revenueYtd)}
-          footnote={`${data.revenueYtdDeltaPercent >= 0 ? "+" : ""}${data.revenueYtdDeltaPercent}% vs prior YTD`}
-          highlight
-        />
-        <DashboardCard
-          label="Active Wholesale Pipeline"
-          value={formatCurrency(data.activeWholesalePipelineValue)}
-          footnote={`${data.activeWholesalePipelineCount} open wholesale POs`}
-        />
-        <DashboardCard
-          label="Awaiting Action"
-          value={data.awaitingActionCount}
-          footnote={`${data.awaitingPoSubmissionCount} need PO submitted`}
-        />
-        <DashboardCard
-          label="SKUs at OOS Risk <90d"
-          value={data.skuOosRisk90dCount}
-          footnote={`${data.skuOosRiskCriticalCount} critical`}
-        />
-        <DashboardCard
-          label="Production POs in Flight"
-          value={data.productionPosInFlightCount}
-          footnote={`Next land: ${data.productionNextLandDate ? formatDate(data.productionNextLandDate) : "N/A"}`}
-        />
-        <DashboardCard
-          label="DTC Orders Today"
-          value={data.dtcOrdersTodayCount}
-          footnote={formatCurrency(data.dtcOrdersTodayValue)}
-        />
+        <DashboardCard label="Wholesale Revenue" value={formatCurrency(data.wholesaleRevenueTotal)} footnote="Wholesale only. Shopify / DTC excluded." highlight />
+        <DashboardCard label="Danger SKUs" value={data.dangerSkuCount} footnote="Red when on-hand inventory is 25 units or less." />
+        <DashboardCard label="Incoming Inventory" value={formatNumber(data.incomingInventoryUnits)} footnote={`${data.activeSkusInRoute} active SKUs in route`} />
+        <DashboardCard label="Open Invoices" value={data.openInvoiceCount} footnote="Manufacturer invoices not shipped yet" />
+        <DashboardCard label="Shipped Invoices" value={data.shippedInvoiceCount} footnote={`${data.inventoryInRouteCount} still in route`} />
+        <DashboardCard label="Awaiting Action" value={data.awaitingActionCount} footnote="Urgent inventory and invoice follow-up" />
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header">
-            <h3>Revenue Pace vs Prior YTD</h3>
-          </div>
-          <div className="detail-grid">
-            <div className="detail-card">
-              <span>Current YTD Revenue</span>
-              <strong>{formatCurrency(data.revenueYtd)}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Prior YTD Baseline</span>
-              <strong>{formatCurrency(data.priorRevenueYtd)}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Projected Year End</span>
-              <strong>{formatCurrency(data.projectedRevenueYearEnd)}</strong>
-            </div>
-            <div className="detail-card">
-              <span>On / Off Track</span>
-              <strong className={data.revenuePaceDeltaPercent >= 0 ? "success-text" : "danger-text"}>
-                {data.revenuePaceDeltaPercent >= 0 ? "+" : ""}
-                {data.revenuePaceDeltaPercent}% vs prior YTD
-              </strong>
-            </div>
-          </div>
-          <p className="helper-text">
-            The prior baseline line is a straight full-year benchmark: it starts at zero in January and ends at your saved prior YTD revenue in December.
-          </p>
-        </div>
-        <MultiLineChartCard
-          title="Revenue Projection"
-          data={data.revenueProjectionTrend}
-          xKey="label"
-          series={[
-            { dataKey: "actualRevenue", label: "Actual YTD", stroke: "#111111" },
-            { dataKey: "projectedRevenue", label: "Projected Pace", stroke: "#e72027" },
-            { dataKey: "priorBaselineRevenue", label: "Prior YTD Pace", stroke: "#69707d", strokeDasharray: "6 4" },
-          ]}
-        />
-      </div>
-      <div className="split-grid">
-        <div className="panel section-stack">
-          <div className="panel-header">
-            <h3>Revenue by Channel (YTD)</h3>
+            <h3>Manufacturing Snapshot</h3>
+            <Link className="btn btn-secondary btn-small" to="/production">Open Manufacturing</Link>
           </div>
           <div className="stat-list">
-            {data.revenueByChannelYtd.map((item) => (
-              <div key={item.channel} className="stat-row">
+            {data.manufacturingSnapshotRows.length ? data.manufacturingSnapshotRows.map((row) => (
+              <div key={row.poId} className="stat-row">
                 <div className="cell-stack">
-                  <strong>{item.channel}</strong>
-                  <span className="muted">YTD</span>
+                  <strong>{row.poNumber} | {row.manufacturer}</strong>
+                  <span className="muted">
+                    {row.skuCount} SKUs | {formatNumber(row.incomingUnits)} units | ETA {formatDate(row.etaDate)}
+                  </span>
+                  <span className="helper-text">{row.reorderWindowSummary}</span>
                 </div>
-                <strong>{formatCurrency(item.value)}</strong>
+                <div className="cell-stack">
+                  <StatusBadge label={row.invoiceStatus} />
+                  <span className="muted">{row.shipmentStatus}</span>
+                </div>
               </div>
-            ))}
+            )) : <div className="empty-state">No active manufacturing invoices are in route right now.</div>}
           </div>
         </div>
         <div className="panel section-stack">
-          <div className="panel-header">
-            <h3>Top SKUs YTD</h3>
-          </div>
-          <div className="stat-list">
-            {data.topSkusYtd.length ? data.topSkusYtd.map((item) => (
-              <div key={item.sku || item.label} className="stat-row">
-                <div className="cell-stack">
-                  <strong>{item.label}</strong>
-                  <span className="muted">{item.units} units</span>
-                </div>
-                <strong>{formatCurrency(item.value)}</strong>
-              </div>
-            )) : (
-              <div className="empty-state">No YTD SKU revenue data is available yet.</div>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="section-stack">
-        <div className="section-header">
-          <h3>Operations Snapshot</h3>
-          <span className="helper-text">Current operational depth stays in place below the new executive-level KPIs.</span>
-        </div>
-        <div className="card-grid">
-          <DashboardCard label="Weighted Forecast" value={formatCurrency(data.weightedForecastValue)} footnote="Modeled from current retailer PO pipeline" highlight />
-          <DashboardCard label="Active Pipeline" value={formatCurrency(data.activePipelineValue)} footnote={`${data.openPoCount} open operational orders`} />
-          <DashboardCard label="Due in 14 Days" value={data.dueIn14DaysCount} footnote="Retailer and manufacturer deadlines approaching" />
-          <DashboardCard label="Pending Intake" value={data.pendingIntakeCount} footnote="Forwarded or unprocessed PO requests" />
-          <DashboardCard label="Low Stock Items" value={data.lowStockCount} footnote="Current inventory at or below safety stock" />
-          <DashboardCard
-            label="Order to Arrival"
-            value={`${data.avgOrderToArrivalDays}d`}
-            footnote={`${data.productionTimelineExceptionCount} POs need date cleanup or arrival updates`}
-          />
-          <DashboardCard
-            label="Paid to Arrival"
-            value={`${data.avgPaidToArrivalDays}d`}
-            footnote="Completed manufacturer POs only"
-          />
-        </div>
-      </div>
-      <div className="split-grid">
-        <div className="panel section-stack">
-          <div className="panel-header">
-            <h3>Priority Feed</h3>
-          </div>
+          <div className="panel-header"><h3>Priority Feed</h3></div>
           <div className="timeline">
             {data.priorityFeed.map((item) => (
               <div key={item.id} className="timeline-item">
@@ -217,64 +67,60 @@ export function DashboardPage() {
             ))}
           </div>
         </div>
-        <div className="panel section-stack">
-          <div className="panel-header"><h3>Upcoming Reorder Windows</h3></div>
-          <div className="timeline">
-            {data.reorderWindows.length ? data.reorderWindows.map((item) => (
-              <div key={item.retailer} className="timeline-item">
-                <strong>{item.retailer}</strong>
-                <p>{item.window}</p>
-                <span className="muted">{item.productHint}</span>
-              </div>
-            )) : <div className="empty-state">No retailer reorder windows calculated yet.</div>}
-          </div>
-        </div>
-      </div>
-      <div className="split-grid">
-        <BarChartCard title="Retailer Pipeline Value" data={data.pipelineByRetailer} xKey="retailer" dataKey="value" />
-        <MultiLineChartCard
-          title="Production to Arrival Timeline"
-          data={data.productionTimelineTrend}
-          xKey="label"
-          series={[
-            { dataKey: "orderToArrivalDays", label: "Order to Arrival", stroke: "#111111" },
-            { dataKey: "paidToArrivalDays", label: "Paid to Arrival", stroke: "#e72027" },
-          ]}
-        />
-      </div>
-      <div className="helper-text">Projected points use `expected_delivery_date` until an `actual_delivery_date` is captured.</div>
-      <div className="split-grid">
-        <LineChartCard title="Inventory by Record" data={data.stockTrend} xKey="date" dataKey="inventory" />
-        <BarChartCard title="Spend by Vendor" data={data.spendByVendor} xKey="vendor" dataKey="spend" />
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
-          <div className="panel-header"><h3>Recent CSV Imports</h3></div>
-          <div className="timeline">
-            {data.recentImports.map((item) => (
-              <div key={item.id} className="timeline-item">
-                <strong>{item.file_name}</strong>
-                <p>{item.successful_rows} successful rows | {item.failed_rows} failed rows</p>
+          <div className="panel-header"><h3>Retailer Visibility</h3></div>
+          <div className="stat-list">
+            {data.wholesaleAccounts.length ? data.wholesaleAccounts.map((account) => (
+              <div key={account.retailerId} className="stat-row">
+                <div className="cell-stack">
+                  <strong>{account.retailer}</strong>
+                  <span className="muted">{account.recentPoCount} recent POs</span>
+                  <span className="helper-text">{account.nextWindow}</span>
+                </div>
+                <div className="cell-stack">
+                  <span>{account.openInvoices} open</span>
+                  <span>{account.shippedInvoices} shipped / route</span>
+                </div>
               </div>
-            ))}
+            )) : <div className="empty-state">No retailer activity has been logged yet.</div>}
           </div>
         </div>
         <div className="panel section-stack">
-          <div className="panel-header"><h3>Quick SOP Links</h3></div>
-          <div className="quick-links">
-            {data.quickSops.map((sop) => (
-              <a
-                key={sop.id}
-                className="quick-link-card"
-                href={sop.external_url ?? sop.file_url ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <strong>{sop.title}</strong>
-                <p className="muted">{sop.category}</p>
-              </a>
-            ))}
+          <div className="panel-header"><h3>Inventory Danger Alerts</h3></div>
+          <div className="timeline">
+            {data.inventoryAlerts.length ? data.inventoryAlerts.map((item) => (
+              <div key={item.sku} className={`timeline-item${item.status === "danger" ? " timeline-item-danger" : ""}`}>
+                <div className="panel-header">
+                  <strong>{item.productName}</strong>
+                  <StatusBadge label={item.status === "danger" ? "Danger" : item.status === "warning" ? "Low" : "Healthy"} />
+                </div>
+                <p>{item.sku}</p>
+                <span className="muted">On hand: {item.currentQuantity} | Incoming: {item.incomingQuantity}</span>
+              </div>
+            )) : <div className="empty-state">No inventory alerts right now.</div>}
           </div>
+        </div>
+      </div>
+      <div className="panel section-stack">
+        <div className="panel-header"><h3>SKU Reorder Windows</h3></div>
+        <div className="stat-list">
+          {data.skuReorderWindows.slice(0, 8).map((item) => (
+            <div key={item.sku} className="stat-row">
+              <div className="cell-stack">
+                <strong>{item.productName}</strong>
+                <span className="muted">{item.sku}</span>
+              </div>
+              <div className="cell-stack">
+                <strong>{item.recommendation}</strong>
+                <span className="muted">
+                  Reorder by {item.reorderByDate ? formatDate(item.reorderByDate) : "manual review"}
+                </span>
+                <span className="helper-text">On hand {item.currentQuantity} | Incoming {item.incomingQuantity}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       <div className="split-grid">
@@ -301,7 +147,6 @@ export function DashboardPage() {
               </div>
             ))}
           </div>
-          <div className="helper-text">Inventory value: {formatCurrency(data.inventoryValue)} | Vendor risk count: {formatNumber(data.vendorRiskCount)}</div>
         </div>
       </div>
     </div>
