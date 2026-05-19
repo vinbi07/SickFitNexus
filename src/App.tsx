@@ -14,6 +14,7 @@ import { TrainingPage } from "@/pages/TrainingPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { LocationsPage } from "@/pages/LocationsPage";
 import { ProductsPage } from "@/pages/ProductsPage";
+import { BarcodesPage } from "@/pages/BarcodesPage";
 import { RetailersPage } from "@/pages/RetailersPage";
 import { RetailerDetailPage } from "@/pages/RetailerDetailPage";
 import { CompliancePage } from "@/pages/CompliancePage";
@@ -34,6 +35,7 @@ const navItems = [
   { to: "/production", label: "Manufacturing" },
   { to: "/locations", label: "Locations" },
   { to: "/products", label: "Products" },
+  { to: "/barcodes", label: "Barcodes" },
   { to: "/lookbook-templates", label: "Lookbooks" },
   { to: "/alerts", label: "Alerts" },
   { to: "/reports", label: "Reports" },
@@ -91,6 +93,7 @@ export default function App() {
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/products" element={<ProductsPage />} />
+              <Route path="/barcodes" element={<BarcodesPage />} />
               <Route path="/lookbook-templates" element={<LookbookTemplatesPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
               <Route path="/reports" element={<ReportsPage />} />

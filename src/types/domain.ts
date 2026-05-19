@@ -128,6 +128,29 @@ export interface Product {
   variants?: Product[];
 }
 
+export interface ProductBarcode {
+  id: string;
+  sku: string;
+  handle: string | null;
+  product_name: string;
+  collection: string | null;
+  pack_quantity: number | null;
+  pack_unit: string | null;
+  size: string | null;
+  barcode_upc: string | null;
+  created_at: string;
+  updated_at: string;
+  product_barcode_links?: ProductBarcodeLink[];
+}
+
+export interface ProductBarcodeLink {
+  id: string;
+  barcode_id: string;
+  product_id: string;
+  created_at: string;
+  products?: Product | null;
+}
+
 export interface InventoryItem {
   id: string;
   product_id: string;

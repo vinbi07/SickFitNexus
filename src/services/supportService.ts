@@ -1,6 +1,7 @@
 import { assertSupabase } from "@/lib/supabase";
-import { deleteFromTable, listTable, updateTable, upsertTable } from "@/services/baseService";
+import { deleteFromTable, insertTable, listTable, updateTable, upsertTable } from "@/services/baseService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
+import { getErrorMessage } from "@/utils/errors";
 import type {
   AppSettings,
   Comment,
@@ -8,6 +9,8 @@ import type {
   InventoryItem,
   Location,
   Person,
+  ProductBarcode,
+  ProductBarcodeLink,
   Product,
   Sop,
   TrainingModule,
@@ -98,6 +101,96 @@ async function saveProduct(payload: Partial<Product>) {
   return saved;
 }
 
+function normalizeBarcodeUpc(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  // Preserve raw scientific-notation UPC strings so we do not invent digits the source file did not keep.
+  return raw;
+}
+
+async function saveProductBarcode(payload: Partial<ProductBarcode>) {
+  const {
+    product_barcode_links: barcodeLinks,
+    linked_product_ids: _linkedProductIds,
+    ...barcodePayload
+  } = payload as Partial<ProductBarcode> & { linked_product_ids?: string[] };
+
+  try {
+    const [saved] = (await upsertTable<ProductBarcode>("product_barcodes", {
+      ...barcodePayload,
+      sku: String(barcodePayload.sku ?? "").trim(),
+      handle: barcodePayload.handle ? String(barcodePayload.handle).trim() : null,
+      product_name: String(barcodePayload.product_name ?? "").trim(),
+      collection: barcodePayload.collection ? String(barcodePayload.collection).trim() : null,
+      pack_quantity:
+        barcodePayload.pack_quantity === null || barcodePayload.pack_quantity === undefined || Number.isNaN(Number(barcodePayload.pack_quantity))
+          ? null
+          : Number(barcodePayload.pack_quantity),
+      pack_unit: barcodePayload.pack_unit ? String(barcodePayload.pack_unit).trim() : null,
+      size: barcodePayload.size ? String(barcodePayload.size).trim() : null,
+      barcode_upc: normalizeBarcodeUpc(barcodePayload.barcode_upc),
+    })) as ProductBarcode[];
+
+    if (Array.isArray(barcodeLinks)) {
+      const supabase = assertSupabase();
+      const productIds = [...new Set(
+        barcodeLinks
+          .map((link) => String(link.product_id ?? "").trim())
+          .filter(Boolean),
+      )];
+
+      const { error: deleteLinksError } = await supabase
+        .from("product_barcode_links")
+        .delete()
+        .eq("barcode_id", saved.id);
+      if (deleteLinksError) {
+        console.error("Failed to clear existing barcode links", {
+          barcodeId: saved.id,
+          sku: saved.sku,
+          productIds,
+          error: deleteLinksError,
+        });
+        throw new Error(`Unable to save barcode links. ${getErrorMessage(deleteLinksError)}`);
+      }
+
+      if (productIds.length) {
+        const { error: insertLinksError } = await supabase
+          .from("product_barcode_links")
+          .insert(productIds.map((productId) => ({ barcode_id: saved.id, product_id: productId })));
+        if (insertLinksError) {
+          console.error("Failed to insert barcode links", {
+            barcodeId: saved.id,
+            sku: saved.sku,
+            productIds,
+            error: insertLinksError,
+          });
+          throw new Error(`Unable to save linked products. ${getErrorMessage(insertLinksError)}`);
+        }
+      }
+    }
+
+    return saved;
+  } catch (error) {
+    console.error("Failed to save barcode row", {
+      payload,
+      error,
+    });
+    throw new Error(`Unable to save barcode row. ${getErrorMessage(error)}`);
+  }
+}
+
+type ProductBarcodeImportRow = {
+  sku?: string;
+  handle?: string;
+  product_name?: string;
+  collection?: string;
+  pack_quantity?: string | number;
+  pack_unit?: string;
+  size?: string;
+  barcode_upc?: string | number;
+};
+
 export const supportService = {
   listLocations: async () => {
     const supabase = assertSupabase();
@@ -144,6 +237,43 @@ export const supportService = {
   },
   saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),
+  listBarcodes: async () => {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("product_barcodes")
+      .select("*, product_barcode_links(*, products(*))")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as ProductBarcode[];
+  },
+  saveBarcode: saveProductBarcode,
+  deleteBarcode: (id: string) => deleteFromTable("product_barcodes", id),
+  importBarcodes: async (rows: ProductBarcodeImportRow[]) => {
+    const prepared = rows
+      .map((row) => ({
+        sku: String(row.sku ?? "").trim(),
+        handle: row.handle ? String(row.handle).trim() : null,
+        product_name: String(row.product_name ?? "").trim(),
+        collection: row.collection ? String(row.collection).trim() : null,
+        pack_quantity:
+          row.pack_quantity === null || row.pack_quantity === undefined || String(row.pack_quantity).trim() === ""
+            ? null
+            : Number(row.pack_quantity),
+        pack_unit: row.pack_unit ? String(row.pack_unit).trim() : null,
+        size: row.size ? String(row.size).trim() : null,
+        barcode_upc: normalizeBarcodeUpc(row.barcode_upc),
+      }))
+      .filter((row) => row.sku && row.product_name);
+
+    if (!prepared.length) {
+      throw new Error("No valid barcode rows were found in the CSV.");
+    }
+
+    const inserted = await insertTable<ProductBarcode>("product_barcodes", prepared);
+    return {
+      importedCount: (inserted ?? []).length,
+    };
+  },
   listSops: () => listTable<Sop>("sops"),
   saveSop: upsertSingle<Sop>("sops"),
   deleteSop: (id: string) => deleteFromTable("sops", id),
