@@ -32,6 +32,48 @@ export interface Retailer {
   updated_at: string;
 }
 
+export interface Buyer {
+  id: string;
+  retailer_id: string;
+  lookbook_template_id: string | null;
+  company_name: string;
+  buyer_name: string;
+  buyer_email: string;
+  phone: string | null;
+  billing_address: string | null;
+  shipping_address: string | null;
+  payment_terms: string | null;
+  order_mode_enabled: boolean;
+  compliance_requirements: string | null;
+  assigned_sales_rep: string | null;
+  access_token: string;
+  token_expires_at: string | null;
+  last_accessed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  retailers?: Retailer | null;
+  lookbook_templates?: LookbookTemplate | null;
+}
+
+export interface LookbookTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LookbookTemplateItem {
+  id: string;
+  template_id: string;
+  product_id: string;
+  sort_order: number;
+  featured: boolean;
+  created_at: string;
+  products?: Product | null;
+}
+
 export interface Location {
   id: string;
   name: string;
@@ -45,16 +87,30 @@ export interface Location {
 
 export interface Product {
   id: string;
+  parent_product_id: string | null;
   sku: string;
+  upc: string | null;
   name: string;
+  variant_title: string | null;
+  variant_sort_order: number;
   category: string | null;
   description: string | null;
   vendor_id: string | null;
   unit_cost: number;
   unit_price: number;
+  pack_size: string | null;
+  case_pack_quantity: number;
+  wholesale_price: number;
+  msrp: number;
+  weight: string | null;
+  dimensions: string | null;
   current_inventory: number;
+  inventory_available: number;
+  inventory_allocated: number;
   safety_stock: number;
   image_url: string | null;
+  compliance_docs_required: string[];
+  compliance_docs_status: string | null;
   no_bundles: boolean;
   shopify_product_id: string | null;
   shopify_variant_id: string | null;
@@ -66,6 +122,8 @@ export interface Product {
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
+  parent_products?: Product | null;
+  variants?: Product[];
 }
 
 export interface InventoryItem {
@@ -86,6 +144,7 @@ export interface InventoryItem {
 export type PurchaseOrderStatus =
   | "Draft"
   | "Pending"
+  | "Pending Approval"
   | "Ordered"
   | "In Transit"
   | "Partially Received"
@@ -106,9 +165,12 @@ export interface PurchaseOrder {
   po_number: string;
   vendor_id: string | null;
   retailer_id: string | null;
+  buyer_id: string | null;
   location_id: string | null;
   status: PurchaseOrderStatus;
   po_type: PurchaseOrderType;
+  approval_status: "Not Requested" | "Pending Approval" | "Approved" | "Rejected" | "Cancelled";
+  allocation_status: "Not Allocated" | "Allocated" | "Released" | "Queued for Fulfillment" | "Fulfilled";
   order_date: string | null;
   ship_date: string | null;
   submitted_at: string | null;
@@ -122,6 +184,19 @@ export interface PurchaseOrder {
   tracking_status: string | null;
   generated_form_url: string | null;
   source_channel: string | null;
+  compliance_snapshot: Record<string, unknown>;
+  buyer_notes: string | null;
+  internal_notes: string | null;
+  start_ship_date: string | null;
+  ship_complete_date: string | null;
+  subtotal: number;
+  total_units: number;
+  total_retail: number;
+  requested_action: "draft" | "quote" | "submit";
+  approved_at: string | null;
+  approved_by: string | null;
+  queued_for_fulfillment_at: string | null;
+  cancelled_at: string | null;
   total_cost: number;
   source_file_name: string | null;
   notes: string | null;
@@ -129,6 +204,7 @@ export interface PurchaseOrder {
   updated_at: string;
   vendors?: Vendor | null;
   retailers?: Retailer | null;
+  buyers?: Buyer | null;
   locations?: Location | null;
 }
 
@@ -137,11 +213,19 @@ export interface PoLineItem {
   purchase_order_id: string;
   product_id: string | null;
   sku: string;
+  upc: string | null;
   product_name: string;
+  description: string | null;
+  unit: string;
+  case_quantity: number;
+  unit_quantity: number;
   quantity_ordered: number;
   quantity_received: number;
   unit_cost: number;
+  unit_retail: number;
   line_total: number;
+  extended_cost: number;
+  extended_retail: number;
   created_at: string;
   updated_at: string;
   products?: Product | null;
@@ -164,6 +248,50 @@ export interface PurchaseOrderDocument {
   title: string;
   file_url: string | null;
   created_at: string;
+}
+
+export interface PurchaseOrderNotification {
+  id: string;
+  purchase_order_id: string;
+  recipient_type: "buyer" | "internal";
+  recipient_name: string | null;
+  recipient_email: string | null;
+  channel: string;
+  notification_type: string;
+  status: "queued" | "processing" | "sent" | "failed";
+  subject: string;
+  body: string;
+  payload: Record<string, unknown>;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComplianceSnapshot {
+  retailerId: string;
+  buyerId: string;
+  summary: string;
+  compliantCount: number;
+  requiredCount: number;
+  missingDocs: string[];
+  productWarnings: Array<{
+    productId: string;
+    sku: string;
+    missingDocs: string[];
+  }>;
+}
+
+export interface LookbookOrderInputLine {
+  product_id: string;
+  sku: string;
+  requested_case_quantity: number;
+}
+
+export interface LookbookOrderTotals {
+  skuCount: number;
+  totalUnits: number;
+  subtotal: number;
+  totalRetail: number;
 }
 
 export type InventoryEventType =
@@ -465,6 +593,7 @@ export interface DashboardSnapshot {
   quickSops: Sop[];
   stockTrend: Array<{ date: string; inventory: number }>;
   spendByVendor: Array<{ vendor: string; spend: number }>;
+  incomingInventoryByManufacturer: Array<{ manufacturer: string; units: number }>;
   revenueYtd: number;
   revenueYtdDeltaPercent: number;
   activeWholesalePipelineValue: number;

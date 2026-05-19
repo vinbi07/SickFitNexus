@@ -1,23 +1,33 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
+import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { buyerService } from "@/services/buyerService";
 import { retailerService } from "@/services/retailerService";
+import type { Buyer } from "@/types/domain";
 import { formatCurrency, formatDate } from "@/utils/format";
 
 export function RetailerDetailPage() {
   const params = useParams();
   const retailerId = params.id ?? "";
-  const { data, loading, error } = useAsyncData(() => retailerService.getProfile(retailerId), [retailerId]);
+  const [editingBuyer, setEditingBuyer] = useState<Partial<Buyer> | null>(null);
+  const [deletingBuyer, setDeletingBuyer] = useState<Buyer | null>(null);
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const { data, loading, error, reload } = useAsyncData(() => retailerService.getProfile(retailerId), [retailerId]);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load retailer profile"} />;
 
   return (
     <div className="section-stack">
+      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <PageHeader
         title={data.retailer.name}
         description={`${data.retailer.account_number ?? "No account number"} | ${data.retailer.retailer_group ?? "Standalone account"}${data.parentRetailer ? ` | Parent: ${data.parentRetailer.name}` : ""}`}
@@ -82,6 +92,38 @@ export function RetailerDetailPage() {
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
+          <div className="panel-header">
+            <h3>Buyer Access</h3>
+            <button className="btn btn-primary btn-small" onClick={() => setEditingBuyer({ retailer_id: data.retailer.id, company_name: data.retailer.name, order_mode_enabled: true })}>Add Buyer</button>
+          </div>
+          <DataTable
+            emptyMessage="No buyers configured for this account yet."
+            columns={[
+              { key: "buyer_name", title: "Buyer", render: (row) => row.buyer_name },
+              { key: "buyer_email", title: "Email", render: (row) => row.buyer_email },
+              { key: "payment_terms", title: "Terms", render: (row) => row.payment_terms ?? "N/A" },
+              { key: "template", title: "Lookbook", render: (row) => row.lookbook_templates?.name ?? "All wholesale products" },
+              { key: "order_mode_enabled", title: "Order Mode", render: (row) => <StatusBadge label={row.order_mode_enabled ? "Enabled" : "Disabled"} /> },
+              { key: "access", title: "Magic Link", render: (row) => <span className="helper-text">/lookbook/{row.access_token}</span> },
+              {
+                key: "actions",
+                title: "Actions",
+                render: (row) => (
+                  <div className="btn-row">
+                    <button className="btn btn-secondary btn-small" onClick={() => setEditingBuyer(row)}>Edit</button>
+                    <button className="btn btn-ghost btn-small" onClick={async () => {
+                      await navigator.clipboard.writeText(`${window.location.origin}/lookbook/${row.access_token}`);
+                      setNotice({ tone: "success", message: "Magic link copied to clipboard." });
+                    }}>Copy Link</button>
+                    <button className="btn btn-danger btn-small" onClick={() => setDeletingBuyer(row)}>Delete</button>
+                  </div>
+                ),
+              },
+            ]}
+            rows={data.buyers}
+          />
+        </div>
+        <div className="panel section-stack">
           <div className="panel-header"><h3>Top SKUs</h3></div>
           <DataTable
             emptyMessage="No SKU history for this retailer yet."
@@ -110,6 +152,64 @@ export function RetailerDetailPage() {
           />
         </div>
       </div>
+      {editingBuyer ? (
+        <EntityFormModal<Partial<Buyer>>
+          title={editingBuyer.id ? "Edit Buyer" : "Add Buyer"}
+          saveLabel={editingBuyer.id ? "Save Buyer" : "Create Buyer"}
+          initialValues={{
+            company_name: editingBuyer.company_name ?? data.retailer.name,
+            buyer_name: editingBuyer.buyer_name ?? "",
+            buyer_email: editingBuyer.buyer_email ?? "",
+            phone: editingBuyer.phone ?? "",
+            billing_address: editingBuyer.billing_address ?? "",
+            shipping_address: editingBuyer.shipping_address ?? "",
+            payment_terms: editingBuyer.payment_terms ?? "",
+            compliance_requirements: editingBuyer.compliance_requirements ?? "",
+            assigned_sales_rep: editingBuyer.assigned_sales_rep ?? "",
+            lookbook_template_id: editingBuyer.lookbook_template_id ?? "",
+            order_mode_enabled: editingBuyer.order_mode_enabled ?? true,
+            token_expires_at: editingBuyer.token_expires_at ?? "",
+          }}
+          fields={[
+            { key: "company_name", label: "Company Name" },
+            { key: "buyer_name", label: "Buyer Name", required: true },
+            { key: "buyer_email", label: "Buyer Email", required: true },
+            { key: "phone", label: "Phone" },
+            { key: "payment_terms", label: "Payment Terms" },
+            { key: "assigned_sales_rep", label: "Assigned Sales Rep" },
+            { key: "lookbook_template_id", label: "Lookbook Template", type: "select", options: data.lookbookTemplates.map((template) => ({ label: template.name, value: template.id })) },
+            { key: "billing_address", label: "Billing Address", type: "textarea" },
+            { key: "shipping_address", label: "Shipping Address", type: "textarea" },
+            { key: "compliance_requirements", label: "Compliance Requirements", type: "textarea" },
+            { key: "token_expires_at", label: "Token Expires", type: "date" },
+            { key: "order_mode_enabled", label: "Order Mode Enabled", type: "checkbox" },
+          ]}
+          onSave={async (values) => {
+            await buyerService.upsert({
+              ...editingBuyer,
+              ...values,
+              retailer_id: data.retailer.id,
+            });
+            await reload();
+            setNotice({ tone: "success", message: editingBuyer.id ? "Buyer updated successfully." : "Buyer created successfully." });
+          }}
+          onClose={() => setEditingBuyer(null)}
+        />
+      ) : null}
+      {deletingBuyer ? (
+        <ConfirmDialog
+          title="Delete buyer?"
+          message={`Remove ${deletingBuyer.buyer_name} and revoke the magic link?`}
+          busy={false}
+          onClose={() => setDeletingBuyer(null)}
+          onConfirm={async () => {
+            await buyerService.remove(deletingBuyer.id);
+            setDeletingBuyer(null);
+            await reload();
+            setNotice({ tone: "success", message: "Buyer deleted successfully." });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

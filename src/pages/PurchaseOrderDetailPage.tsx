@@ -4,7 +4,9 @@ import { CommentsPanel } from "@/features/comments/CommentsPanel";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
+import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
@@ -14,6 +16,7 @@ import { formatCurrency, formatDate } from "@/utils/format";
 export function PurchaseOrderDetailPage() {
   const params = useParams();
   const poId = params.id ?? "";
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [newMessage, setNewMessage] = useState({
     sender_name: "",
     sender_role: "",
@@ -37,10 +40,43 @@ export function PurchaseOrderDetailPage() {
 
   return (
     <div className="section-stack">
+      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <PageHeader
         title={`PO ${data.purchaseOrder.po_number}`}
-        description={`${data.purchaseOrder.po_type} | ${data.purchaseOrder.retailers?.name ?? data.purchaseOrder.vendors?.name ?? "Unassigned"} | ${data.purchaseOrder.locations?.name ?? "No location assigned"}`}
-        actions={<StatusBadge label={data.purchaseOrder.status} />}
+        description={`${data.purchaseOrder.po_type} | ${data.purchaseOrder.retailers?.name ?? data.purchaseOrder.vendors?.name ?? "Unassigned"} | ${data.purchaseOrder.buyers?.buyer_name ?? "No buyer linked"}`}
+        actions={(
+          <div className="btn-row">
+            <StatusBadge label={data.purchaseOrder.status} />
+            <button className="btn btn-secondary btn-small" onClick={() => window.print()}>Preview / Print</button>
+            <button className="btn btn-primary btn-small" onClick={async () => {
+              try {
+                await purchaseOrderService.approve(poId, "SickFit Team");
+                await reload();
+                setNotice({ tone: "success", message: "PO approved successfully." });
+              } catch (err) {
+                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to approve PO." });
+              }
+            }}>Approve</button>
+            <button className="btn btn-ghost btn-small" onClick={async () => {
+              try {
+                await purchaseOrderService.queueForFulfillment(poId);
+                await reload();
+                setNotice({ tone: "success", message: "PO queued for fulfillment." });
+              } catch (err) {
+                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to queue PO." });
+              }
+            }}>Queue for Fulfillment</button>
+            <button className="btn btn-danger btn-small" onClick={async () => {
+              try {
+                await purchaseOrderService.reject(poId, "Cancelled from approval workspace.");
+                await reload();
+                setNotice({ tone: "success", message: "PO rejected and allocation released." });
+              } catch (err) {
+                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to reject PO." });
+              }
+            }}>Reject / Cancel</button>
+          </div>
+        )}
       />
       <div className="card-grid">
         <div className="card metric-card">
@@ -60,24 +96,42 @@ export function PurchaseOrderDetailPage() {
           <strong className="metric-value">{data.purchaseOrder.invoice_status ?? "Open"}</strong>
         </div>
         <div className="card metric-card">
+          <span className="metric-label">Allocation</span>
+          <strong className="metric-value">{data.purchaseOrder.allocation_status}</strong>
+        </div>
+        <div className="card metric-card">
+          <span className="metric-label">Compliance</span>
+          <strong className="metric-value">{String((data.purchaseOrder.compliance_snapshot as { summary?: string } | null)?.summary ?? "N/A")}</strong>
+        </div>
+        <div className="card metric-card">
           <span className="metric-label">Paid to Delivered</span>
           <strong className="metric-value">{paidToDeliveredDays !== null ? `${paidToDeliveredDays}d` : "Open"}</strong>
         </div>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h3>PO Preview</h3></div>
+        <PurchaseOrderDocumentView purchaseOrder={data.purchaseOrder} lineItems={data.lineItems} />
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header"><h3>Lifecycle</h3></div>
           <div className="detail-grid">
             <div className="detail-card"><span>Retailer</span><strong>{data.purchaseOrder.retailers?.name ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Buyer</span><strong>{data.purchaseOrder.buyers?.buyer_name ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{data.purchaseOrder.vendors?.name ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Ship Date</span><strong>{formatDate(data.purchaseOrder.ship_date)}</strong></div>
             <div className="detail-card"><span>ETA</span><strong>{formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date)}</strong></div>
+            <div className="detail-card"><span>Approval</span><strong>{data.purchaseOrder.approval_status}</strong></div>
+            <div className="detail-card"><span>Allocation</span><strong>{data.purchaseOrder.allocation_status}</strong></div>
             <div className="detail-card"><span>Invoice Status</span><strong>{data.purchaseOrder.invoice_status ?? "Open"}</strong></div>
             <div className="detail-card"><span>Invoice Paid</span><strong>{formatDate(data.purchaseOrder.invoice_paid_at)}</strong></div>
             <div className="detail-card"><span>Shipment Status</span><strong>{data.purchaseOrder.shipment_status ?? data.purchaseOrder.tracking_status ?? "None"}</strong></div>
             <div className="detail-card"><span>Tracking</span><strong>{data.purchaseOrder.tracking_number ?? "None"}</strong></div>
             <div className="detail-card"><span>Source Channel</span><strong>{data.purchaseOrder.source_channel ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Generated Form</span><strong>{data.purchaseOrder.generated_form_url ? <a href={data.purchaseOrder.generated_form_url} target="_blank" rel="noreferrer">Open</a> : "Not generated"}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Compliance Snapshot</span><strong>{String((data.purchaseOrder.compliance_snapshot as { summary?: string } | null)?.summary ?? "No compliance snapshot recorded.")}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Buyer Notes</span><strong>{data.purchaseOrder.buyer_notes ?? "No buyer notes added."}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Internal Notes</span><strong>{data.purchaseOrder.internal_notes ?? "No internal notes added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.purchaseOrder.notes ?? "No notes added."}</strong></div>
           </div>
         </div>
@@ -87,10 +141,12 @@ export function PurchaseOrderDetailPage() {
             columns={[
               { key: "sku", title: "SKU", render: (row) => row.sku },
               { key: "product_name", title: "Product", render: (row) => row.product_name },
+              { key: "case_quantity", title: "Cases", render: (row) => row.case_quantity },
               { key: "quantity_ordered", title: "Ordered", render: (row) => row.quantity_ordered },
+              { key: "unit_quantity", title: "Units", render: (row) => row.unit_quantity },
               { key: "quantity_received", title: "Received", render: (row) => row.quantity_received },
               { key: "unit_cost", title: "Unit Cost", render: (row) => formatCurrency(row.unit_cost) },
-              { key: "line_total", title: "Line Total", render: (row) => formatCurrency(row.line_total) },
+              { key: "line_total", title: "Extended Cost", render: (row) => formatCurrency(row.extended_cost || row.line_total) },
             ]}
             rows={data.lineItems}
           />
@@ -202,6 +258,18 @@ export function PurchaseOrderDetailPage() {
         </div>
       </div>
       <div className="split-grid">
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Queued Notifications</h3></div>
+          <div className="timeline">
+            {data.notifications.length ? data.notifications.map((notification) => (
+              <div key={notification.id} className="timeline-item">
+                <strong>{notification.subject}</strong>
+                <p>{notification.recipient_type} · {notification.status}</p>
+                <span className="muted">{notification.recipient_email ?? notification.recipient_name ?? "Internal queue"}</span>
+              </div>
+            )) : <div className="empty-state">No queued notifications yet.</div>}
+          </div>
+        </div>
         <div className="panel section-stack">
           <div className="panel-header"><h3>Activity Timeline</h3></div>
           <div className="timeline">

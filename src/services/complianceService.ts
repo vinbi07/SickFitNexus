@@ -1,10 +1,14 @@
 import { assertSupabase } from "@/lib/supabase";
 import { insertTable, upsertTable } from "@/services/baseService";
 import type {
+  ComplianceSnapshot,
   ComplianceRequirementType,
+  Product,
+  Buyer,
   RetailerComplianceDocument,
   RetailerComplianceRequirement,
 } from "@/types/domain";
+import { buildComplianceSnapshot } from "@/utils/lookbook";
 
 export const complianceService = {
   async listRequirementTypes() {
@@ -63,5 +67,23 @@ export const complianceService = {
       ...requirement,
       documents: documents.filter((document) => document.retailer_requirement_id === requirement.id),
     }));
+  },
+
+  async buildSnapshotForBuyerOrder(buyer: Buyer, products: Product[]): Promise<ComplianceSnapshot> {
+    const requirements = await this.listRequirements();
+    return buildComplianceSnapshot({
+      buyer,
+      retailerRequirementStatuses: requirements
+        .filter((requirement) => requirement.retailer_id === buyer.retailer_id)
+        .map((requirement) => ({
+          requirementName: requirement.requirement_types?.name ?? "Compliance requirement",
+          status: requirement.status,
+        })),
+      productRequirements: products.map((product) => ({
+        productId: product.id,
+        sku: product.sku,
+        requiredDocs: product.compliance_docs_status === "Missing" ? product.compliance_docs_required : [],
+      })),
+    });
   },
 };

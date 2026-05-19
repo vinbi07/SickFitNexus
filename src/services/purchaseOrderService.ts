@@ -1,9 +1,11 @@
 import { assertSupabase } from "@/lib/supabase";
 import { activityService } from "@/services/activityService";
 import { deleteFromTable, insertTable, upsertTable } from "@/services/baseService";
+import { inventoryService } from "@/services/inventoryService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import type {
   ActivityEvent,
+  Buyer,
   Comment,
   InventoryEvent,
   Location,
@@ -11,6 +13,7 @@ import type {
   Product,
   PurchaseOrder,
   PurchaseOrderDocument,
+  PurchaseOrderNotification,
   PurchaseOrderMessage,
   Retailer,
   Vendor,
@@ -20,16 +23,19 @@ function attachPurchaseOrderRelations(
   purchaseOrders: PurchaseOrder[],
   vendors: Vendor[],
   retailers: Retailer[],
+  buyers: Buyer[],
   locations: Location[],
 ) {
   const vendorsById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
   const retailersById = new Map(retailers.map((retailer) => [retailer.id, retailer]));
+  const buyersById = new Map(buyers.map((buyer) => [buyer.id, buyer]));
   const locationsById = new Map(locations.map((location) => [location.id, location]));
 
   return purchaseOrders.map((purchaseOrder) => ({
     ...purchaseOrder,
     vendors: purchaseOrder.vendor_id ? vendorsById.get(purchaseOrder.vendor_id) ?? null : null,
     retailers: purchaseOrder.retailer_id ? retailersById.get(purchaseOrder.retailer_id) ?? null : null,
+    buyers: purchaseOrder.buyer_id ? buyersById.get(purchaseOrder.buyer_id) ?? null : null,
     locations: purchaseOrder.location_id ? locationsById.get(purchaseOrder.location_id) ?? null : null,
   }));
 }
@@ -97,20 +103,23 @@ export const purchaseOrderService = {
     if (error) throw error;
 
     const purchaseOrders = (data ?? []) as PurchaseOrder[];
-    const [vendorResponse, retailerResponse, locationResponse] = await Promise.all([
+    const [vendorResponse, retailerResponse, buyerResponse, locationResponse] = await Promise.all([
       supabase.from("vendors").select("*"),
       supabase.from("retailers").select("*"),
+      supabase.from("buyers").select("*"),
       supabase.from("locations").select("*"),
     ]);
 
     if (vendorResponse.error) throw vendorResponse.error;
     if (retailerResponse.error) throw retailerResponse.error;
+    if (buyerResponse.error) throw buyerResponse.error;
     if (locationResponse.error) throw locationResponse.error;
 
     return attachPurchaseOrderRelations(
       purchaseOrders,
       (vendorResponse.data ?? []) as Vendor[],
       (retailerResponse.data ?? []) as Retailer[],
+      (buyerResponse.data ?? []) as Buyer[],
       (locationResponse.data ?? []) as Location[],
     );
   },
@@ -124,11 +133,13 @@ export const purchaseOrderService = {
       activityResponse,
       vendorResponse,
       retailerResponse,
+      buyerResponse,
       locationResponse,
       productResponse,
       eventsResponse,
       messagesResponse,
       documentsResponse,
+      notificationsResponse,
     ] = await Promise.all([
       supabase.from("purchase_orders").select("*").eq("id", id).single(),
       supabase.from("po_line_items").select("*").eq("purchase_order_id", id),
@@ -136,11 +147,13 @@ export const purchaseOrderService = {
       supabase.from("activity_events").select("*").eq("entity_id", id).order("created_at", { ascending: false }),
       supabase.from("vendors").select("*"),
       supabase.from("retailers").select("*"),
+      supabase.from("buyers").select("*"),
       supabase.from("locations").select("*"),
       supabase.from("products").select("*"),
       supabase.from("inventory_events").select("*"),
       supabase.from("purchase_order_messages").select("*").eq("purchase_order_id", id).order("created_at", { ascending: false }),
       supabase.from("purchase_order_documents").select("*").eq("purchase_order_id", id).order("created_at", { ascending: false }),
+      supabase.from("purchase_order_notifications").select("*").eq("purchase_order_id", id).order("created_at", { ascending: false }),
     ]);
 
     if (poResponse.error) throw poResponse.error;
@@ -149,16 +162,19 @@ export const purchaseOrderService = {
     if (activityResponse.error) throw activityResponse.error;
     if (vendorResponse.error) throw vendorResponse.error;
     if (retailerResponse.error) throw retailerResponse.error;
+    if (buyerResponse.error) throw buyerResponse.error;
     if (locationResponse.error) throw locationResponse.error;
     if (productResponse.error) throw productResponse.error;
     if (eventsResponse.error) throw eventsResponse.error;
     if (messagesResponse.error) throw messagesResponse.error;
     if (documentsResponse.error) throw documentsResponse.error;
+    if (notificationsResponse.error) throw notificationsResponse.error;
 
     const [purchaseOrder] = attachPurchaseOrderRelations(
       [poResponse.data as PurchaseOrder],
       (vendorResponse.data ?? []) as Vendor[],
       (retailerResponse.data ?? []) as Retailer[],
+      (buyerResponse.data ?? []) as Buyer[],
       (locationResponse.data ?? []) as Location[],
     );
 
@@ -178,6 +194,7 @@ export const purchaseOrderService = {
       activity: (activityResponse.data ?? []) as ActivityEvent[],
       messages: (messagesResponse.data ?? []) as PurchaseOrderMessage[],
       documents: (documentsResponse.data ?? []) as PurchaseOrderDocument[],
+      notifications: (notificationsResponse.data ?? []) as PurchaseOrderNotification[],
     };
   },
 
@@ -195,8 +212,18 @@ export const purchaseOrderService = {
       quantity_received: Number(item.quantity_received ?? 0),
       unit_cost: Number(item.unit_cost ?? 0),
       line_total: Number(item.quantity_ordered ?? 0) * Number(item.unit_cost ?? 0),
+      upc: item.upc ? String(item.upc) : null,
+      description: item.description ? String(item.description) : null,
+      unit: item.unit ? String(item.unit) : "EA",
+      case_quantity: Number(item.case_quantity ?? 0),
+      unit_quantity: Number(item.unit_quantity ?? item.quantity_ordered ?? 0),
+      unit_retail: Number(item.unit_retail ?? 0),
+      extended_cost: Number(item.extended_cost ?? Number(item.quantity_ordered ?? 0) * Number(item.unit_cost ?? 0)),
+      extended_retail: Number(item.extended_retail ?? 0),
     }));
-    const totalCost = normalizedLineItems.reduce((sum, item) => sum + Number(item.line_total ?? 0), 0);
+    const totalCost = normalizedLineItems.reduce((sum, item) => sum + Number(item.extended_cost ?? item.line_total ?? 0), 0);
+    const totalUnits = normalizedLineItems.reduce((sum, item) => sum + Number(item.unit_quantity ?? item.quantity_ordered ?? 0), 0);
+    const totalRetail = normalizedLineItems.reduce((sum, item) => sum + Number(item.extended_retail ?? 0), 0);
 
     const generatedText = buildGeneratedFormText(
       purchaseOrderPayload,
@@ -219,6 +246,9 @@ export const purchaseOrderService = {
       invoice_paid_at: normalizeOptionalDate(purchaseOrderPayload.invoice_paid_at),
       shipment_status: purchaseOrderPayload.shipment_status ? String(purchaseOrderPayload.shipment_status) : null,
       total_cost: totalCost,
+      subtotal: Number(purchaseOrderPayload.subtotal ?? totalCost),
+      total_units: Number(purchaseOrderPayload.total_units ?? totalUnits),
+      total_retail: Number(purchaseOrderPayload.total_retail ?? totalRetail),
       generated_form_url: generatedFormUrl,
     })) as PurchaseOrder[];
 
@@ -309,13 +339,15 @@ export const purchaseOrderService = {
       .single();
     if (error) throw error;
 
-    const [vendorResponse, retailerResponse, locationResponse] = await Promise.all([
+    const [vendorResponse, retailerResponse, buyerResponse, locationResponse] = await Promise.all([
       supabase.from("vendors").select("*"),
       supabase.from("retailers").select("*"),
+      supabase.from("buyers").select("*"),
       supabase.from("locations").select("*"),
     ]);
     if (vendorResponse.error) throw vendorResponse.error;
     if (retailerResponse.error) throw retailerResponse.error;
+    if (buyerResponse.error) throw buyerResponse.error;
     if (locationResponse.error) throw locationResponse.error;
 
     await activityService.create({
@@ -330,8 +362,87 @@ export const purchaseOrderService = {
       [data as PurchaseOrder],
       (vendorResponse.data ?? []) as Vendor[],
       (retailerResponse.data ?? []) as Retailer[],
+      (buyerResponse.data ?? []) as Buyer[],
       (locationResponse.data ?? []) as Location[],
     )[0];
+  },
+
+  async approve(id: string, approver: string) {
+    const detail = await this.getById(id);
+    const updated = await this.updateStatus(id, "Ordered");
+    const supabase = assertSupabase();
+    await supabase
+      .from("purchase_orders")
+      .update({
+        approval_status: "Approved",
+        allocation_status: "Allocated",
+        approved_at: new Date().toISOString(),
+        approved_by: approver,
+      })
+      .eq("id", id);
+    await activityService.create({
+      event_type: "purchase_order_approved",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number} approved`,
+      description: `${approver} approved the order for fulfillment review.`,
+      metadata: { purchaseOrderId: id, approver },
+    });
+    return detail;
+  },
+
+  async reject(id: string, reason?: string) {
+    const detail = await this.getById(id);
+    await inventoryService.releaseProducts(
+      detail.lineItems.reduce<Array<{ productId: string; units: number }>>((accumulator, item) => {
+        if (item.product_id) {
+          accumulator.push({
+            productId: item.product_id,
+            units: Number(item.unit_quantity ?? item.quantity_ordered ?? 0),
+          });
+        }
+        return accumulator;
+      }, []),
+    );
+    const supabase = assertSupabase();
+    await supabase
+      .from("purchase_orders")
+      .update({
+        status: "Cancelled",
+        approval_status: "Rejected",
+        allocation_status: "Released",
+        cancelled_at: new Date().toISOString(),
+        internal_notes: reason ?? detail.purchaseOrder.internal_notes,
+      })
+      .eq("id", id);
+    await activityService.create({
+      event_type: "purchase_order_rejected",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${detail.purchaseOrder.po_number} rejected`,
+      description: reason ?? "Purchase order rejected.",
+      metadata: { purchaseOrderId: id },
+    });
+  },
+
+  async queueForFulfillment(id: string) {
+    const detail = await this.getById(id);
+    const supabase = assertSupabase();
+    await supabase
+      .from("purchase_orders")
+      .update({
+        allocation_status: "Queued for Fulfillment",
+        queued_for_fulfillment_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    await activityService.create({
+      event_type: "purchase_order_queued_for_fulfillment",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${detail.purchaseOrder.po_number} queued for fulfillment`,
+      description: "Allocated inventory is ready for fulfillment.",
+      metadata: { purchaseOrderId: id },
+    });
   },
 
   async remove(id: string) {

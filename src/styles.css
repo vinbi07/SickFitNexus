@@ -234,6 +234,32 @@ textarea {
   gap: 10px;
 }
 
+.dashboard-link-card {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+
+.dashboard-card-grid > .metric-card,
+.dashboard-card-grid > .dashboard-link-card {
+  grid-column: span 4;
+}
+
+.dashboard-card-grid .metric-card {
+  height: 100%;
+}
+
+.dashboard-link-card .card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.dashboard-link-card:hover .card,
+.dashboard-link-card:focus-visible .card {
+  transform: translateY(-2px);
+  box-shadow: var(--brand-card-shadow-strong);
+  border-color: rgba(231, 32, 39, 0.24);
+}
+
 .metric-label {
   color: var(--brand-muted);
   font-size: 0.88rem;
@@ -254,6 +280,31 @@ textarea {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(251, 252, 253, 0.99));
+}
+
+.dashboard-panel-shell {
+  position: relative;
+}
+
+.dashboard-panel-action {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 2;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-border);
+  background: rgba(255, 255, 255, 0.94);
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dashboard-panel-action:hover,
+.dashboard-panel-action:focus-visible {
+  border-color: rgba(231, 32, 39, 0.3);
+  color: #b41f29;
 }
 
 .panel-header,
@@ -552,6 +603,26 @@ textarea {
   background: linear-gradient(180deg, #ffffff, #fafbfd);
 }
 
+.dashboard-link-row {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+
+.dashboard-link-row .stat-row,
+.dashboard-link-row .timeline-item {
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dashboard-link-row:hover .stat-row,
+.dashboard-link-row:hover .timeline-item,
+.dashboard-link-row:focus-visible .stat-row,
+.dashboard-link-row:focus-visible .timeline-item {
+  transform: translateY(-1px);
+  border-color: rgba(231, 32, 39, 0.24);
+  box-shadow: 0 10px 24px rgba(17, 17, 17, 0.06);
+}
+
 .stat-row strong:last-child {
   flex-shrink: 0;
   text-align: right;
@@ -682,6 +753,67 @@ textarea {
   margin-bottom: 6px;
 }
 
+.channel-lane-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.channel-lane-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(231, 32, 39, 0.08), transparent 42%),
+    linear-gradient(180deg, #ffffff, #fafbfd);
+}
+
+.channel-lane-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.channel-lane-rank {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7b1a21;
+  background: linear-gradient(135deg, rgba(231, 32, 39, 0.14), rgba(255, 111, 115, 0.2));
+  border: 1px solid rgba(231, 32, 39, 0.16);
+  flex-shrink: 0;
+}
+
+.channel-lane-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(17, 17, 17, 0.06), rgba(17, 17, 17, 0.03));
+}
+
+.channel-lane-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #111111 0%, #e72027 55%, #ff6f73 100%);
+  box-shadow: 0 6px 18px rgba(231, 32, 39, 0.24);
+}
+
+.channel-lane-value {
+  min-width: 92px;
+  text-align: right;
+}
+
 .inventory-product-cell {
   display: flex;
   align-items: center;
@@ -746,6 +878,243 @@ textarea {
   gap: 16px;
 }
 
+.lookbook-shell {
+  min-height: 100vh;
+  padding: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(231, 32, 39, 0.14), transparent 18%),
+    linear-gradient(180deg, #f8f3ec 0%, #f2eee8 45%, #ece8e1 100%);
+}
+
+.lookbook-hero {
+  margin: 0 auto 24px;
+  max-width: 1380px;
+  padding: 28px 30px;
+  border-radius: 22px;
+  color: white;
+  background:
+    radial-gradient(circle at 85% 10%, rgba(255, 149, 120, 0.24), transparent 20%),
+    linear-gradient(135deg, #09090a 0%, #1a0f12 52%, #401418 100%);
+  box-shadow: 0 22px 60px rgba(16, 11, 11, 0.26);
+}
+
+.lookbook-kicker,
+.po-document-kicker {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.lookbook-layout {
+  max-width: 1380px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
+}
+
+.lookbook-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.lookbook-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 27, 25, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 248, 244, 0.98));
+  box-shadow: 0 18px 42px rgba(26, 16, 16, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.lookbook-card:hover,
+.lookbook-card-selected {
+  transform: translateY(-2px);
+  border-color: rgba(231, 32, 39, 0.38);
+  box-shadow: 0 24px 52px rgba(39, 17, 17, 0.14);
+}
+
+.lookbook-card-media {
+  aspect-ratio: 4 / 5;
+  min-height: 240px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top right, rgba(231, 32, 39, 0.22), transparent 20%),
+    linear-gradient(180deg, #2c1c1f 0%, #1b1717 100%);
+  color: white;
+}
+
+.lookbook-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.lookbook-card-body {
+  min-width: 0;
+  flex: 1;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lookbook-card-topline,
+.lookbook-price-row,
+.lookbook-card-footer,
+.po-total-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lookbook-card-topline {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.lookbook-card-title {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.lookbook-card-sku {
+  display: block;
+  max-width: 100%;
+  color: var(--brand-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.lookbook-card-badge-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lookbook-card-copy {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.lookbook-price-row span,
+.lookbook-card-footer,
+.po-document-meta span,
+.po-total-card span {
+  color: var(--brand-muted);
+  font-size: 0.8rem;
+}
+
+.lookbook-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff7f5, #fffdfb);
+  border: 1px solid rgba(231, 32, 39, 0.14);
+}
+
+.lookbook-stepper div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lookbook-summary {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+
+.lookbook-total-card {
+  flex-direction: column;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(17, 17, 17, 0.96), rgba(65, 18, 22, 0.92));
+  color: white;
+}
+
+.lookbook-confirmation {
+  max-width: 560px;
+  margin: 10vh auto 0;
+  text-align: center;
+  padding: 38px 32px;
+}
+
+.lookbook-confirmation-mark {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  color: white;
+  background: linear-gradient(135deg, #b81820 0%, #e72027 56%, #ff7378 100%);
+}
+
+.po-document {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.po-document-header,
+.po-address-grid,
+.po-document-footer {
+  display: grid;
+  gap: 16px;
+}
+
+.po-document-header {
+  grid-template-columns: 1.3fr 1fr;
+  align-items: start;
+}
+
+.po-document-meta,
+.po-total-card {
+  display: grid;
+  gap: 12px;
+}
+
+.po-document-meta div,
+.po-total-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.po-address-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.po-document-table {
+  overflow-x: auto;
+}
+
+.po-document-footer {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
 .topbar-logo {
   width: 58px;
   height: 58px;
@@ -770,6 +1139,16 @@ textarea {
   .split-grid {
     grid-template-columns: 1fr;
   }
+
+  .lookbook-layout,
+  .po-document-header,
+  .po-document-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .po-address-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -788,6 +1167,11 @@ textarea {
     grid-column: span 12;
   }
 
+  .dashboard-card-grid > .metric-card,
+  .dashboard-card-grid > .dashboard-link-card {
+    grid-column: span 12;
+  }
+
   .content-area {
     padding: 16px;
   }
@@ -796,5 +1180,51 @@ textarea {
   .page-header,
   .panel-header {
     flex-direction: column;
+  }
+
+  .channel-lane-row {
+    grid-template-columns: 1fr;
+  }
+
+  .channel-lane-value {
+    text-align: left;
+    min-width: 0;
+  }
+
+  .lookbook-shell {
+    padding: 18px;
+  }
+
+  .lookbook-grid,
+  .po-address-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .sidebar,
+  .topbar,
+  .page-header .btn-row,
+  .panel > .panel-header:not(:first-child),
+  .notice-banner {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+
+  .content-area,
+  .content-inner,
+  .panel,
+  .card,
+  .table-shell {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+
+  .po-document {
+    color: #111;
   }
 }

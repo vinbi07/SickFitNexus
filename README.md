@@ -86,6 +86,7 @@ This repo now includes a wholesale operations cleanup pass focused on real invoi
 ### Schema / Files Added
 
 - New migration: [src/db/migrations/011_operations_dashboard_refresh.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/011_operations_dashboard_refresh.sql)
+- New lookbook migration: [src/db/migrations/012_lookbook_order_mode.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/012_lookbook_order_mode.sql)
 - New account profile page: [src/pages/RetailerDetailPage.tsx](/c:/Users/Vinbi/SickFitNexus/src/pages/RetailerDetailPage.tsx)
 - New shared operations helpers: [src/utils/operations.ts](/c:/Users/Vinbi/SickFitNexus/src/utils/operations.ts)
 
@@ -117,6 +118,9 @@ VITE_SUPABASE_ANON_KEY=...
 - [src/db/migrations/009_shopify_orders.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/009_shopify_orders.sql)
 - [src/db/migrations/010_dashboard_baselines.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/010_dashboard_baselines.sql)
 - [src/db/migrations/011_operations_dashboard_refresh.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/011_operations_dashboard_refresh.sql)
+- [src/db/migrations/012_lookbook_order_mode.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/012_lookbook_order_mode.sql)
+- [src/db/migrations/013_lookbook_templates.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/013_lookbook_templates.sql)
+- [src/db/migrations/014_product_variants.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/014_product_variants.sql)
 - [src/db/seed.sql](/c:/Users/Vinbi/SickFitNexus/src/db/seed.sql)
 
 4. Start the app:
@@ -130,6 +134,139 @@ npm run dev
 - [public/sample-po-import.csv](/c:/Users/Vinbi/SickFitNexus/public/sample-po-import.csv)
 
 The sample import is now shaped around the preferred Shields-style wholesale format.
+
+## Lookbook Order Mode
+
+The app now includes a buyer-facing wholesale lookbook flow that lets a retailer buyer submit a case-pack order from a public magic link. Submitted orders become SickFit purchase orders, queue internal approval, snapshot compliance, and allocate inventory without immediately deducting on-hand stock.
+
+The app also now supports reusable lookbook templates and linked product variants, so different buyers can receive different assortments and order the exact sellable variant instead of only a base product.
+
+### Internal setup
+
+1. Run the new migration:
+   [src/db/migrations/012_lookbook_order_mode.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/012_lookbook_order_mode.sql)
+2. Run the template migration:
+   [src/db/migrations/013_lookbook_templates.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/013_lookbook_templates.sql)
+3. Run the product variant migration:
+   [src/db/migrations/014_product_variants.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/014_product_variants.sql)
+4. Open `Products` and fill in wholesale-ready product fields for any SKU you want to expose in the lookbook:
+   - `UPC`
+   - `Pack Size`
+   - `Case Pack Quantity`
+   - `Wholesale Price`
+   - `MSRP`
+   - `Weight`
+   - `Dimensions`
+   - `Compliance Docs`
+   - `Compliance Status`
+5. If one style has multiple sellable options, split it into linked variants:
+   - keep one base style row
+   - create a separate product row for each sellable variant such as `1 Pack (Default)`, `3 Pack`, or `6 Packs`
+   - on each child row, set `Parent Style` to the base style
+   - set `Variant Title` to the buyer-facing option name
+   - set `Variant Sort Order` to control display order
+   - keep SKU, UPC, pricing, inventory, and pack/case data on the variant row itself
+6. Open `Lookbooks` and create one or more templates.
+7. Add the exact variant SKUs you want visible in each template.
+8. Open `Accounts`, then open a retailer profile.
+9. In the `Buyer Access` section, create a buyer, make sure `Order Mode Enabled` is checked, and assign a `Lookbook Template`.
+10. Copy the buyer magic link from the retailer profile. The route format is:
+
+```text
+/lookbook/{access_token}
+```
+
+### Template editor flow
+
+1. Open `Lookbooks` from the main navigation.
+2. Create a new template with a name and optional description.
+3. In the template editor:
+   - search the catalog
+   - add variant SKUs to the template assortment
+   - remove variant SKUs from the template
+   - set `Sort Order`
+   - mark selected items as `Featured`
+4. Save the template.
+
+The template catalog now treats products as families plus variants:
+
+- the main product name is the parent style
+- the helper text shows the variant title
+- buyers order the exact variant SKU that was added to the template
+
+Each buyer can be assigned a different template. This lets you maintain:
+
+- premium assortments
+- basics-only assortments
+- retailer-exclusive capsules
+- seasonal or launch-specific lookbooks
+
+### Buyer flow
+
+1. Open the buyer magic link.
+2. Review the wholesale product cards shown for that buyer’s assigned template.
+3. Use the plus/minus stepper to add products by case only.
+4. Review the live order summary on the right side.
+5. Use one of the buyer actions:
+   - `Save Draft`: saves quantities without inventory allocation
+   - `Request Quote`: saves the order for internal review without inventory allocation
+   - `Submit PO to SickFit`: validates buyer info, inventory, SKU/UPC data, and compliance, then creates a pending-approval PO and allocates inventory
+
+After submit, the buyer sees a confirmation screen with the generated PO number.
+
+If a buyer does not have a template assigned, the app falls back to showing all wholesale-ready products.
+
+### Variant setup example
+
+Use linked products whenever one style has multiple pack, pricing, or inventory options.
+
+Example:
+
+- Parent style: `3D Bean Cushioned Quarter Sock`
+- Variant: `1 Pack (Default)`
+- Variant: `3 Pack`
+- Variant: `6 Packs`
+
+Recommended setup:
+
+- create one base style row for `3D Bean Cushioned Quarter Sock`
+- create three child product rows with their own SKU, UPC, price, inventory, and pack metadata
+- link each child row back to the base style with `Parent Style`
+- set the variant labels and sort order on the child rows
+- add the child rows, not just the base style, to your lookbook template
+
+This is what makes variant-specific ordering, pricing, inventory allocation, and case math work correctly in the buyer lookbook.
+
+### Internal review flow
+
+1. Open `Purchase Orders`.
+2. Filter or scan for orders in `Pending Approval`.
+3. Open the PO detail page to review:
+   - buyer info
+   - compliance snapshot
+   - allocation status
+   - queued notifications
+   - print-friendly PO preview
+4. Use the approval actions on the PO detail page:
+   - `Approve`
+   - `Queue for Fulfillment`
+   - `Reject / Cancel`
+
+### PDF and email behavior in this MVP
+
+- `Preview / Print` on the PO detail page is the current PDF/export path. Use the browser print dialog to save as PDF with the PO preview layout.
+- Buyer and internal email sends are not live yet. Instead, the app writes queued notification records to `purchase_order_notifications` so a later Edge Function or mail provider can process them.
+
+### Inventory behavior
+
+- Drafts and quote requests do not allocate stock.
+- Submitted buyer POs increase `inventory_allocated`.
+- Allocated units stay in inventory until the PO is rejected, cancelled, or later fulfilled.
+- Available-to-sell inventory is treated as:
+
+```text
+current_inventory - inventory_allocated
+```
 
 ## Notes
 

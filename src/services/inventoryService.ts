@@ -3,6 +3,7 @@ import { activityService } from "@/services/activityService";
 import { deleteFromTable, insertTable, listTable, upsertTable, updateTable } from "@/services/baseService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import type { InventoryEvent, InventoryItem, Product, Vendor } from "@/types/domain";
+import { deriveInventoryAvailable } from "@/utils/lookbook";
 
 async function syncProductInventory(productId: string) {
   const supabase = assertSupabase();
@@ -15,7 +16,15 @@ async function syncProductInventory(productId: string) {
     (sum: number, row: { quantity_on_hand: number | null }) => sum + Number(row.quantity_on_hand ?? 0),
     0,
   );
-  await updateTable<Product>("products", productId, { current_inventory: total });
+  const { data: product, error: productError } = await supabase.from("products").select("*").eq("id", productId).single();
+  if (productError) throw productError;
+  await updateTable<Product>("products", productId, {
+    current_inventory: total,
+    inventory_available: deriveInventoryAvailable({
+      current_inventory: total,
+      inventory_allocated: Number((product as Product).inventory_allocated ?? 0),
+    }),
+  });
 }
 
 export const inventoryService = {
@@ -42,7 +51,12 @@ export const inventoryService = {
     const calculatedById = new Map(calculatedProducts.map((product) => [product.id, product]));
     return items.map((item) => ({
       ...item,
-      products: item.products ? calculatedById.get(item.products.id) ?? item.products : item.products,
+      products: item.products
+        ? {
+            ...(calculatedById.get(item.products.id) ?? item.products),
+            inventory_available: deriveInventoryAvailable(calculatedById.get(item.products.id) ?? item.products),
+          }
+        : item.products,
     }));
   },
   listEvents: async () => {
@@ -191,5 +205,70 @@ export const inventoryService = {
       description: `${payload.quantity} units moved between locations.`,
       metadata: { sourceInventoryItemId: source.id, targetInventoryItemId: targetItemId },
     });
+  },
+
+  async allocateProducts(lines: Array<{ productId: string; units: number }>) {
+    const supabase = assertSupabase();
+    for (const line of lines) {
+      const { data, error } = await supabase.from("products").select("*").eq("id", line.productId).single();
+      if (error) throw error;
+      const product = data as Product;
+      const nextAllocated = Number(product.inventory_allocated ?? 0) + Number(line.units ?? 0);
+      if (nextAllocated > Number(product.current_inventory ?? 0)) {
+        throw new Error(`Allocation for ${product.name} exceeds on-hand inventory.`);
+      }
+      await updateTable<Product>("products", product.id, {
+        inventory_allocated: nextAllocated,
+        inventory_available: deriveInventoryAvailable({
+          current_inventory: Number(product.current_inventory ?? 0),
+          inventory_allocated: nextAllocated,
+        }),
+      });
+    }
+  },
+
+  async releaseProducts(lines: Array<{ productId: string; units: number }>) {
+    const supabase = assertSupabase();
+    for (const line of lines) {
+      const { data, error } = await supabase.from("products").select("*").eq("id", line.productId).single();
+      if (error) throw error;
+      const product = data as Product;
+      const nextAllocated = Math.max(Number(product.inventory_allocated ?? 0) - Number(line.units ?? 0), 0);
+      await updateTable<Product>("products", product.id, {
+        inventory_allocated: nextAllocated,
+        inventory_available: deriveInventoryAvailable({
+          current_inventory: Number(product.current_inventory ?? 0),
+          inventory_allocated: nextAllocated,
+        }),
+      });
+    }
+  },
+
+  async fulfillProducts(lines: Array<{ productId: string; units: number; locationId?: string | null; relatedPoId?: string | null }>) {
+    const supabase = assertSupabase();
+    for (const line of lines) {
+      const { data, error } = await supabase.from("products").select("*").eq("id", line.productId).single();
+      if (error) throw error;
+      const product = data as Product;
+      const nextInventory = Math.max(Number(product.current_inventory ?? 0) - Number(line.units ?? 0), 0);
+      const nextAllocated = Math.max(Number(product.inventory_allocated ?? 0) - Number(line.units ?? 0), 0);
+      await updateTable<Product>("products", product.id, {
+        current_inventory: nextInventory,
+        inventory_allocated: nextAllocated,
+        inventory_available: deriveInventoryAvailable({
+          current_inventory: nextInventory,
+          inventory_allocated: nextAllocated,
+        }),
+      });
+      await insertTable<InventoryEvent>("inventory_events", {
+        product_id: product.id,
+        location_id: line.locationId ?? null,
+        related_po_id: line.relatedPoId ?? null,
+        event_type: "Usage",
+        quantity_change: Number(line.units ?? 0) * -1,
+        event_date: new Date().toISOString().slice(0, 10),
+        notes: "Fulfilled lookbook order allocation.",
+      });
+    }
   },
 };

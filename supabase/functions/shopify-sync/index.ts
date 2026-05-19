@@ -40,6 +40,8 @@ type ShopifyVariantNode = {
   };
 };
 
+type ShopifyProductNode = ShopifyVariantNode["product"];
+
 type ShopifyOrderNode = {
   id: string;
   name: string;
@@ -207,6 +209,15 @@ function getInventoryCategoryFromAncillaryCategory(ancillaryCategory: string | n
   return "Ancillary";
 }
 
+function getNormalizedVariantTitle(variantTitle: string) {
+  const trimmed = variantTitle.trim();
+  return trimmed && trimmed !== "Default Title" ? trimmed : null;
+}
+
+function buildSyntheticParentSku(product: ShopifyProductNode) {
+  return `STYLE-${shortenShopifyGid(product.id)}`;
+}
+
 async function fetchShopifyGraphql({
   storeDomain,
   adminToken,
@@ -352,10 +363,83 @@ async function ensureLocation(
   return created;
 }
 
+async function ensureParentStyleProduct(
+  supabaseAdmin: SupabaseClient,
+  storeDomain: string,
+  product: ShopifyProductNode,
+  parentCache: Map<string, Record<string, unknown>>,
+) {
+  const cached = parentCache.get(product.id);
+  if (cached) return cached;
+
+  const storefrontUrl = `https://${storeDomain}/products/${product.handle}`;
+  const adminUrl = `https://admin.shopify.com/store/${storeDomain.replace(".myshopify.com", "")}/products/${shortenShopifyGid(product.id)}`;
+  const syntheticSku = buildSyntheticParentSku(product);
+
+  const { data: existingParent, error: existingParentError } = await supabaseAdmin
+    .from("products")
+    .select("*")
+    .eq("shopify_product_id", product.id)
+    .is("shopify_variant_id", null)
+    .is("parent_product_id", null)
+    .maybeSingle();
+  if (existingParentError) throw existingParentError;
+
+  if (existingParent) {
+    parentCache.set(product.id, existingParent);
+    return existingParent;
+  }
+
+  const { data: skuMatchedParent, error: skuMatchedParentError } = await supabaseAdmin
+    .from("products")
+    .select("*")
+    .eq("sku", syntheticSku)
+    .maybeSingle();
+  if (skuMatchedParentError) throw skuMatchedParentError;
+
+  const parentPayload = {
+    id: skuMatchedParent?.id,
+    sku: syntheticSku,
+    name: product.title,
+    category: skuMatchedParent?.category ?? "Shopify",
+    description: skuMatchedParent?.description ?? `Parent style synced from Shopify product ${product.title}.`,
+    vendor_id: skuMatchedParent?.vendor_id ?? null,
+    unit_cost: Number(skuMatchedParent?.unit_cost ?? 0),
+    unit_price: Number(skuMatchedParent?.unit_price ?? 0),
+    current_inventory: 0,
+    safety_stock: skuMatchedParent?.safety_stock ?? 0,
+    image_url: product.featuredImage?.url ?? skuMatchedParent?.image_url ?? null,
+    no_bundles: skuMatchedParent?.no_bundles ?? false,
+    shopify_product_id: product.id,
+    shopify_variant_id: null,
+    shopify_handle: product.handle,
+    shopify_admin_url: adminUrl,
+    shopify_storefront_url: storefrontUrl,
+    is_shopify_synced: true,
+    last_shopify_sync_at: new Date().toISOString(),
+    ancillary_category: skuMatchedParent?.ancillary_category ?? null,
+    parent_product_id: null,
+    variant_title: null,
+    variant_sort_order: 0,
+  };
+
+  const { data: savedParent, error: savedParentError } = await supabaseAdmin
+    .from("products")
+    .upsert(parentPayload)
+    .select("*")
+    .single();
+  if (savedParentError) throw savedParentError;
+
+  parentCache.set(product.id, savedParent);
+  return savedParent;
+}
+
 async function syncVariant(
   supabaseAdmin: SupabaseClient,
   storeDomain: string,
   variant: ShopifyVariantNode,
+  parentCache: Map<string, Record<string, unknown>>,
+  variantSortOrder: number,
 ) {
   const sku = variant.inventoryItem?.sku?.trim();
   if (!sku) return { productSynced: false, inventorySynced: 0, productId: null as string | null, sku: null as string | null };
@@ -366,10 +450,7 @@ async function syncVariant(
     variantId: variant.id,
   });
 
-  const productName =
-    variant.title && variant.title !== "Default Title"
-      ? `${variant.product.title} - ${variant.title}`
-      : variant.product.title;
+  const normalizedVariantTitle = getNormalizedVariantTitle(variant.title);
 
   const storefrontUrl = `https://${storeDomain}/products/${variant.product.handle}`;
   const adminUrl = `https://admin.shopify.com/store/${storeDomain.replace(".myshopify.com", "")}/products/${variant.product.id.split("/").pop()}`;
@@ -383,10 +464,14 @@ async function syncVariant(
     .maybeSingle();
   if (existingProductError) throw existingProductError;
 
+  const parentProduct = normalizedVariantTitle
+    ? await ensureParentStyleProduct(supabaseAdmin, storeDomain, variant.product, parentCache)
+    : null;
+
   const productPayload = {
     id: existingProduct?.id,
     sku,
-    name: productName,
+    name: variant.product.title,
     category: existingProduct?.category ?? "Shopify",
     description: existingProduct?.description ?? `Synced from Shopify product ${variant.product.title}.`,
     vendor_id: existingProduct?.vendor_id ?? null,
@@ -404,6 +489,11 @@ async function syncVariant(
     is_shopify_synced: true,
     last_shopify_sync_at: new Date().toISOString(),
     ancillary_category: existingProduct?.ancillary_category ?? null,
+    parent_product_id: normalizedVariantTitle ? (existingProduct?.parent_product_id ?? parentProduct?.id ?? null) : existingProduct?.parent_product_id ?? null,
+    variant_title: normalizedVariantTitle,
+    variant_sort_order: normalizedVariantTitle
+      ? Number(existingProduct?.variant_sort_order ?? variantSortOrder)
+      : 0,
   };
 
   const { data: savedProduct, error: savedProductError } = await supabaseAdmin
@@ -609,9 +699,20 @@ Deno.serve(async (request) => {
     let productsSynced = 0;
     let inventoryRecordsSynced = 0;
     const productsBySku = new Map<string, { id: string }>();
+    const parentProductsByShopifyId = new Map<string, Record<string, unknown>>();
+    const variantOrderByShopifyProductId = new Map<string, number>();
 
     for (const variant of variants) {
-      const result = await syncVariant(supabaseAdmin, storeDomain, variant);
+      const nextVariantOrder = (variantOrderByShopifyProductId.get(variant.product.id) ?? 0) + 1;
+      variantOrderByShopifyProductId.set(variant.product.id, nextVariantOrder);
+
+      const result = await syncVariant(
+        supabaseAdmin,
+        storeDomain,
+        variant,
+        parentProductsByShopifyId,
+        nextVariantOrder,
+      );
       if (result.productSynced) productsSynced += 1;
       inventoryRecordsSynced += result.inventorySynced;
       if (result.sku && result.productId) {

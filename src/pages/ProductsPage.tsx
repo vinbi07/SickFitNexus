@@ -14,10 +14,12 @@ import { supportService } from "@/services/supportService";
 import { vendorService } from "@/services/vendorService";
 import type { Product } from "@/types/domain";
 import { formatCurrency } from "@/utils/format";
+import { getProductFamilyName, getProductVariantLabel } from "@/utils/lookbook";
 import { getMarginMetrics, isInventoryDanger } from "@/utils/operations";
 
 type ProductFormValues = Partial<Product> & {
   starting_inventory?: number;
+  compliance_docs_required_input?: string;
 };
 
 export function ProductsPage() {
@@ -43,12 +45,15 @@ export function ProductsPage() {
   if (error || !data) return <ErrorState message={error ?? "Unable to load products"} />;
 
   const categories = [...new Set(data.products.map((product) => product.category).filter(Boolean))] as string[];
+  const parentCandidates = data.products.filter((product) => !product.parent_product_id);
   const filteredProducts = data.products
     .filter((product) => {
       const query = search.trim().toLowerCase();
       const matchesSearch =
         !query ||
         product.name.toLowerCase().includes(query) ||
+        getProductFamilyName(product).toLowerCase().includes(query) ||
+        getProductVariantLabel(product).toLowerCase().includes(query) ||
         product.sku.toLowerCase().includes(query) ||
         (product.description ?? "").toLowerCase().includes(query) ||
         (product.vendors?.name ?? "").toLowerCase().includes(query);
@@ -146,11 +151,14 @@ export function ProductsPage() {
             title: "Product",
             render: (row) => (
               <div className="cell-stack">
-                <strong>{row.name}</strong>
-                <span className="helper-text">{row.category ?? "Uncategorized"}</span>
+                <strong>{getProductFamilyName(row)}</strong>
+                <span className="helper-text">
+                  {getProductVariantLabel(row)}{row.category ? ` | ${row.category}` : ""}
+                </span>
               </div>
             ),
           },
+          { key: "variant", title: "Variant", render: (row) => getProductVariantLabel(row) },
           { key: "vendor", title: "Vendor", render: (row) => row.vendors?.name ?? "Unassigned" },
           { key: "cogs", title: "COGS", render: (row) => formatCurrency(row.unit_cost) },
           { key: "unit_price", title: "Price", render: (row) => formatCurrency(row.unit_price ?? 0) },
@@ -209,11 +217,24 @@ export function ProductsPage() {
           initialValues={{
             sku: editing.sku ?? "",
             name: editing.name ?? "",
+            parent_product_id: editing.parent_product_id ?? "",
+            variant_title: editing.variant_title ?? "",
+            variant_sort_order: editing.variant_sort_order ?? 0,
             category: editing.category ?? "",
             description: editing.description ?? "",
             vendor_id: editing.vendor_id ?? "",
             unit_cost: editing.unit_cost ?? 0,
             unit_price: editing.unit_price ?? 0,
+            pack_size: editing.pack_size ?? "",
+            case_pack_quantity: editing.case_pack_quantity ?? 1,
+            wholesale_price: editing.wholesale_price ?? 0,
+            msrp: editing.msrp ?? 0,
+            upc: editing.upc ?? "",
+            weight: editing.weight ?? "",
+            dimensions: editing.dimensions ?? "",
+            compliance_docs_required_input: (editing.compliance_docs_required ?? []).join(", "),
+            compliance_docs_status: editing.compliance_docs_status ?? "Ready",
+            inventory_allocated: editing.inventory_allocated ?? 0,
             safety_stock: editing.safety_stock ?? 0,
             image_url: editing.image_url ?? "",
             no_bundles: editing.no_bundles ?? false,
@@ -225,10 +246,22 @@ export function ProductsPage() {
           fields={[
             { key: "sku", label: "SKU", required: true },
             { key: "name", label: "Name", required: true },
+            { key: "parent_product_id", label: "Parent Style", type: "select", options: parentCandidates.filter((product) => product.id !== editing.id).map((product) => ({ label: `${product.name} (${product.sku})`, value: product.id })) },
+            { key: "variant_title", label: "Variant Title" },
+            { key: "variant_sort_order", label: "Variant Sort Order", type: "number", min: 0, step: 1 },
             { key: "category", label: "Category" },
             { key: "vendor_id", label: "Primary Vendor", type: "select", options: data.vendors.map((vendor) => ({ label: vendor.name, value: vendor.id })) },
             { key: "unit_cost", label: "COGS", type: "number", min: 0, step: 0.01 },
             { key: "unit_price", label: "Unit Price", type: "number", min: 0, step: 0.01 },
+            { key: "wholesale_price", label: "Wholesale Price", type: "number", min: 0, step: 0.01 },
+            { key: "msrp", label: "MSRP", type: "number", min: 0, step: 0.01 },
+            { key: "upc", label: "UPC" },
+            { key: "pack_size", label: "Pack Size" },
+            { key: "case_pack_quantity", label: "Case Pack Quantity", type: "number", min: 1, step: 1 },
+            { key: "weight", label: "Weight" },
+            { key: "dimensions", label: "Dimensions" },
+            { key: "compliance_docs_required_input", label: "Compliance Docs", type: "textarea" },
+            { key: "compliance_docs_status", label: "Compliance Status", type: "select", options: [{ label: "Ready", value: "Ready" }, { label: "Missing", value: "Missing" }, { label: "Pending", value: "Pending" }] },
             { key: "image_url", label: "Image URL" },
             { key: "no_bundles", label: "No Bundles", type: "checkbox" },
             { key: "shopify_handle", label: "Shopify Handle" },
@@ -244,8 +277,23 @@ export function ProductsPage() {
               ...editing,
               ...values,
               vendor_id: values.vendor_id ? String(values.vendor_id) : null,
+              parent_product_id: values.parent_product_id ? String(values.parent_product_id) : null,
+              variant_title: values.variant_title ? String(values.variant_title) : null,
+              variant_sort_order: Number(values.variant_sort_order ?? 0),
               category: values.category ? String(values.category) : null,
               description: values.description ? String(values.description) : null,
+              upc: values.upc ? String(values.upc) : null,
+              pack_size: values.pack_size ? String(values.pack_size) : null,
+              case_pack_quantity: Math.max(Number(values.case_pack_quantity ?? 1), 1),
+              wholesale_price: Number(values.wholesale_price ?? 0),
+              msrp: Number(values.msrp ?? 0),
+              weight: values.weight ? String(values.weight) : null,
+              dimensions: values.dimensions ? String(values.dimensions) : null,
+              compliance_docs_required: String(values.compliance_docs_required_input ?? "")
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+              compliance_docs_status: values.compliance_docs_status ? String(values.compliance_docs_status) : null,
               image_url: values.image_url ? String(values.image_url) : null,
               no_bundles: Boolean(values.no_bundles),
               shopify_handle: values.shopify_handle ? String(values.shopify_handle) : null,
@@ -272,17 +320,33 @@ export function ProductsPage() {
         >
           <div className="detail-grid">
             <div className="detail-card"><span>Name</span><strong>{viewing.name}</strong></div>
+            <div className="detail-card"><span>Parent Style</span><strong>{viewing.parent_products?.name ?? "Standalone / base style"}</strong></div>
+            <div className="detail-card"><span>Variant</span><strong>{getProductVariantLabel(viewing)}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{viewing.vendors?.name ?? "Unassigned"}</strong></div>
             <div className="detail-card"><span>Category</span><strong>{viewing.category ?? "Uncategorized"}</strong></div>
             <div className="detail-card"><span>Inventory</span><strong className={isInventoryDanger(viewing.current_inventory) ? "danger-text" : ""}>{viewing.current_inventory}</strong></div>
             <div className="detail-card"><span>COGS</span><strong>{formatCurrency(viewing.unit_cost)}</strong></div>
             <div className="detail-card"><span>Unit Price</span><strong>{formatCurrency(viewing.unit_price ?? 0)}</strong></div>
             <div className="detail-card"><span>Margin</span><strong>{getMarginMetrics(viewing.unit_cost, viewing.unit_price).marginPercent.toFixed(0)}%</strong></div>
+            <div className="detail-card"><span>Wholesale</span><strong>{formatCurrency(viewing.wholesale_price ?? 0)}</strong></div>
+            <div className="detail-card"><span>MSRP</span><strong>{formatCurrency(viewing.msrp ?? 0)}</strong></div>
+            <div className="detail-card"><span>UPC</span><strong>{viewing.upc ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Case Pack</span><strong>{viewing.case_pack_quantity}</strong></div>
+            <div className="detail-card"><span>Pack Size</span><strong>{viewing.pack_size ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Available</span><strong>{viewing.inventory_available ?? viewing.current_inventory}</strong></div>
             <div className="detail-card"><span>No Bundles</span><strong>{viewing.no_bundles ? "Yes" : "No"}</strong></div>
             <div className="detail-card"><span>Product Image</span><strong>{viewing.image_url ? <a href={viewing.image_url} target="_blank" rel="noreferrer">Open image</a> : "No image yet"}</strong></div>
+            <div className="detail-card"><span>Compliance</span><strong>{viewing.compliance_docs_status ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Shopify Sync</span><strong>{viewing.is_shopify_synced ? "Synced" : "Not synced"}</strong></div>
             <div className="detail-card"><span>Updated</span><strong>{new Date(viewing.updated_at).toLocaleString()}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Description</span><strong>{viewing.description ?? "No description added."}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Compliance Docs Required</span><strong>{viewing.compliance_docs_required?.length ? viewing.compliance_docs_required.join(", ") : "None"}</strong></div>
+            {viewing.variants?.length ? (
+              <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
+                <span>Linked Variants</span>
+                <strong>{viewing.variants.map((variant) => `${getProductVariantLabel(variant)} (${variant.sku})`).join(", ")}</strong>
+              </div>
+            ) : null}
           </div>
         </Modal>
       ) : null}

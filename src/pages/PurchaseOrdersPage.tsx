@@ -375,6 +375,7 @@ export function PurchaseOrdersPage() {
 
   const openOrders = data.purchaseOrders.filter((po) => !["Received", "Closed", "Cancelled"].includes(po.status));
   const pendingOrders = data.purchaseOrders.filter((po) => po.status === "Pending");
+  const pendingApprovalOrders = data.purchaseOrders.filter((po) => po.approval_status === "Pending Approval");
   const inTransitOrders = data.purchaseOrders.filter((po) => po.status === "In Transit");
   const deliveredRecent = data.purchaseOrders.filter((po) => po.status === "Received" || po.status === "Closed");
 
@@ -419,6 +420,7 @@ export function PurchaseOrdersPage() {
       <div className="card-grid">
         <DashboardCard label="Open" value={openOrders.length} />
         <DashboardCard label="Pending Intake" value={pendingOrders.length} footnote="New or unprocessed requests" />
+        <DashboardCard label="Buyer Queue" value={pendingApprovalOrders.length} footnote="Awaiting SickFit approval" />
         <DashboardCard label="In Transit" value={inTransitOrders.length} />
         <DashboardCard label="Delivered / Closed" value={deliveredRecent.length} />
       </div>
@@ -428,6 +430,7 @@ export function PurchaseOrdersPage() {
           <button className={`btn ${poType === "Retailer PO" ? "btn-primary" : "btn-secondary"}`} onClick={() => setPoType(poType === "Retailer PO" ? "" : "Retailer PO")}>Retailer POs</button>
           <button className={`btn ${poType === "Manufacturer PO" ? "btn-primary" : "btn-secondary"}`} onClick={() => setPoType(poType === "Manufacturer PO" ? "" : "Manufacturer PO")}>Manufacturer POs</button>
           <button className={`btn ${status === "Pending" ? "btn-primary" : "btn-secondary"}`} onClick={() => setStatus(status === "Pending" ? "" : "Pending")}>Pending</button>
+          <button className={`btn ${status === "Pending Approval" ? "btn-primary" : "btn-secondary"}`} onClick={() => setStatus(status === "Pending Approval" ? "" : "Pending Approval")}>Pending Approval</button>
           <button className={`btn ${status === "In Transit" ? "btn-primary" : "btn-secondary"}`} onClick={() => setStatus(status === "In Transit" ? "" : "In Transit")}>Shipped</button>
         </div>
       </div>
@@ -468,8 +471,13 @@ export function PurchaseOrdersPage() {
           },
           { key: "po_type", title: "Type", render: (row) => row.po_type },
           { key: "retailer", title: "Retailer", render: (row) => row.retailers?.name ?? "N/A" },
+          { key: "buyer", title: "Buyer", render: (row) => row.buyers?.buyer_name ?? "N/A" },
           { key: "vendor", title: "Vendor", render: (row) => row.vendors?.name ?? "Unassigned" },
           { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
+          { key: "approval_status", title: "Approval", render: (row) => <StatusBadge label={row.approval_status} /> },
+          { key: "allocation_status", title: "Allocation", render: (row) => <StatusBadge label={row.allocation_status} /> },
+          { key: "total_units", title: "Units", render: (row) => row.total_units ?? 0 },
+          { key: "compliance", title: "Compliance", render: (row) => String((row.compliance_snapshot as { summary?: string } | null)?.summary ?? "N/A") },
           { key: "invoice_status", title: "Invoice", render: (row) => <StatusBadge label={row.invoice_status ?? "Open"} /> },
           { key: "ship_date", title: "Ship Date", render: (row) => formatDate(row.ship_date) },
           { key: "eta_date", title: "ETA", render: (row) => formatDate(row.eta_date ?? row.expected_delivery_date) },

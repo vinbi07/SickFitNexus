@@ -15,6 +15,27 @@ import type {
   Vendor,
   Win,
 } from "@/types/domain";
+import { deriveInventoryAvailable, sortProductsByFamily } from "@/utils/lookbook";
+
+function attachVariantRelations(products: Product[]) {
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const variantsByParentId = new Map<string, Product[]>();
+
+  products.forEach((product) => {
+    if (!product.parent_product_id) return;
+    const current = variantsByParentId.get(product.parent_product_id) ?? [];
+    current.push(product);
+    variantsByParentId.set(product.parent_product_id, current);
+  });
+
+  return products.map((product) => ({
+    ...product,
+    parent_products: product.parent_product_id ? productsById.get(product.parent_product_id) ?? null : null,
+    variants: (variantsByParentId.get(product.id) ?? []).sort(
+      (left, right) => Number(left.variant_sort_order ?? 0) - Number(right.variant_sort_order ?? 0),
+    ),
+  }));
+}
 
 function upsertSingle<T>(table: string) {
   return async (payload: Partial<T>) => {
@@ -44,11 +65,14 @@ async function getOrCreateDefaultLocation() {
 }
 
 async function saveProduct(payload: Partial<Product>) {
-  const { vendors: _vendors, ...productPayload } = payload;
+  const { vendors: _vendors, parent_products: _parentProducts, variants: _variants, ...productPayload } = payload;
   const isCreate = !productPayload.id;
   const startingInventory = Number(productPayload.current_inventory ?? 0);
   const [saved] = (await upsertTable<Product>("products", {
     ...productPayload,
+    parent_product_id: productPayload.parent_product_id ? String(productPayload.parent_product_id) : null,
+    variant_title: productPayload.variant_title ? String(productPayload.variant_title) : null,
+    variant_sort_order: Number(productPayload.variant_sort_order ?? 0),
     current_inventory: isCreate ? 0 : productPayload.current_inventory,
   })) as Product[];
 
@@ -109,7 +133,14 @@ export const supportService = {
       vendors,
       events,
     );
-    return calculated;
+    return sortProductsByFamily(
+      attachVariantRelations(
+        calculated.map((product) => ({
+          ...product,
+          inventory_available: deriveInventoryAvailable(product),
+        })),
+      ),
+    );
   },
   saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),

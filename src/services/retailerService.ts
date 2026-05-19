@@ -1,6 +1,6 @@
 import { assertSupabase } from "@/lib/supabase";
 import { deleteFromTable, upsertTable } from "@/services/baseService";
-import type { PoLineItem, Product, PurchaseOrder, Retailer } from "@/types/domain";
+import type { Buyer, LookbookTemplate, PoLineItem, Product, PurchaseOrder, Retailer } from "@/types/domain";
 import { addDays, toDateInput } from "@/utils/date";
 import { getInvoiceStatus } from "@/utils/operations";
 
@@ -91,6 +91,8 @@ export const retailerService = {
       purchaseOrdersResponse,
       lineItemsResponse,
       productsResponse,
+      buyersResponse,
+      templatesResponse,
     ] = await Promise.all([
       supabase.from("retailers").select("*").eq("id", id).single(),
       supabase.from("retailers").select("*").order("name", { ascending: true }),
@@ -98,6 +100,8 @@ export const retailerService = {
       supabase.from("purchase_orders").select("*").eq("retailer_id", id).order("order_date", { ascending: false }),
       supabase.from("po_line_items").select("*"),
       supabase.from("products").select("*"),
+      supabase.from("buyers").select("*, lookbook_templates(*)").eq("retailer_id", id).order("buyer_name", { ascending: true }),
+      supabase.from("lookbook_templates").select("*").order("name", { ascending: true }),
     ]);
 
     if (retailerResponse.error) throw retailerResponse.error;
@@ -106,6 +110,8 @@ export const retailerService = {
     if (purchaseOrdersResponse.error) throw purchaseOrdersResponse.error;
     if (lineItemsResponse.error) throw lineItemsResponse.error;
     if (productsResponse.error) throw productsResponse.error;
+    if (buyersResponse.error) throw buyersResponse.error;
+    if (templatesResponse.error) throw templatesResponse.error;
 
     const retailer = retailerResponse.data as Retailer;
     const allRetailers = (retailersResponse.data ?? []) as Retailer[];
@@ -113,6 +119,8 @@ export const retailerService = {
     const purchaseOrders = (purchaseOrdersResponse.data ?? []) as PurchaseOrder[];
     const lineItems = (lineItemsResponse.data ?? []) as PoLineItem[];
     const products = (productsResponse.data ?? []) as Product[];
+    const buyers = (buyersResponse.data ?? []) as Buyer[];
+    const lookbookTemplates = (templatesResponse.data ?? []) as LookbookTemplate[];
     const productById = new Map(products.map((product) => [product.id, product]));
     const lineItemsByPo = new Map<string, PoLineItem[]>();
     lineItems.forEach((item) => {
@@ -149,6 +157,8 @@ export const retailerService = {
       retailer,
       parentRetailer,
       childRetailers,
+      buyers,
+      lookbookTemplates,
       locations: siblingLocations,
       purchaseOrders,
       openInvoices,
