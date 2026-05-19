@@ -321,6 +321,7 @@ export function ProductsPage() {
           actions={<button className="btn btn-ghost" onClick={() => setViewing(null)}>Cancel</button>}
         >
           <div className="detail-grid">
+            <div className="detail-card"><span>SKU</span><strong>{viewing.sku}</strong></div>
             <div className="detail-card"><span>Name</span><strong>{viewing.name}</strong></div>
             <div className="detail-card"><span>Parent Style</span><strong>{viewing.parent_products?.name ?? "Standalone / base style"}</strong></div>
             <div className="detail-card"><span>Variant</span><strong>{getProductVariantLabel(viewing)}</strong></div>
