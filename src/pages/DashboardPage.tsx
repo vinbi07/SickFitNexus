@@ -20,6 +20,7 @@ export function DashboardPage() {
   const channelRevenueRows = data.revenueByChannelYtd.filter((item) => item.channel !== "DTC + Shopify");
   const topChannelValue = channelRevenueRows[0]?.value ?? 0;
   const totalChannelRevenue = channelRevenueRows.reduce((sum, item) => sum + item.value, 0);
+  const dtcShopifyRevenue = data.revenueByChannelYtd.find((item) => item.channel === "DTC + Shopify")?.value ?? 0;
 
   return (
     <div className="section-stack">
@@ -34,6 +35,8 @@ export function DashboardPage() {
         </div>
         <div className="card-grid dashboard-card-grid">
           <DashboardCard label="Wholesale Revenue" value={formatCurrency(data.wholesaleRevenueTotal)} footnote="Wholesale only. Shopify / DTC excluded." highlight to="/reports" />
+          <DashboardCard label="DTC + Shopify Revenue" value={formatCurrency(dtcShopifyRevenue)} footnote="Direct-to-consumer revenue contribution" to="/reports" />
+          <DashboardCard label="SKUs at OOS Risk < 90d" value={data.skuOosRisk90dCount} footnote={`${data.skuOosRiskCriticalCount} critical`} to="/products" />
           <DashboardCard label="Danger SKUs" value={data.dangerSkuCount} footnote="Red when on-hand inventory is 25 units or less." to="/inventory" />
           <DashboardCard label="Awaiting Action" value={data.awaitingActionCount} footnote="Urgent inventory and invoice follow-up" to="/alerts" />
         </div>
@@ -225,7 +228,7 @@ export function DashboardPage() {
         </div>
         <div className="card-grid dashboard-card-grid">
           <DashboardCard label="Incoming Inventory" value={formatNumber(data.incomingInventoryUnits)} footnote={`${data.activeSkusInRoute} active SKUs in route`} to="/production" />
-          <DashboardCard label="Open Invoices" value={data.openInvoiceCount} footnote="Manufacturer invoices not shipped yet" to="/purchase-orders" />
+          <DashboardCard label="Open Invoices / POs in Flight" value={data.openInvoiceCount} footnote="Manufacturer POs not shipped yet" to="/purchase-orders" />
           <DashboardCard label="Shipped Invoices" value={data.shippedInvoiceCount} footnote={`${data.inventoryInRouteCount} still in route`} to="/production" />
         </div>
         <div className="split-grid">
