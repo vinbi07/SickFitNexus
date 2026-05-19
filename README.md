@@ -121,6 +121,7 @@ VITE_SUPABASE_ANON_KEY=...
 - [src/db/migrations/012_lookbook_order_mode.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/012_lookbook_order_mode.sql)
 - [src/db/migrations/013_lookbook_templates.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/013_lookbook_templates.sql)
 - [src/db/migrations/014_product_variants.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/014_product_variants.sql)
+- [src/db/migrations/015_retailer_supplier_activation_ids.sql](/c:/Users/Vinbi/SickFitNexus/src/db/migrations/015_retailer_supplier_activation_ids.sql)
 - [src/db/seed.sql](/c:/Users/Vinbi/SickFitNexus/src/db/seed.sql)
 
 4. Start the app:

@@ -20,6 +20,8 @@ export interface Retailer {
   primary_contact_phone: string | null;
   secondary_contacts: string | null;
   account_number: string | null;
+  supplier_id: string | null;
+  activation_id: string | null;
   shipping_requirements: string | null;
   sop_notes: string | null;
   parent_retailer_id: string | null;

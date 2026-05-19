@@ -4,6 +4,29 @@ import type { Buyer, LookbookTemplate, PoLineItem, Product, PurchaseOrder, Retai
 import { addDays, toDateInput } from "@/utils/date";
 import { getInvoiceStatus } from "@/utils/operations";
 
+function toRetailerWritePayload(payload: Partial<Retailer>): Partial<Retailer> {
+  return {
+    id: payload.id,
+    name: payload.name,
+    status: payload.status,
+    primary_contact_name: payload.primary_contact_name,
+    primary_contact_email: payload.primary_contact_email,
+    primary_contact_phone: payload.primary_contact_phone,
+    secondary_contacts: payload.secondary_contacts,
+    account_number: payload.account_number,
+    supplier_id: payload.supplier_id,
+    activation_id: payload.activation_id,
+    shipping_requirements: payload.shipping_requirements,
+    sop_notes: payload.sop_notes,
+    parent_retailer_id: payload.parent_retailer_id,
+    retailer_group: payload.retailer_group,
+    ordering_cadence_days: payload.ordering_cadence_days,
+    next_reorder_start: payload.next_reorder_start,
+    next_reorder_end: payload.next_reorder_end,
+    notes: payload.notes,
+  };
+}
+
 function calculateCadence(purchaseOrders: PurchaseOrder[]) {
   const ordered = purchaseOrders
     .map((po) => po.order_date)
@@ -31,7 +54,7 @@ export const retailerService = {
   },
 
   async upsert(payload: Partial<Retailer>) {
-    const [saved] = (await upsertTable<Retailer>("retailers", payload)) as Retailer[];
+    const [saved] = (await upsertTable<Retailer>("retailers", toRetailerWritePayload(payload))) as Retailer[];
     return saved;
   },
 

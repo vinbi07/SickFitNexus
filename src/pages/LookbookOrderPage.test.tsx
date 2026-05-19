@@ -43,6 +43,8 @@ const retailer: Retailer = {
   primary_contact_phone: null,
   secondary_contacts: null,
   account_number: null,
+  supplier_id: null,
+  activation_id: null,
   shipping_requirements: null,
   sop_notes: null,
   parent_retailer_id: null,

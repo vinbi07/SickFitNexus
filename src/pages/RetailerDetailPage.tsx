@@ -58,6 +58,8 @@ export function RetailerDetailPage() {
             <div className="detail-card"><span>Primary Contact</span><strong>{data.retailer.primary_contact_name ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Email</span><strong>{data.retailer.primary_contact_email ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Phone</span><strong>{data.retailer.primary_contact_phone ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Supplier ID</span><strong>{data.retailer.supplier_id ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Activation ID</span><strong>{data.retailer.activation_id ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Next Reorder Window</span><strong>{data.retailer.next_reorder_start ? `${formatDate(data.retailer.next_reorder_start)} - ${formatDate(data.retailer.next_reorder_end)}` : "Not set"}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Additional Contacts</span><strong>{data.retailer.secondary_contacts ?? "No extra contacts added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>SOPs</span><strong>{data.retailer.sop_notes ?? "No SOP notes added."}</strong></div>
