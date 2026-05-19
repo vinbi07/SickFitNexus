@@ -4,17 +4,19 @@ export function DataTable<T>({
   columns,
   rows,
   emptyMessage = "No records available.",
+  className,
 }: {
   columns: Array<{ key: string; title: string; render: (row: T) => ReactNode }>;
   rows: T[];
   emptyMessage?: string;
+  className?: string;
 }) {
   if (!rows.length) {
     return <div className="empty-state">{emptyMessage}</div>;
   }
 
   return (
-    <div className="table-shell">
+    <div className={className ? `table-shell ${className}` : "table-shell"}>
       <table className="data-table">
         <thead>
           <tr>

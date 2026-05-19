@@ -134,6 +134,7 @@ export function ProductsPage() {
         </div>
       </div>
       <DataTable
+        className="table-shell-wide"
         emptyMessage="No products yet. Add your first product to start managing catalog and inventory links."
         columns={[
           {
@@ -145,7 +146,7 @@ export function ProductsPage() {
               </div>
             ),
           },
-          { key: "sku", title: "SKU", render: (row) => <span className="table-link">{row.sku}</span> },
+          { key: "sku", title: "SKU", render: (row) => <span className="table-link product-sku-cell">{row.sku}</span> },
           {
             key: "name",
             title: "Product",
@@ -158,10 +159,11 @@ export function ProductsPage() {
               </div>
             ),
           },
-          { key: "variant", title: "Variant", render: (row) => getProductVariantLabel(row) },
-          { key: "vendor", title: "Vendor", render: (row) => row.vendors?.name ?? "Unassigned" },
+          { key: "variant", title: "Variant", render: (row) => <span className="product-compact-cell">{getProductVariantLabel(row)}</span> },
+          { key: "vendor", title: "Vendor", render: (row) => <span className="product-compact-cell">{row.vendors?.name ?? "Unassigned"}</span> },
           { key: "cogs", title: "COGS", render: (row) => formatCurrency(row.unit_cost) },
           { key: "unit_price", title: "Price", render: (row) => formatCurrency(row.unit_price ?? 0) },
+          { key: "weight", title: "Weight", render: (row) => row.weight ?? "N/A" },
           {
             key: "margin",
             title: "Margin",
@@ -177,9 +179,9 @@ export function ProductsPage() {
             key: "actions",
             title: "Actions",
             render: (row) => (
-              <div className="btn-row">
+              <div className="btn-row product-actions-cell">
                 <button className="btn btn-ghost btn-small" onClick={() => setViewing(row)}>
-                  View Details
+                  View
                 </button>
                 <button
                   className="btn btn-ghost btn-small"
@@ -196,7 +198,7 @@ export function ProductsPage() {
                     }
                   }}
                 >
-                  Sync Shopify
+                  Sync
                 </button>
                 <button className="btn btn-secondary btn-small" onClick={() => setEditing(row)}>
                   Edit
@@ -331,6 +333,7 @@ export function ProductsPage() {
             <div className="detail-card"><span>Wholesale</span><strong>{formatCurrency(viewing.wholesale_price ?? 0)}</strong></div>
             <div className="detail-card"><span>MSRP</span><strong>{formatCurrency(viewing.msrp ?? 0)}</strong></div>
             <div className="detail-card"><span>UPC</span><strong>{viewing.upc ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Weight</span><strong>{viewing.weight ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Case Pack</span><strong>{viewing.case_pack_quantity}</strong></div>
             <div className="detail-card"><span>Pack Size</span><strong>{viewing.pack_size ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Available</span><strong>{viewing.inventory_available ?? viewing.current_inventory}</strong></div>

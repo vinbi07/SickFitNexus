@@ -431,9 +431,19 @@ textarea {
 }
 
 .table-shell {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   position: relative;
   background: linear-gradient(180deg, #ffffff, #fbfbfc);
+}
+
+.table-shell-wide .data-table {
+  min-width: 1240px;
+}
+
+.table-shell-wide .data-table th,
+.table-shell-wide .data-table td {
+  padding: 12px 14px;
 }
 
 .table-toolbar {
@@ -443,6 +453,7 @@ textarea {
 
 .data-table {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
 }
 
@@ -468,6 +479,29 @@ textarea {
 .table-link {
   color: #b41f29;
   font-weight: 700;
+}
+
+.product-sku-cell {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.product-compact-cell {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-actions-cell {
+  gap: 8px;
+  max-width: 160px;
 }
 
 .cell-stack {
