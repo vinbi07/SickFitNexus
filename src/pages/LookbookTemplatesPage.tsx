@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { lookbookTemplateService } from "@/services/lookbookTemplateService";
 import { supportService } from "@/services/supportService";
-import type { LookbookTemplate, LookbookTemplateItem, Product } from "@/types/domain";
+import type { LookbookTemplate, LookbookTemplateItem, Product, ProductBarcode } from "@/types/domain";
 import { formatCurrency } from "@/utils/format";
 import {
   deriveInventoryAvailable,
@@ -18,13 +18,20 @@ import {
   getProductFamilyName,
   getProductVariantLabel,
   resolveCasePackQuantity,
-  sortProductsByFamily,
 } from "@/utils/lookbook";
 
 type TemplateEditor = {
   template: Partial<LookbookTemplate>;
   items: Array<Partial<LookbookTemplateItem>>;
 };
+
+function getPrimaryLinkedProduct(barcode: ProductBarcode) {
+  return barcode.product_barcode_links?.find((link) => link.products)?.products ?? null;
+}
+
+function truncateLinkedSku(sku: string) {
+  return sku.length > 12 ? `${sku.slice(0, 9)}...` : sku;
+}
 
 export function LookbookTemplatesPage() {
   const [query, setQuery] = useState("");
@@ -36,6 +43,7 @@ export function LookbookTemplatesPage() {
     async () => ({
       templates: await lookbookTemplateService.list(),
       products: await supportService.listProducts(),
+      barcodes: await supportService.listBarcodes(),
     }),
     [],
   );
@@ -98,6 +106,7 @@ export function LookbookTemplatesPage() {
         <LookbookTemplateEditor
           initialValue={editing}
           products={data.products}
+          barcodes={data.barcodes}
           onClose={() => setEditing(null)}
           onSaved={async () => {
             await reload();
@@ -198,11 +207,13 @@ function LookbookTemplatePreview({
 function LookbookTemplateEditor({
   initialValue,
   products,
+  barcodes,
   onClose,
   onSaved,
 }: {
   initialValue: TemplateEditor;
   products: Product[];
+  barcodes: ProductBarcode[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -216,17 +227,32 @@ function LookbookTemplateEditor({
   const [search, setSearch] = useState("");
 
   const selectedIds = new Set(items.map((item) => item.product_id).filter(Boolean));
-  const filteredProducts = sortProductsByFamily(
-    products.filter((product) =>
-      [
-        product.name,
-        product.sku,
-        product.category ?? "",
-        product.variant_title ?? "",
-        product.parent_products?.name ?? "",
-      ].join(" ").toLowerCase().includes(search.toLowerCase()),
-    ),
-  );
+  const filteredBarcodes = [...barcodes]
+    .sort((left, right) => {
+      const productComparison = left.product_name.localeCompare(right.product_name);
+      if (productComparison !== 0) return productComparison;
+      return left.sku.localeCompare(right.sku);
+    })
+    .filter((barcode) => {
+      const linkedProducts = (barcode.product_barcode_links ?? [])
+        .map((link) => link.products)
+        .filter((product): product is Product => Boolean(product));
+      return [
+        barcode.product_name,
+        barcode.sku,
+        barcode.handle ?? "",
+        barcode.collection ?? "",
+        barcode.barcode_upc ?? "",
+        barcode.size ?? "",
+        ...linkedProducts.flatMap((product) => [
+          product.name,
+          product.sku,
+          product.category ?? "",
+          product.variant_title ?? "",
+          product.parent_products?.name ?? "",
+        ]),
+      ].join(" ").toLowerCase().includes(search.toLowerCase());
+    });
 
   return (
     <div className="modal-backdrop">
@@ -272,62 +298,88 @@ function LookbookTemplateEditor({
           <div className="panel section-stack">
             <div className="panel-header"><h3>Catalog</h3></div>
             <div className="filter-row">
-              <input placeholder="Search products" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <input placeholder="Search barcode catalog" value={search} onChange={(event) => setSearch(event.target.value)} />
             </div>
             <DataTable
-              emptyMessage="No products match this search."
+              emptyMessage="No barcode rows match this search."
               columns={[
+                {
+                  key: "add",
+                  title: "Add",
+                  render: (row) => {
+                    const linkedProduct = getPrimaryLinkedProduct(row);
+                    const isAdded = linkedProduct ? selectedIds.has(linkedProduct.id) : false;
+                    return (
+                      <button
+                        className="btn btn-secondary btn-small"
+                        disabled={!linkedProduct || isAdded}
+                        onClick={() => {
+                          if (!linkedProduct) return;
+                          setItems((current) => [
+                            ...current,
+                            {
+                              product_id: linkedProduct.id,
+                              sort_order: current.length,
+                              featured: false,
+                            },
+                          ]);
+                        }}
+                      >
+                        {!linkedProduct ? "Unlinked" : isAdded ? "Added" : "Add"}
+                      </button>
+                    );
+                  },
+                },
+                {
+                  key: "link",
+                  title: "Shopify Link",
+                  render: (row) => {
+                    const linkedProduct = getPrimaryLinkedProduct(row);
+                    return linkedProduct ? (
+                      <div className="cell-stack">
+                        <StatusBadge label="Linked" />
+                        <span className="helper-text" title={linkedProduct.sku}>{truncateLinkedSku(linkedProduct.sku)}</span>
+                      </div>
+                    ) : (
+                      <div className="cell-stack">
+                        <StatusBadge label="Warning" />
+                        <span className="helper-text">Not linked to a Shopify product.</span>
+                      </div>
+                    );
+                  },
+                },
                 {
                   key: "image",
                   title: "Image",
-                  render: (row) => (
-                    <div className="product-thumb-shell">
-                      {row.image_url ? (
-                        <img className="product-thumb" src={row.image_url} alt={getProductFamilyName(row)} />
-                      ) : (
-                        <span className="product-thumb-fallback">{row.sku.slice(0, 2)}</span>
-                      )}
-                    </div>
-                  ),
+                  render: (row) => {
+                    const linkedProduct = getPrimaryLinkedProduct(row);
+                    return (
+                      <div className="product-thumb-shell">
+                        {linkedProduct?.image_url ? (
+                          <img className="product-thumb" src={linkedProduct.image_url} alt={getProductFamilyName(linkedProduct)} />
+                        ) : (
+                          <span className="product-thumb-fallback">{row.sku.slice(0, 2)}</span>
+                        )}
+                      </div>
+                    );
+                  },
                 },
                 { key: "sku", title: "SKU", render: (row) => row.sku },
                 {
                   key: "name",
-                  title: "Product",
+                  title: "Barcode Product",
                   render: (row) => (
                     <div className="cell-stack">
-                      <strong>{getProductFamilyName(row)}</strong>
+                      <strong>{row.product_name}</strong>
                       <span className="helper-text">
-                        {getProductVariantLabel(row)}{row.category ? ` | ${row.category}` : row.description ? ` | ${row.description}` : ""}
+                        UPC {row.barcode_upc ?? "Pending"}{row.size ? ` | ${row.size}` : ""}{row.handle ? ` | ${row.handle}` : ""}
                       </span>
                     </div>
                   ),
                 },
-                { key: "category", title: "Category", render: (row) => row.category ?? "N/A" },
-                {
-                  key: "add",
-                  title: "Add",
-                  render: (row) => (
-                    <button
-                      className="btn btn-secondary btn-small"
-                      disabled={selectedIds.has(row.id)}
-                      onClick={() =>
-                        setItems((current) => [
-                          ...current,
-                          {
-                            product_id: row.id,
-                            sort_order: current.length,
-                            featured: false,
-                          },
-                        ])
-                      }
-                    >
-                      {selectedIds.has(row.id) ? "Added" : "Add"}
-                    </button>
-                  ),
-                },
+                { key: "collection", title: "Collection", render: (row) => row.collection ?? "N/A" },
               ]}
-              rows={filteredProducts}
+              rows={filteredBarcodes}
             />
           </div>
           <div className="panel section-stack">
