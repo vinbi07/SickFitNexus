@@ -9,6 +9,7 @@ import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { buildLookbookUrl } from "@/lib/publicUrl";
 import { buyerService } from "@/services/buyerService";
 import { retailerService } from "@/services/retailerService";
 import type { Buyer } from "@/types/domain";
@@ -106,7 +107,7 @@ export function RetailerDetailPage() {
               { key: "payment_terms", title: "Terms", render: (row) => row.payment_terms ?? "N/A" },
               { key: "template", title: "Lookbook", render: (row) => row.lookbook_templates?.name ?? "All wholesale products" },
               { key: "order_mode_enabled", title: "Order Mode", render: (row) => <StatusBadge label={row.order_mode_enabled ? "Enabled" : "Disabled"} /> },
-              { key: "access", title: "Magic Link", render: (row) => <span className="helper-text">/lookbook/{row.access_token}</span> },
+              { key: "access", title: "Magic Link", render: (row) => <span className="helper-text">{buildLookbookUrl(row.access_token)}</span> },
               {
                 key: "actions",
                 title: "Actions",
@@ -114,7 +115,7 @@ export function RetailerDetailPage() {
                   <div className="btn-row">
                     <button className="btn btn-secondary btn-small" onClick={() => setEditingBuyer(row)}>Edit</button>
                     <button className="btn btn-ghost btn-small" onClick={async () => {
-                      await navigator.clipboard.writeText(`${window.location.origin}/lookbook/${row.access_token}`);
+                      await navigator.clipboard.writeText(buildLookbookUrl(row.access_token));
                       setNotice({ tone: "success", message: "Magic link copied to clipboard." });
                     }}>Copy Link</button>
                     <button className="btn btn-danger btn-small" onClick={() => setDeletingBuyer(row)}>Delete</button>
