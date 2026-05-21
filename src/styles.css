@@ -949,21 +949,31 @@ textarea {
 .lookbook-shell {
   min-height: 100vh;
   padding: 32px;
-  background:
-    radial-gradient(circle at top left, rgba(231, 32, 39, 0.14), transparent 18%),
-    linear-gradient(180deg, #f8f3ec 0%, #f2eee8 45%, #ece8e1 100%);
+  background: #ffffff;
 }
 
 .lookbook-hero {
-  margin: 0 auto 24px;
+  margin: 0 auto 20px;
   max-width: 1380px;
-  padding: 28px 30px;
-  border-radius: 22px;
-  color: white;
-  background:
-    radial-gradient(circle at 85% 10%, rgba(255, 149, 120, 0.24), transparent 20%),
-    linear-gradient(135deg, #09090a 0%, #1a0f12 52%, #401418 100%);
-  box-shadow: 0 22px 60px rgba(16, 11, 11, 0.26);
+  padding: 20px 24px;
+  border-radius: 4px;
+  border: 1px solid #e4e7eb;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.lookbook-hero h1 {
+  margin: 4px 0 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+  color: #111111;
+}
+
+.lookbook-hero > div > span {
+  display: block;
+  margin-top: 4px;
+  color: #69707d;
+  font-size: 0.88rem;
 }
 
 .lookbook-kicker,
@@ -972,6 +982,13 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.78rem;
+}
+
+.lookbook-kicker {
+  color: #e72027;
+}
+
+.po-document-kicker {
   color: rgba(255, 255, 255, 0.72);
 }
 
@@ -992,31 +1009,29 @@ textarea {
 .lookbook-card {
   display: flex;
   flex-direction: column;
-  border-radius: 20px;
+  border-radius: 4px;
   overflow: hidden;
-  border: 1px solid rgba(34, 27, 25, 0.1);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 248, 244, 0.98));
-  box-shadow: 0 18px 42px rgba(26, 16, 16, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  border: 1px solid #e4e7eb;
+  background: #ffffff;
+  box-shadow: none;
+  transition: border-color 0.15s ease;
 }
 
 .lookbook-card:hover,
 .lookbook-card-selected {
-  transform: translateY(-2px);
-  border-color: rgba(231, 32, 39, 0.38);
-  box-shadow: 0 24px 52px rgba(39, 17, 17, 0.14);
+  transform: none;
+  border-color: #e72027;
+  box-shadow: none;
 }
 
 .lookbook-card-media {
   aspect-ratio: 4 / 5;
-  min-height: 240px;
+  min-height: 200px;
   overflow: hidden;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at top right, rgba(231, 32, 39, 0.22), transparent 20%),
-    linear-gradient(180deg, #2c1c1f 0%, #1b1717 100%);
-  color: white;
+  background: #f3f4f6;
+  color: #69707d;
 }
 
 .lookbook-card-media img {
@@ -1093,11 +1108,11 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fff7f5, #fffdfb);
-  border: 1px solid rgba(231, 32, 39, 0.14);
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: #f9fafb;
+  border: 1px solid #e4e7eb;
 }
 
 .lookbook-stepper div {
@@ -1111,14 +1126,241 @@ textarea {
   position: sticky;
   top: 24px;
   align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lookbook-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e4e7eb;
+}
+
+.lookbook-summary-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.lookbook-summary-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: #e72027;
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.lookbook-summary-meta {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e4e7eb;
+  border-radius: 4px;
+}
+
+.lookbook-summary-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lookbook-summary-meta span {
+  font-size: 0.72rem;
+  color: #69707d;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lookbook-summary-meta strong {
+  font-size: 0.88rem;
+  color: #111111;
+}
+
+.lookbook-summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lookbook-summary-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #69707d;
+}
+
+.lookbook-line-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e4e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.lookbook-line-item {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid #f0f2f4;
+}
+
+.lookbook-line-item:last-child {
+  border-bottom: none;
+}
+
+.lookbook-line-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.lookbook-line-name {
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.lookbook-line-price {
+  font-size: 0.88rem;
+  flex-shrink: 0;
+}
+
+.lookbook-line-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.lookbook-line-remove {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #69707d;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.lookbook-line-remove:hover {
+  background: #fdeced;
+  color: #b41f29;
+}
+
+.lookbook-line-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lookbook-line-sub span {
+  font-size: 0.78rem;
+  color: #69707d;
+}
+
+.lookbook-line-warning {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: #945f08;
+  background: #fff9ec;
+  border: 1px solid #efd4a2;
+  border-radius: 4px;
+  padding: 5px 8px;
+}
+
+.lookbook-summary-empty {
+  margin: 0;
+  padding: 20px 16px;
+  text-align: center;
+  color: #69707d;
+  font-size: 0.88rem;
+  background: #f9fafb;
+  border: 1px solid #e4e7eb;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+.lookbook-subtotal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f9fafb;
+  border: 1px solid #e4e7eb;
+  border-radius: 4px;
+}
+
+.lookbook-subtotal-row strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.lookbook-subtotal-units {
+  color: #69707d;
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+
+.lookbook-shipping-note {
+  margin: -8px 0 0;
+  font-size: 0.76rem;
+  color: #69707d;
+  text-align: center;
+}
+
+.lookbook-optional {
+  color: #69707d;
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+
+.lookbook-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lookbook-submit-btn {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 0.95rem;
+}
+
+.lookbook-secondary-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lookbook-secondary-actions .btn {
+  flex: 1;
+  font-size: 0.85rem;
 }
 
 .lookbook-total-card {
   flex-direction: column;
   padding: 14px 16px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(17, 17, 17, 0.96), rgba(65, 18, 22, 0.92));
-  color: white;
+  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid #e4e7eb;
+  color: #111111;
 }
 
 .lookbook-confirmation {
@@ -1132,12 +1374,62 @@ textarea {
   width: 88px;
   height: 88px;
   margin: 0 auto 18px;
-  border-radius: 999px;
+  border-radius: 4px;
   display: grid;
   place-items: center;
   font-size: 2rem;
   color: white;
-  background: linear-gradient(135deg, #b81820 0%, #e72027 56%, #ff7378 100%);
+  background: #e72027;
+}
+
+.lookbook-qty-input {
+  width: 60px;
+  text-align: center;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  padding: 5px 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: #ffffff;
+  color: #111111;
+}
+
+.lookbook-qty-input::-webkit-inner-spin-button,
+.lookbook-qty-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.lookbook-qty-input:disabled {
+  background: #f3f4f6;
+  color: #69707d;
+}
+
+.lookbook-shell .panel::before,
+.lookbook-shell .card::before {
+  display: none;
+}
+
+.lookbook-shell .panel,
+.lookbook-shell .card,
+.lookbook-shell .detail-card,
+.lookbook-shell .notice-banner,
+.lookbook-shell .empty-state {
+  border-radius: 4px;
+}
+
+.lookbook-shell .btn {
+  border-radius: 4px;
+}
+
+.lookbook-shell .field input,
+.lookbook-shell .field select,
+.lookbook-shell .field textarea {
+  border-radius: 4px;
+}
+
+.lookbook-shell .timeline-item {
+  padding: 12px 0 12px 18px;
 }
 
 .po-document {

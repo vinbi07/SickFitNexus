@@ -168,10 +168,31 @@ export function LookbookOrderPage() {
                           });
                         }}
                       >
-                        -
+                        −
                       </button>
                       <div>
-                        <strong>{caseQty} cases</strong>
+                        <input
+                          type="number"
+                          className="lookbook-qty-input"
+                          min={0}
+                          max={maxCaseQuantity > 0 ? maxCaseQuantity : 0}
+                          value={caseQty}
+                          disabled={maxCaseQuantity <= 0}
+                          onChange={(e) => {
+                            const val = Math.min(Math.max(0, Math.floor(Number(e.target.value) || 0)), maxCaseQuantity > 0 ? maxCaseQuantity : 0);
+                            setQuantities((current) => ({ ...current, [product.id]: val }));
+                            if (val >= maxCaseQuantity && maxCaseQuantity > 0) {
+                              setQuantityWarnings((current) => ({ ...current, [product.id]: limitMessage }));
+                            } else {
+                              setQuantityWarnings((current) => {
+                                if (!current[product.id]) return current;
+                                const next = { ...current };
+                                delete next[product.id];
+                                return next;
+                              });
+                            }
+                          }}
+                        />
                         <span>{orderedUnits} {orderUnitLabel} | {formatCurrency(lineTotal)}</span>
                       </div>
                       <button
@@ -206,50 +227,84 @@ export function LookbookOrderPage() {
             })}
           </div>
           <aside className="lookbook-summary panel">
-            <div className="panel-header"><h3>Order Summary</h3></div>
-            <div className="detail-grid">
-              <div className="detail-card"><span>Retailer</span><strong>{data.retailer.name}</strong></div>
-              <div className="detail-card"><span>Selected SKUs</span><strong>{totals.skuCount}</strong></div>
-              <div className="detail-card"><span>Total Units</span><strong>{totals.totalUnits}</strong></div>
-              <div className="detail-card"><span>Payment Terms</span><strong>{data.buyer.payment_terms ?? "Not set"}</strong></div>
-              <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Shipping</span><strong>Calculated at fulfillment</strong></div>
-              <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Compliance</span><strong>{selectedProducts.some((line) => data.products.find((product) => product.id === line.product_id)?.compliance_docs_status === "Missing") ? "Missing docs warning" : "Ready to submit"}</strong></div>
+            <div className="lookbook-summary-header">
+              <h3>Your Order</h3>
+              {totals.skuCount > 0 ? <span className="lookbook-summary-badge">{totals.skuCount} item{totals.skuCount !== 1 ? "s" : ""}</span> : null}
             </div>
-            <div className="timeline">
-              {selectedProducts.length ? selectedProducts.map((line) => {
-                const selectedProduct = data.products.find((product) => product.id === line.product_id);
-                const fallbackName = String(line.product_name ?? line.sku ?? "Selected item");
 
-                return (
-                  <div key={String(line.product_id)} className="timeline-item">
-                    <strong>{getProductFamilyName(selectedProduct ?? { name: fallbackName })}</strong>
-                    <p className="helper-text">
-                      {getProductVariantLabel(
-                        selectedProduct ?? {
-                          name: fallbackName,
-                          variant_title: null,
-                          parent_product_id: null,
-                        },
-                      )} | {line.sku}
-                    </p>
-                    <p>{line.case_quantity} cases | {line.unit_quantity} ordered</p>
-                    <span className="muted">{formatCurrency(Number(line.extended_cost ?? 0))}</span>
-                  </div>
-                );
-              }) : <div className="empty-state">No selected items yet.</div>}
+            <div className="lookbook-summary-meta">
+              <div>
+                <span>Ordering for</span>
+                <strong>{data.retailer.name}</strong>
+              </div>
             </div>
-            <div className="po-total-card lookbook-total-card">
-              <div><span>Subtotal</span><strong>{formatCurrency(totals.subtotal)}</strong></div>
-              <div><span>Estimated Total</span><strong>{formatCurrency(totals.subtotal)}</strong></div>
+
+            <div className="lookbook-summary-section">
+              <p className="lookbook-summary-label">What you're ordering</p>
+              {selectedProducts.length ? (
+                <div className="lookbook-line-list">
+                  {selectedProducts.map((line) => {
+                    const selectedProduct = data.products.find((product) => product.id === line.product_id);
+                    const fallbackName = String(line.product_name ?? line.sku ?? "Selected item");
+                    const hasComplianceIssue = selectedProduct?.compliance_docs_status === "Missing";
+                    return (
+                      <div key={String(line.product_id)} className="lookbook-line-item">
+                        <div className="lookbook-line-main">
+                          <strong className="lookbook-line-name">{getProductFamilyName(selectedProduct ?? { name: fallbackName })}</strong>
+                          <div className="lookbook-line-right">
+                            <strong className="lookbook-line-price">{formatCurrency(Number(line.extended_cost ?? 0))}</strong>
+                            <button
+                              className="lookbook-line-remove"
+                              title="Remove from order"
+                              onClick={() => {
+                                setQuantities((current) => ({ ...current, [String(line.product_id)]: 0 }));
+                                setQuantityWarnings((current) => {
+                                  if (!current[String(line.product_id)]) return current;
+                                  const next = { ...current };
+                                  delete next[String(line.product_id)];
+                                  return next;
+                                });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                        <div className="lookbook-line-sub">
+                          <span>{getProductVariantLabel(selectedProduct ?? { name: fallbackName, variant_title: null, parent_product_id: null })} · {line.sku}</span>
+                          <span>{line.case_quantity} cases · {line.unit_quantity} units</span>
+                        </div>
+                        {hasComplianceIssue ? <p className="lookbook-line-warning">SickFit will follow up about missing paperwork for this item</p> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="lookbook-summary-empty">Add products from the catalogue on the left to build your order.</p>
+              )}
             </div>
+
+            {selectedProducts.length > 0 ? (
+              <div className="lookbook-subtotal-row">
+                <span>Subtotal <span className="lookbook-subtotal-units">({totals.totalUnits} units)</span></span>
+                <strong>{formatCurrency(totals.subtotal)}</strong>
+              </div>
+            ) : null}
+
+            <p className="lookbook-shipping-note">Shipping is calculated at the time of fulfillment.</p>
+
             <div className="field field-wide">
-              <label>Notes</label>
-              <textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} />
+              <label>Note to SickFit <span className="lookbook-optional">— optional</span></label>
+              <textarea rows={3} placeholder="Special instructions, delivery windows, questions..." value={notes} onChange={(event) => setNotes(event.target.value)} />
             </div>
-            <div className="btn-row">
-              <button className="btn btn-secondary" disabled={Boolean(busyAction)} onClick={() => void handleSave("draft")}>{busyAction === "draft" ? "Saving..." : "Save Draft"}</button>
-              <button className="btn btn-ghost" disabled={Boolean(busyAction)} onClick={() => void handleSave("quote")}>{busyAction === "quote" ? "Saving..." : "Request Quote"}</button>
-              <button className="btn btn-primary" disabled={Boolean(busyAction)} onClick={() => void handleSave("submit")}>{busyAction === "submit" ? "Submitting..." : "Submit PO to SickFit"}</button>
+
+            <div className="lookbook-actions">
+              <button className="btn btn-primary lookbook-submit-btn" disabled={Boolean(busyAction)} onClick={() => void handleSave("submit")}>
+                {busyAction === "submit" ? "Submitting..." : "Submit PO to SickFit"}
+              </button>
+              <div className="lookbook-secondary-actions">
+                <button className="btn btn-ghost" disabled={Boolean(busyAction)} onClick={() => void handleSave("quote")}>{busyAction === "quote" ? "Saving..." : "Request Quote"}</button>
+              </div>
             </div>
           </aside>
         </div>
