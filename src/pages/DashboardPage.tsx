@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { BarChartCard } from "@/components/BarChartCard";
 import { DashboardCard } from "@/components/DashboardCard";
@@ -5,6 +6,7 @@ import { ErrorState } from "@/components/ErrorState";
 import { LineChartCard } from "@/components/LineChartCard";
 import { LoadingState } from "@/components/LoadingState";
 import { MultiLineChartCard } from "@/components/MultiLineChartCard";
+import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -12,7 +14,9 @@ import { dashboardService } from "@/services/dashboardService";
 import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
 
 export function DashboardPage() {
-  const { data, loading, error } = useAsyncData(() => dashboardService.getSnapshot(), []);
+  const [syncingShopifyDashboard, setSyncingShopifyDashboard] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const { data, loading, error, reload } = useAsyncData(() => dashboardService.getSnapshot(), []);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load dashboard"} />;
@@ -28,6 +32,7 @@ export function DashboardPage() {
         title="Operations Dashboard"
         description="Focus the command center on wholesale revenue, incoming inventory, manufacturing invoice status, retailer visibility, and urgent inventory risks."
       />
+      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="section-stack">
         <div className="section-header">
           <h2>Operations</h2>
@@ -35,7 +40,58 @@ export function DashboardPage() {
         </div>
         <div className="card-grid dashboard-card-grid">
           <DashboardCard label="Wholesale Revenue" value={formatCurrency(data.wholesaleRevenueTotal)} footnote="Wholesale only. Shopify / DTC excluded." highlight to="/reports" />
-          <DashboardCard label="DTC + Shopify Revenue" value={formatCurrency(dtcShopifyRevenue)} footnote="Direct-to-consumer revenue contribution" to="/reports" />
+          <DashboardCard
+            label="DTC + Shopify Revenue"
+            value={formatCurrency(dtcShopifyRevenue)}
+            footnote="Direct-to-consumer revenue contribution"
+            to="/reports"
+            action={(
+              <button
+                type="button"
+                className="btn btn-ghost btn-small dashboard-card-icon-button"
+                disabled={syncingShopifyDashboard}
+                aria-label={syncingShopifyDashboard ? "Syncing Shopify dashboard" : "Sync Shopify dashboard"}
+                title={syncingShopifyDashboard ? "Syncing Shopify dashboard" : "Sync Shopify dashboard"}
+                onClick={async () => {
+                  try {
+                    setSyncingShopifyDashboard(true);
+                    const result = await dashboardService.syncShopifyDashboard();
+                    await reload();
+                    setNotice({
+                      tone: "success",
+                      message: `Shopify dashboard sync completed. ${result.ordersSynced ?? 0} orders and ${result.lineItemsSynced ?? 0} line items refreshed.`,
+                    });
+                  } catch (err) {
+                    setNotice({
+                      tone: "error",
+                      message: err instanceof Error ? err.message : "Shopify dashboard sync failed.",
+                    });
+                  } finally {
+                    setSyncingShopifyDashboard(false);
+                  }
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M20 12a8 8 0 1 1-2.34-5.66"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M20 4v6h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </button>
+            )}
+          />
           <DashboardCard label="SKUs at OOS Risk < 90d" value={data.skuOosRisk90dCount} footnote={`${data.skuOosRiskCriticalCount} critical`} to="/products" />
           <DashboardCard label="Danger SKUs" value={data.dangerSkuCount} footnote="Red when on-hand inventory is 25 units or less." to="/inventory" />
           <DashboardCard label="Awaiting Action" value={data.awaitingActionCount} footnote="Urgent inventory and invoice follow-up" to="/alerts" />
