@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { BarChartCard } from "@/components/BarChartCard";
 import { DashboardCard } from "@/components/DashboardCard";
+import { DonutChartCard } from "@/components/DonutChartCard";
 import { ErrorState } from "@/components/ErrorState";
-import { LineChartCard } from "@/components/LineChartCard";
 import { LoadingState } from "@/components/LoadingState";
 import { MultiLineChartCard } from "@/components/MultiLineChartCard";
 import { NotificationBanner } from "@/components/NotificationBanner";
@@ -196,7 +196,7 @@ export function DashboardPage() {
             <Link className="dashboard-panel-action" to="/retailers">Open Accounts</Link>
           </div>
           <div className="dashboard-panel-shell">
-            <LineChartCard title="Inventory by Record" data={data.stockTrend} xKey="date" dataKey="inventory" />
+            <DonutChartCard title="Inventory Status Breakdown" data={data.inventoryStatusBreakdown} />
             <Link className="dashboard-panel-action" to="/inventory">Open Inventory</Link>
           </div>
         </div>

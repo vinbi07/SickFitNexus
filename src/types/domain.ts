@@ -621,6 +621,7 @@ export interface DashboardSnapshot {
   recentActivity: ActivityEvent[];
   quickSops: Sop[];
   stockTrend: Array<{ date: string; inventory: number }>;
+  inventoryStatusBreakdown: Array<{ label: string; value: number; color: string }>;
   spendByVendor: Array<{ vendor: string; spend: number }>;
   incomingInventoryByManufacturer: Array<{ manufacturer: string; units: number }>;
   revenueYtd: number;

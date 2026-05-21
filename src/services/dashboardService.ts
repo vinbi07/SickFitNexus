@@ -504,6 +504,35 @@ export const dashboardService = {
       };
     });
 
+    const stockTrend = Array.from(
+      inventoryItems.reduce<Map<string, number>>((acc, item) => {
+        const date = item.updated_at?.slice(0, 10) ?? item.created_at?.slice(0, 10);
+        if (!date) return acc;
+        acc.set(date, (acc.get(date) ?? 0) + Number(item.quantity_on_hand ?? 0));
+        return acc;
+      }, new Map<string, number>()),
+    )
+      .sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate))
+      .slice(-8)
+      .map(([date, inventory]) => ({ date, inventory }));
+    const inventoryStatusBreakdown = [
+      {
+        label: "Healthy",
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, product.safety_stock) === "healthy").length,
+        color: "#1f8f63",
+      },
+      {
+        label: "Warning",
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, product.safety_stock) === "warning").length,
+        color: "#f2a93b",
+      },
+      {
+        label: "Danger",
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, product.safety_stock) === "danger").length,
+        color: "#e72027",
+      },
+    ];
+
     return {
       openPoCount: openOrders.length,
       delayedPoCount: purchaseOrders.filter((po) => po.status === "Delayed").length,
@@ -523,10 +552,8 @@ export const dashboardService = {
       recentAlerts: alerts,
       recentActivity: activity,
       quickSops: sops,
-      stockTrend: inventoryItems.slice(-8).map((item) => ({
-        date: item.updated_at.slice(0, 10),
-        inventory: item.quantity_on_hand,
-      })),
+      stockTrend,
+      inventoryStatusBreakdown,
       spendByVendor: purchaseOrders
         .reduce<Array<{ vendor: string; spend: number }>>((acc, po) => {
           const vendorName = vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned";
