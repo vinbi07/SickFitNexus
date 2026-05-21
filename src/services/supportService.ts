@@ -208,7 +208,7 @@ export const supportService = {
     const [productsResponse, vendorsResponse, eventsResponse] = await Promise.all([
       supabase
         .from("products")
-        .select("*, vendors:vendors!products_vendor_id_fkey(*)")
+        .select("*, vendors:vendors!products_vendor_id_fkey(*), product_barcode_links(*, product_barcodes(*))")
         .order("name", { ascending: true }),
       supabase.from("vendors").select("*"),
       supabase.from("inventory_events").select("*"),

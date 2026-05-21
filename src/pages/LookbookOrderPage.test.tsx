@@ -152,4 +152,31 @@ describe("LookbookOrderPage", () => {
     renderPage();
     expect(await screen.findByText(/No products are available/i)).toBeInTheDocument();
   });
+
+  it("shows an inline warning and blocks quantities above the available case limit", async () => {
+    vi.mocked(lookbookOrderService.loadByToken).mockResolvedValueOnce({
+      buyer,
+      retailer,
+      products: [
+        {
+          ...product,
+          current_inventory: 4,
+          inventory_available: 4,
+          inventory_allocated: 0,
+        },
+      ],
+      existingDraft: null,
+    });
+
+    renderPage();
+    await screen.findByText(/SickFit Wholesale Lookbook/i);
+
+    const incrementButton = screen.getAllByText("+")[0];
+    fireEvent.click(incrementButton);
+    fireEvent.click(incrementButton);
+    fireEvent.click(incrementButton);
+
+    expect(screen.getByText(/Only 2 cases available right now\./i)).toBeInTheDocument();
+    expect(screen.getByText(/4 packs \| \$72/i)).toBeInTheDocument();
+  });
 });

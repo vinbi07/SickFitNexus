@@ -11,6 +11,10 @@ import {
   buildLineItemFromProduct,
   calculateLookbookTotals,
   deriveInventoryAvailable,
+  getDisplaySku,
+  getLookbookMetaLine,
+  getLookbookRetailPrice,
+  getLookbookWholesalePrice,
   getOrderUnitLabel,
   getProductFamilyName,
   getProductVariantLabel,
@@ -22,6 +26,7 @@ export function LookbookOrderPage() {
   const { token = "" } = useParams();
   const { data, loading, error, reload } = useAsyncData(() => lookbookOrderService.loadByToken(token), [token]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [quantityWarnings, setQuantityWarnings] = useState<Record<string, string>>({});
   const [busyAction, setBusyAction] = useState<"draft" | "quote" | "submit" | null>(null);
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState<PurchaseOrder | null>(null);
@@ -123,36 +128,77 @@ export function LookbookOrderPage() {
               const packsPerCase = resolveCasePackQuantity(product);
               const orderUnitLabel = getOrderUnitLabel(product);
               const orderedUnits = caseQty * packsPerCase;
-              const lineTotal = orderedUnits * product.wholesale_price;
+              const wholesalePrice = getLookbookWholesalePrice(product);
+              const lineTotal = orderedUnits * wholesalePrice;
               const availableUnits = deriveInventoryAvailable(product);
+              const maxCaseQuantity = Math.floor(availableUnits / packsPerCase);
+              const limitMessage = maxCaseQuantity > 0
+                ? `Only ${maxCaseQuantity} case${maxCaseQuantity === 1 ? "" : "s"} available right now.`
+                : "This item is currently out of stock.";
+              const displaySku = getDisplaySku(product);
+              const metaLine = getLookbookMetaLine(product);
+              const quantityWarning = quantityWarnings[product.id];
 
               return (
                 <article key={product.id} className={`lookbook-card${selected ? " lookbook-card-selected" : ""}`}>
                   <div className="lookbook-card-media">
-                    {product.image_url ? <img src={product.image_url} alt={product.name} /> : <span>{product.sku.slice(0, 2)}</span>}
+                    {product.image_url ? <img src={product.image_url} alt={product.name} /> : <span>{displaySku.slice(0, 2)}</span>}
                   </div>
                   <div className="lookbook-card-body">
                     <div className="lookbook-card-topline">
                       <strong className="lookbook-card-title">{getProductFamilyName(product)}</strong>
-                      <span className="lookbook-card-sku">{getProductVariantLabel(product)} | {product.sku}</span>
+                      <span className="lookbook-card-sku">{getProductVariantLabel(product)} | {displaySku}</span>
                     </div>
-                    <p className="lookbook-card-copy">UPC {product.upc ?? "Pending"} | Pack {product.pack_size ?? "1 Pack"}</p>
+                    {metaLine ? <p className="lookbook-card-copy">{metaLine}</p> : null}
                     <p className="lookbook-card-copy">{packsPerCase} {orderUnitLabel}/case | {product.weight ?? "Weight TBD"} | {product.dimensions ?? "Dimensions TBD"}</p>
                     <div className="lookbook-price-row">
-                      <div><span>Wholesale</span><strong>{formatCurrency(product.wholesale_price)}</strong></div>
-                      <div><span>MSRP</span><strong>{formatCurrency(product.msrp)}</strong></div>
+                      <div><span>Wholesale</span><strong>{formatCurrency(wholesalePrice)}</strong></div>
+                      <div><span>MSRP</span><strong>{formatCurrency(getLookbookRetailPrice(product))}</strong></div>
                     </div>
                     <div className="lookbook-stepper">
-                      <button className="btn btn-secondary btn-small" onClick={() => setQuantities((current) => ({ ...current, [product.id]: Math.max(caseQty - 1, 0) }))}>-</button>
+                      <button
+                        className="btn btn-secondary btn-small"
+                        onClick={() => {
+                          setQuantities((current) => ({ ...current, [product.id]: Math.max(caseQty - 1, 0) }));
+                          setQuantityWarnings((current) => {
+                            if (!current[product.id]) return current;
+                            const next = { ...current };
+                            delete next[product.id];
+                            return next;
+                          });
+                        }}
+                      >
+                        -
+                      </button>
                       <div>
                         <strong>{caseQty} cases</strong>
                         <span>{orderedUnits} {orderUnitLabel} | {formatCurrency(lineTotal)}</span>
                       </div>
-                      <button className="btn btn-primary btn-small" onClick={() => setQuantities((current) => ({ ...current, [product.id]: caseQty + 1 }))}>+</button>
+                      <button
+                        className="btn btn-primary btn-small"
+                        disabled={maxCaseQuantity <= 0}
+                        onClick={() => {
+                          if (caseQty >= maxCaseQuantity) {
+                            setQuantityWarnings((current) => ({ ...current, [product.id]: limitMessage }));
+                            return;
+                          }
+
+                          setQuantities((current) => ({ ...current, [product.id]: caseQty + 1 }));
+                          setQuantityWarnings((current) => {
+                            if (!current[product.id]) return current;
+                            const next = { ...current };
+                            delete next[product.id];
+                            return next;
+                          });
+                        }}
+                      >
+                        +
+                      </button>
                     </div>
+                    {quantityWarning ? <p className="helper-text danger-text">{quantityWarning}</p> : null}
                     <div className="lookbook-card-footer">
                       <span>{availableUnits} {orderUnitLabel} available</span>
-                      <span>{product.compliance_docs_status === "Missing" ? "Compliance docs missing" : "Compliance ready"}</span>
+                      {product.compliance_docs_status === "Missing" ? <span>Compliance docs missing</span> : null}
                     </div>
                   </div>
                 </article>

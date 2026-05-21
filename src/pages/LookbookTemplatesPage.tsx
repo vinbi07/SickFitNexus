@@ -14,6 +14,10 @@ import type { LookbookTemplate, LookbookTemplateItem, Product, ProductBarcode } 
 import { formatCurrency } from "@/utils/format";
 import {
   deriveInventoryAvailable,
+  getDisplaySku,
+  getLookbookMetaLine,
+  getLookbookRetailPrice,
+  getLookbookWholesalePrice,
   getOrderUnitLabel,
   getProductFamilyName,
   getProductVariantLabel,
@@ -170,33 +174,38 @@ function LookbookTemplatePreview({
           <div className="empty-state">No products selected for this template yet.</div>
         ) : (
           <div className="lookbook-grid">
-            {previewProducts.map(({ item, product }) => (
-              <article key={`${product.id}-${item.sort_order ?? 0}`} className="lookbook-card">
-                <div className="lookbook-card-media">
-                  {product.image_url ? <img src={product.image_url} alt={getProductFamilyName(product)} /> : <span>{product.sku.slice(0, 2)}</span>}
-                </div>
-                <div className="lookbook-card-body">
-                  <div className="lookbook-card-topline">
-                    <strong className="lookbook-card-title">{getProductFamilyName(product)}</strong>
-                    <div className="lookbook-card-badge-row">
-                      <span className="lookbook-card-sku">{getProductVariantLabel(product)} | {product.sku}</span>
-                      {item.featured ? <StatusBadge label="Featured" /> : null}
+            {previewProducts.map(({ item, product }) => {
+              const displaySku = getDisplaySku(product);
+              const metaLine = getLookbookMetaLine(product);
+              const wholesalePrice = getLookbookWholesalePrice(product);
+
+              return (
+                <article key={`${product.id}-${item.sort_order ?? 0}`} className="lookbook-card">
+                  <div className="lookbook-card-media">
+                    {product.image_url ? <img src={product.image_url} alt={getProductFamilyName(product)} /> : <span>{displaySku.slice(0, 2)}</span>}
+                  </div>
+                  <div className="lookbook-card-body">
+                    <div className="lookbook-card-topline">
+                      <strong className="lookbook-card-title">{getProductFamilyName(product)}</strong>
+                      <div className="lookbook-card-badge-row">
+                        <span className="lookbook-card-sku">{getProductVariantLabel(product)} | {displaySku}</span>
+                        {item.featured ? <StatusBadge label="Featured" /> : null}
+                      </div>
+                    </div>
+                    {metaLine ? <p className="lookbook-card-copy">{metaLine}</p> : null}
+                    <p className="lookbook-card-copy">{resolveCasePackQuantity(product)} {getOrderUnitLabel(product)}/case | {product.weight ?? "Weight TBD"} | {product.dimensions ?? "Dimensions TBD"}</p>
+                    <div className="lookbook-price-row">
+                      <div><span>Wholesale</span><strong>{formatCurrency(wholesalePrice)}</strong></div>
+                      <div><span>MSRP</span><strong>{formatCurrency(getLookbookRetailPrice(product))}</strong></div>
+                    </div>
+                    <div className="lookbook-card-footer">
+                      <span>{deriveInventoryAvailable(product)} {getOrderUnitLabel(product)} available</span>
+                      {product.compliance_docs_status === "Missing" ? <span>Compliance docs missing</span> : null}
                     </div>
                   </div>
-                  <p className="lookbook-card-copy">SKU {product.sku} | UPC {product.upc ?? "Pending"}</p>
-                  <p className="lookbook-card-copy">Pack {product.pack_size ?? "1 Pack"} | {resolveCasePackQuantity(product)} {getOrderUnitLabel(product)}/case</p>
-                  <p className="lookbook-card-copy">{product.weight ?? "Weight TBD"} | {product.dimensions ?? "Dimensions TBD"}</p>
-                  <div className="lookbook-price-row">
-                    <div><span>Wholesale</span><strong>{formatCurrency(product.wholesale_price)}</strong></div>
-                    <div><span>MSRP</span><strong>{formatCurrency(product.msrp)}</strong></div>
-                  </div>
-                  <div className="lookbook-card-footer">
-                    <span>{deriveInventoryAvailable(product)} {getOrderUnitLabel(product)} available</span>
-                    <span>{product.compliance_docs_status === "Missing" ? "Compliance docs missing" : "Compliance ready"}</span>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>

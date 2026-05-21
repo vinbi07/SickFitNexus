@@ -8,18 +8,39 @@ function getPackDescriptor(product: Pick<Product, "name" | "pack_size">) {
   return [product.pack_size ?? "", product.name ?? ""].join(" ").toLowerCase();
 }
 
-export function getUnitsPerPack(product: Pick<Product, "name" | "pack_size">) {
+type PackMetadata = Pick<Product, "name" | "pack_size" | "pack_quantity" | "pack_unit" | "product_barcode_links">;
+
+function getStructuredPackQuantity(product: PackMetadata) {
+  const directQuantity = Number(product.pack_quantity ?? 0);
+  if (Number.isFinite(directQuantity) && directQuantity > 0) return directQuantity;
+
+  const linkedQuantity = Number(product.product_barcode_links?.find((link) => Number(link.product_barcodes?.pack_quantity ?? 0) > 0)?.product_barcodes?.pack_quantity ?? 0);
+  if (Number.isFinite(linkedQuantity) && linkedQuantity > 0) return linkedQuantity;
+
+  return null;
+}
+
+export function getUnitsPerPack(product: PackMetadata) {
+  const structuredQuantity = getStructuredPackQuantity(product);
+  if (structuredQuantity) return structuredQuantity;
+
   const descriptor = getPackDescriptor(product);
   if (descriptor.includes("default")) return 1;
 
   const match = descriptor.match(/(\d+)\s*pack/);
-  if (!match) return null;
+  if (match) {
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
 
-  const parsed = Number(match[1]);
+  const numericMatch = descriptor.match(/(\d+)/);
+  if (!numericMatch) return null;
+
+  const parsed = Number(numericMatch[1]);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function resolveCasePackQuantity(product: Pick<Product, "name" | "pack_size" | "case_pack_quantity">) {
+export function resolveCasePackQuantity(product: Pick<Product, "name" | "pack_size" | "pack_quantity" | "pack_unit" | "product_barcode_links" | "case_pack_quantity">) {
   const unitsPerPack = getUnitsPerPack(product);
   if (unitsPerPack && unitsPerPack > 0) {
     return Math.max(Math.floor(12 / unitsPerPack), 1);
@@ -34,6 +55,37 @@ export function getOrderUnitLabel(product: Pick<Product, "name" | "pack_size">) 
 
 export function getProductFamilyName(product: Pick<Product, "name"> & Partial<Pick<Product, "parent_products">>) {
   return product.parent_products?.name ?? product.name;
+}
+
+export function getDisplaySku(product: Pick<Product, "sku" | "product_barcode_links">) {
+  return product.product_barcode_links?.find((link) => link.product_barcodes?.sku)?.product_barcodes?.sku ?? product.sku;
+}
+
+export function getLookbookMetaLine(product: Pick<Product, "upc" | "pack_size">) {
+  const parts: string[] = [];
+
+  if (product.upc?.trim()) {
+    parts.push(`UPC ${product.upc.trim()}`);
+  }
+
+  const packSize = product.pack_size?.trim();
+  if (packSize && packSize.toLowerCase() !== "1 pack") {
+    parts.push(`Pack ${packSize}`);
+  }
+
+  return parts.join(" | ");
+}
+
+export function getLookbookRetailPrice(product: Pick<Product, "msrp" | "unit_price">) {
+  return Number(product.msrp ?? 0) > 0
+    ? Number(product.msrp)
+    : Number(product.unit_price ?? 0);
+}
+
+export function getLookbookWholesalePrice(product: Pick<Product, "wholesale_price" | "unit_price">) {
+  return Number(product.wholesale_price ?? 0) > 0
+    ? Number(product.wholesale_price)
+    : Number(product.unit_price ?? 0) * 0.665;
 }
 
 export function getProductVariantLabel(
@@ -66,8 +118,8 @@ export function isCaseQuantityValid(product: Pick<Product, "case_pack_quantity">
 export function buildLineItemFromProduct(product: Product, caseQuantity: number): Partial<PoLineItem> {
   const safeCaseQuantity = Number(caseQuantity ?? 0);
   const unitQuantity = safeCaseQuantity * resolveCasePackQuantity(product);
-  const unitCost = Number(product.wholesale_price ?? 0);
-  const unitRetail = Number(product.msrp ?? product.unit_price ?? 0);
+  const unitCost = getLookbookWholesalePrice(product);
+  const unitRetail = getLookbookRetailPrice(product);
   const extendedCost = unitQuantity * unitCost;
   const extendedRetail = unitQuantity * unitRetail;
 
@@ -143,7 +195,7 @@ export function validateLookbookSelection(lines: LookbookOrderInputLine[], produ
   lines.forEach((line) => {
     const product = productsById.get(line.product_id);
     if (!product) throw new Error(`Product ${line.sku} is no longer available.`);
-    if (!product.sku || !product.upc) throw new Error(`Product ${product.name} is missing a SKU or UPC.`);
+    if (!getDisplaySku(product).trim()) throw new Error(`Product ${product.name} is missing a SKU.`);
     if (!isCaseQuantityValid(product, line.requested_case_quantity) || line.requested_case_quantity <= 0) {
       throw new Error(`Product ${product.name} must be ordered in whole case quantities.`);
     }

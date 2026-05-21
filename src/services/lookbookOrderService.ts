@@ -46,7 +46,7 @@ async function listWholesaleProducts(templateId?: string | null) {
   const supabase = assertSupabase();
   const { data, error } = await supabase
     .from("products")
-    .select("*, vendors:vendors!products_vendor_id_fkey(*)")
+    .select("*, vendors:vendors!products_vendor_id_fkey(*), product_barcode_links(*, product_barcodes(*))")
     .gt("case_pack_quantity", 0)
     .order("name", { ascending: true });
   if (error) throw error;

@@ -7,6 +7,8 @@ import {
   deriveInventoryAvailable,
   getProductFamilyName,
   getProductVariantLabel,
+  getLookbookRetailPrice,
+  getLookbookWholesalePrice,
   getUnitsPerPack,
   resolveCasePackQuantity,
   sortProductsByFamily,
@@ -26,8 +28,8 @@ const baseProduct: Product = {
   vendor_id: null,
   unit_cost: 10,
   unit_price: 30,
-  pack_size: "6 units",
-  case_pack_quantity: 6,
+  pack_size: "1 Pack",
+  case_pack_quantity: 12,
   wholesale_price: 18,
   msrp: 30,
   weight: "2 lb",
@@ -83,8 +85,8 @@ describe("lookbook utilities", () => {
 
   it("builds a case-pack line item and aggregates totals", () => {
     const line = buildLineItemFromProduct(baseProduct, 2);
-    expect(line.unit_quantity).toBe(12);
-    expect(line.extended_cost).toBe(216);
+    expect(line.unit_quantity).toBe(24);
+    expect(line.extended_cost).toBe(432);
     expect(
       calculateLookbookTotals([
         {
@@ -96,10 +98,48 @@ describe("lookbook utilities", () => {
       ]),
     ).toEqual({
       skuCount: 1,
-      totalUnits: 12,
-      subtotal: 216,
-      totalRetail: 360,
+      totalUnits: 24,
+      subtotal: 432,
+      totalRetail: 720,
     });
+  });
+
+  it("falls back to unit price when msrp is zero", () => {
+    const line = buildLineItemFromProduct(
+      {
+        ...baseProduct,
+        msrp: 0,
+        unit_price: 42,
+      },
+      1,
+    );
+
+    expect(line.unit_retail).toBe(42);
+    expect(line.extended_retail).toBe(504);
+  });
+
+  it("falls back to unit price times 0.665 when wholesale price is zero", () => {
+    const line = buildLineItemFromProduct(
+      {
+        ...baseProduct,
+        wholesale_price: 0,
+        unit_price: 42,
+      },
+      1,
+    );
+
+    expect(line.unit_cost).toBe(27.93);
+    expect(Number(line.extended_cost)).toBeCloseTo(335.16, 2);
+  });
+
+  it("returns the display retail price using unit price when msrp is zero", () => {
+    expect(getLookbookRetailPrice({ msrp: 0, unit_price: 42 })).toBe(42);
+    expect(getLookbookRetailPrice({ msrp: 55, unit_price: 42 })).toBe(55);
+  });
+
+  it("returns the display wholesale price using unit price times 0.665 when wholesale is zero", () => {
+    expect(getLookbookWholesalePrice({ wholesale_price: 0, unit_price: 42 })).toBe(27.93);
+    expect(getLookbookWholesalePrice({ wholesale_price: 18, unit_price: 42 })).toBe(18);
   });
 
   it("validates inventory only when requested", () => {
@@ -109,15 +149,60 @@ describe("lookbook utilities", () => {
       }),
     ).not.toThrow();
     expect(() =>
-      validateLookbookSelection([{ product_id: baseProduct.id, sku: baseProduct.sku, requested_case_quantity: 20 }], [baseProduct]),
+      validateLookbookSelection([{ product_id: baseProduct.id, sku: baseProduct.sku, requested_case_quantity: 5 }], [baseProduct]),
     ).toThrow(/exceeds available inventory/i);
+  });
+
+  it("allows ordering when upc is missing but sku is present", () => {
+    expect(() =>
+      validateLookbookSelection(
+        [{ product_id: baseProduct.id, sku: baseProduct.sku, requested_case_quantity: 1 }],
+        [{ ...baseProduct, upc: null }],
+      ),
+    ).not.toThrow();
   });
 
   it("derives packs per case from pack title variants", () => {
     expect(resolveCasePackQuantity({ name: "Sock Variant", pack_size: "1 Packs (Default)", case_pack_quantity: 99 })).toBe(12);
+    expect(resolveCasePackQuantity({ name: "Sock Variant", pack_size: "2 Pack", case_pack_quantity: 99 })).toBe(6);
     expect(resolveCasePackQuantity({ name: "Sock Variant", pack_size: "3 Pack", case_pack_quantity: 99 })).toBe(4);
     expect(resolveCasePackQuantity({ name: "Sock Variant", pack_size: "6 Packs", case_pack_quantity: 99 })).toBe(2);
+    expect(resolveCasePackQuantity({ name: "Sock Variant", pack_size: "6 units", case_pack_quantity: 99 })).toBe(2);
     expect(getUnitsPerPack({ name: "Sock Variant", pack_size: "6 Packs" })).toBe(6);
+  });
+
+  it("prefers structured barcode pack quantity when product text is incomplete", () => {
+    expect(
+      resolveCasePackQuantity({
+        name: "Sock Variant",
+        pack_size: null,
+        pack_quantity: null,
+        pack_unit: null,
+        case_pack_quantity: 99,
+        product_barcode_links: [
+          {
+            id: "link-1",
+            barcode_id: "barcode-1",
+            product_id: "product-1",
+            created_at: "",
+            product_barcodes: {
+              id: "barcode-1",
+              sku: "SKU-1",
+              handle: null,
+              product_name: "Sock Variant",
+              collection: null,
+              pack_quantity: 1,
+              pack_unit: "Pack",
+              size: null,
+              barcode_upc: null,
+              created_at: "",
+              updated_at: "",
+              product_barcode_links: [],
+            },
+          },
+        ],
+      }),
+    ).toBe(12);
   });
 
   it("creates a compliance snapshot summary", () => {

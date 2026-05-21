@@ -101,6 +101,8 @@ export interface Product {
   unit_cost: number;
   unit_price: number;
   pack_size: string | null;
+  pack_quantity?: number | null;
+  pack_unit?: string | null;
   case_pack_quantity: number;
   wholesale_price: number;
   msrp: number;
@@ -126,6 +128,7 @@ export interface Product {
   vendors?: Vendor | null;
   parent_products?: Product | null;
   variants?: Product[];
+  product_barcode_links?: ProductBarcodeLink[];
 }
 
 export interface ProductBarcode {
@@ -149,6 +152,7 @@ export interface ProductBarcodeLink {
   product_id: string;
   created_at: string;
   products?: Product | null;
+  product_barcodes?: ProductBarcode | null;
 }
 
 export interface InventoryItem {
