@@ -40,15 +40,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    supabase
-      .rpc("admin_check_session", { p_token: token })
-      .then(({ data, error }) => {
+    Promise.resolve(supabase.rpc("admin_check_session", { p_token: token }))
+      .then(({ data, error }: { data: { user: AuthUser } | null; error: { message: string } | null }) => {
         if (cancelled) return;
         if (error || !data?.user) {
           localStorage.removeItem(SESSION_KEY);
           setUser(null);
         } else {
-          setUser(data.user as AuthUser);
+          setUser(data.user);
         }
       })
       .catch(() => {

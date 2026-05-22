@@ -35,7 +35,20 @@ export interface Database {
       wins: { Row: any; Insert: any; Update: any };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      admin_check_session: {
+        Args: { p_token: string };
+        Returns: { user: { id: string; email: string; display_name: string } } | null;
+      };
+      admin_login: {
+        Args: { p_email: string; p_password: string };
+        Returns: { token: string; user: { id: string; email: string; display_name: string }; error?: string } | null;
+      };
+      admin_logout: {
+        Args: { p_token: string };
+        Returns: void;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

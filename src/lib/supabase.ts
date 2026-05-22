@@ -6,7 +6,10 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = isSupabaseConfigured
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyClient = ReturnType<typeof createClient<any>>;
+
+export const supabase: AnyClient | null = isSupabaseConfigured
   ? createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: false,
@@ -15,12 +18,13 @@ export const supabase = isSupabaseConfigured
     })
   : null;
 
-export function assertSupabase() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function assertSupabase(): any {
   if (!supabase) {
     throw new Error(
       "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to continue.",
     );
   }
 
-  return supabase as any;
+  return supabase;
 }
