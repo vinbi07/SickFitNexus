@@ -7,10 +7,11 @@ export function LoginPage() {
   const { login }   = useAuth();
   const navigate    = useNavigate();
 
-  const [email,       setEmail]       = useState("");
-  const [password,    setPassword]    = useState("");
-  const [error,       setError]       = useState<string | null>(null);
-  const [submitting,  setSubmitting]  = useState(false);
+  const [email,        setEmail]       = useState("");
+  const [password,     setPassword]   = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error,        setError]      = useState<string | null>(null);
+  const [submitting,   setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -60,15 +61,25 @@ export function LoginPage() {
 
           <div className="field field-wide">
             <label htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={submitting}
-            />
+            <div className="input-reveal">
+              <input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={submitting}
+              />
+              <button
+                type="button"
+                className="reveal-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
 
           <div className="field field-wide">

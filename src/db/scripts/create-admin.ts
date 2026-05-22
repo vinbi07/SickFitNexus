@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
  * Seed the first dashboard admin user.
+ * Password is hashed server-side in PostgreSQL via pgcrypto (bcrypt).
  *
  * Usage:
  *   npx tsx src/db/scripts/create-admin.ts --email you@example.com --password YourPassword123 --name "Your Name"
  *
  * Required environment variables (set in .env or shell):
- *   SUPABASE_URL              — your Supabase project URL
+ *   VITE_SUPABASE_URL         — your Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — service role key (from Supabase → Settings → API)
  */
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { hash as bcryptHash } from "bcryptjs";
 import { createClient } from "@supabase/supabase-js";
 
 // Load .env from project root (tsx doesn't auto-load it)
@@ -44,20 +44,20 @@ function getArg(name: string, required = true): string {
 
 const email    = getArg("email").toLowerCase().trim();
 const password = getArg("password");
-const name     = getArg("name", false) || email.split("@")[0];
+const name     = getArg("name", false);
 
 if (password.length < 12) {
   console.error("❌  Password must be at least 12 characters.");
   process.exit(1);
 }
 
-const SUPABASE_URL     = process.env.SUPABASE_URL     ?? process.env.VITE_SUPABASE_URL;
+const SUPABASE_URL     = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.error(
     "❌  Missing environment variables.\n" +
-    "    Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env file or shell.",
+    "    Set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env file.",
   );
   process.exit(1);
 }
@@ -67,28 +67,30 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 async function main() {
-  console.log(`⏳  Hashing password for ${email} (bcrypt cost=12)…`);
-  const password_hash = await bcryptHash(password, 12);
+  console.log(`⏳  Creating admin user: ${email}`);
 
-  const { data, error } = await supabase
-    .from("dashboard_users")
-    .insert({ email, password_hash, display_name: name })
-    .select("id, email, display_name")
-    .single();
+  const { data, error } = await supabase.rpc("admin_create_user", {
+    p_email:        email,
+    p_password:     password,
+    p_display_name: name,
+  });
 
   if (error) {
-    if (error.code === "23505") {
-      console.error(`❌  A user with email "${email}" already exists.`);
-    } else {
-      console.error("❌  Failed to create user:", error.message);
-    }
+    console.error("❌  Failed:", error.message);
+    process.exit(1);
+  }
+
+  const result = data as { id?: string; email?: string; display_name?: string; error?: string } | null;
+
+  if (result?.error) {
+    console.error("❌  Failed:", result.error);
     process.exit(1);
   }
 
   console.log("✅  Admin user created:");
-  console.log(`    ID:    ${data.id}`);
-  console.log(`    Email: ${data.email}`);
-  console.log(`    Name:  ${data.display_name}`);
+  console.log(`    ID:    ${result?.id}`);
+  console.log(`    Email: ${result?.email}`);
+  console.log(`    Name:  ${result?.display_name}`);
 }
 
 void main();

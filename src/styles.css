@@ -1654,3 +1654,33 @@ textarea {
   padding: 8px;
   background: linear-gradient(135deg, #0f1012, #291115);
 }
+
+.input-reveal {
+  position: relative;
+  display: flex;
+}
+
+.input-reveal input {
+  flex: 1;
+  padding-right: 60px;
+}
+
+.reveal-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brand-muted);
+  padding: 2px 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.reveal-toggle:hover {
+  color: var(--brand-primary);
+}

@@ -6,6 +6,9 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
+import { supabase } from "@/lib/supabase";
+
+const SESSION_KEY = "sfn_admin_token";
 
 export interface AuthUser {
   id:           string;
@@ -26,16 +29,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser]       = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Restore session from localStorage on mount
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/auth/session", { credentials: "include" })
-      .then((res) => {
-        if (!res.ok) throw new Error("no session");
-        return res.json() as Promise<{ user: AuthUser | null }>;
-      })
-      .then((data) => {
-        if (!cancelled) setUser(data.user ?? null);
+    const token = localStorage.getItem(SESSION_KEY);
+
+    if (!token || !supabase) {
+      setLoading(false);
+      return;
+    }
+
+    supabase
+      .rpc("admin_check_session", { p_token: token })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.user) {
+          localStorage.removeItem(SESSION_KEY);
+          setUser(null);
+        } else {
+          setUser(data.user as AuthUser);
+        }
       })
       .catch(() => {
         if (!cancelled) setUser(null);
@@ -48,36 +62,43 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    try {
-      const res = await fetch("/api/auth/login", {
-        method:      "POST",
-        credentials: "include",
-        headers:     { "Content-Type": "application/json" },
-        body:        JSON.stringify({ email, password }),
-      });
-
-      let data: { user?: AuthUser; error?: string } = {};
-      try {
-        data = await res.json() as typeof data;
-      } catch {
-        // response wasn't JSON — likely a 404 HTML page from Vite dev server
-        return { error: "Login service unreachable. Run npm run dev:vercel to enable auth." };
-      }
-
-      if (!res.ok) {
-        return { error: data.error ?? "Login failed. Please try again." };
-      }
-
-      setUser(data.user ?? null);
-      return { error: null };
-    } catch {
-      return { error: "Network error. Please check your connection and try again." };
+    if (!supabase) {
+      return { error: "Backend not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY." };
     }
+
+    const { data, error } = await supabase.rpc("admin_login", {
+      p_email:    email,
+      p_password: password,
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    const result = data as { token?: string; user?: AuthUser; error?: string } | null;
+
+    if (result?.error) {
+      return { error: result.error };
+    }
+
+    if (!result?.token || !result?.user) {
+      return { error: "Login failed. Please try again." };
+    }
+
+    localStorage.setItem(SESSION_KEY, result.token);
+    setUser(result.user);
+    return { error: null };
   }, []);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    const token = localStorage.getItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
     setUser(null);
+
+    if (token && supabase) {
+      // Fire and forget — don't block the UI
+      void supabase.rpc("admin_logout", { p_token: token });
+    }
   }, []);
 
   return (
