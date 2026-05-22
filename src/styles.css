@@ -1,4 +1,130 @@
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-Book-BF66160450c2e92.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-BookItalic-BF661604511b981.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-Medium-BF66160450d988d.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-MediumItalic-BF6616045177c71.ttf") format("truetype");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-Semibold-BF66160451692c7.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-SemiboldItalic-BF661604516314e.ttf") format("truetype");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-Bold-BF6616045097aac.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-BoldItalic-BF6616045093ed8.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-Extrabold-BF661604510c584.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus";
+  src: url("/fonts/CopernicusTrial-Heavy-BF6616045153731.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus Condensed";
+  src: url("/fonts/CopernicusNewCondTrial-070-BF6616044f8a3ab.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus Condensed";
+  src: url("/fonts/CopernicusNewCondTrial-090-BF6616044f92f03.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus Condensed";
+  src: url("/fonts/CopernicusNewCondTrial-110-BF6616045000e13.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus Condensed";
+  src: url("/fonts/CopernicusNewCondTrial-130-BF661604501d32e.otf") format("opentype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus Condensed";
+  src: url("/fonts/CopernicusNewCondTrial-150-BF661604503ea55.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Copernicus Condensed";
+  src: url("/fonts/CopernicusNewCondTrial-170-BF661604505d5d2.otf") format("opentype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   --brand-primary: #e72027;
@@ -12,10 +138,12 @@
   --brand-radius: 10px;
   --brand-radius-sm: 8px;
   --brand-max-width: 1440px;
+  --font-body: "Copernicus", Georgia, serif;
+  --font-display:"Copernicus", Georgia, serif;
+  --font-utility: "Copernicus", Georgia, serif;
   color: var(--brand-secondary);
   background: var(--brand-bg);
-  font-family:
-  "Anton", Helvetica, Arial, sans-serif;
+  font-family: var(--font-display);
 }
 
 * {
@@ -24,12 +152,26 @@
 
 body {
   margin: 0;
-  font-family: "DM Sans", Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
+  font-size: 0.91rem;
+  font-weight: 400;
+  line-height: 1.5;
   min-height: 100vh;
   background:
     radial-gradient(circle at top left, rgba(231, 32, 39, 0.11), transparent 18%),
     radial-gradient(circle at 95% 10%, rgba(17, 17, 17, 0.08), transparent 16%),
     linear-gradient(180deg, #fafbfc 0%, #f3f5f7 58%, #eef1f4 100%);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 a {
@@ -104,7 +246,10 @@ textarea {
 
 .brand-lockup p {
   font-size: 1rem;
+  font-family: var(--font-display);
   font-weight: 700;
+  letter-spacing: 0.03em;
+
 }
 
 .brand-lockup span {
@@ -138,6 +283,9 @@ textarea {
   border-radius: 8px;
   padding: 12px 14px;
   color: rgba(255, 255, 255, 0.74);
+  font-family: var(--font-utility);
+  font-weight: 500;
+  letter-spacing: 0.03em;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
   border: 1px solid transparent;
 }
@@ -179,8 +327,8 @@ textarea {
 .topbar h1,
 .page-header h1 {
   margin: 0;
-  font-size: 1.6rem;
-  letter-spacing: -0.02em;
+  font-size: 1.38rem;
+  letter-spacing: 0.01em;
 }
 
 .topbar p,
@@ -296,12 +444,17 @@ textarea {
 
 .metric-label {
   color: var(--brand-muted);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
+  font-family: var(--font-utility);
+  letter-spacing: 0.05em;
+
 }
 
 .metric-value {
-  font-size: 1.85rem;
+  font-size: 1.58rem;
   font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
 }
 
 .metric-footnote {
@@ -405,8 +558,11 @@ textarea {
 }
 
 .field label {
-  font-size: 0.9rem;
+  font-size: 0.86rem;
+  font-family: var(--font-utility);
   font-weight: 600;
+  letter-spacing: 0.04em;
+
 }
 
 .field input,
@@ -432,7 +588,10 @@ textarea {
   border: none;
   border-radius: 8px;
   padding: 11px 16px;
+  font-family: var(--font-utility);
   font-weight: 600;
+  letter-spacing: 0.03em;
+
   cursor: pointer;
 }
 
@@ -506,9 +665,10 @@ textarea {
 
 .data-table th {
   color: var(--brand-muted);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  font-family: var(--font-utility);
+
+  letter-spacing: 0.06em;
 }
 
 .table-link {
@@ -522,8 +682,11 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.82rem;
+  font-family: var(--font-utility);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-size: 0.76rem;
+
 }
 
 .product-compact-cell {
@@ -551,8 +714,11 @@ textarea {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
+  font-family: var(--font-utility);
   font-weight: 700;
+  letter-spacing: 0.04em;
+
   border: 1px solid transparent;
 }
 
@@ -979,7 +1145,7 @@ textarea {
 
 .lookbook-hero h1 {
   margin: 4px 0 0;
-  font-size: 1.6rem;
+  font-size: 1.36rem;
   letter-spacing: -0.02em;
   color: #111111;
 }
@@ -994,8 +1160,9 @@ textarea {
 .lookbook-kicker,
 .po-document-kicker {
   margin: 0 0 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-family: var(--font-utility);
+
+  letter-spacing: 0.1em;
   font-size: 0.78rem;
 }
 
@@ -1158,7 +1325,9 @@ textarea {
 .lookbook-summary-header h3 {
   margin: 0;
   font-size: 1rem;
+  font-family: var(--font-display);
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .lookbook-summary-badge {
@@ -1189,9 +1358,10 @@ textarea {
 
 .lookbook-summary-meta span {
   font-size: 0.72rem;
+  font-family: var(--font-utility);
   color: #69707d;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+
+  letter-spacing: 0.08em;
 }
 
 .lookbook-summary-meta strong {
@@ -1208,9 +1378,10 @@ textarea {
 .lookbook-summary-label {
   margin: 0;
   font-size: 0.72rem;
+  font-family: var(--font-utility);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+
+  letter-spacing: 0.08em;
   color: #69707d;
 }
 
@@ -1638,8 +1809,8 @@ textarea {
 
 .login-brand h1 {
   margin: 0;
-  font-size: 1.4rem;
-  letter-spacing: -0.02em;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
 }
 
 .login-brand p {
@@ -1652,7 +1823,6 @@ textarea {
   object-fit: contain;
   border-radius: 14px;
   padding: 8px;
-  background: linear-gradient(135deg, #0f1012, #291115);
 }
 
 .input-reveal {
@@ -1674,11 +1844,12 @@ textarea {
   border: none;
   cursor: pointer;
   font-size: 0.78rem;
+  font-family: var(--font-utility);
   font-weight: 600;
   color: var(--brand-muted);
   padding: 2px 4px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0.06em;
+
 }
 
 .reveal-toggle:hover {
