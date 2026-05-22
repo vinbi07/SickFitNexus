@@ -1604,3 +1604,53 @@ textarea {
     color: #111;
   }
 }
+
+/* ===== Login Page ===== */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(231, 32, 39, 0.11), transparent 18%),
+    radial-gradient(circle at 95% 10%, rgba(17, 17, 17, 0.08), transparent 16%),
+    linear-gradient(180deg, #fafbfc 0%, #f3f5f7 58%, #eef1f4 100%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.login-brand {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-brand h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+}
+
+.login-brand p {
+  margin: 0;
+}
+
+.login-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 14px;
+  padding: 8px;
+  background: linear-gradient(135deg, #0f1012, #291115);
+}

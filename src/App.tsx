@@ -1,4 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { CsvImportsPage } from "@/pages/CsvImportsPage";
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage";
@@ -49,10 +51,12 @@ const navItems = [
 export default function App() {
   return (
     <Routes>
+      <Route path="/login" element={<LoginPage />} />
       <Route path="/lookbook/:token" element={<LookbookOrderPage />} />
       <Route
         path="*"
         element={(
+          <ProtectedRoute>
           <AppShell
             sidebar={
               <div className="sidebar-nav">
@@ -104,6 +108,7 @@ export default function App() {
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </AppShell>
+          </ProtectedRoute>
         )}
       />
     </Routes>
