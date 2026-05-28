@@ -2,13 +2,16 @@ import { assertSupabase } from "@/lib/supabase";
 import { buyerService } from "@/services/buyerService";
 import { complianceService } from "@/services/complianceService";
 import { inventoryService } from "@/services/inventoryService";
+import { lookbookAnalyticsService } from "@/services/lookbookAnalyticsService";
 import { insertTable } from "@/services/baseService";
+import { purchaseOrderService } from "@/services/purchaseOrderService";
 import type {
   Buyer,
   LookbookOrderInputLine,
   PoLineItem,
   Product,
   PurchaseOrder,
+  PurchaseOrderCounterEvent,
   PurchaseOrderNotification,
   Retailer,
 } from "@/types/domain";
@@ -94,22 +97,45 @@ async function buildOrderContext(token: string) {
     .eq("id", buyer.retailer_id)
     .single();
   if (retailerError) throw retailerError;
+  const retailer = retailerData as Retailer;
+
+  const isExpired = Boolean(
+    buyer.token_expires_at && new Date(buyer.token_expires_at).getTime() < Date.now(),
+  );
 
   const existingDraftResponse = await supabase
     .from("purchase_orders")
     .select("*, buyers(*), retailers(*), locations(*), vendors(*)")
     .eq("buyer_id", buyer.id)
-    .in("requested_action", ["draft", "quote"])
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
   if (existingDraftResponse.error) throw existingDraftResponse.error;
+  const existingDraft =
+    ((existingDraftResponse.data ?? []) as PurchaseOrder[]).find((purchaseOrder) =>
+      !["Fulfilled", "Cancelled", "Closed"].includes(purchaseOrder.status),
+    ) ?? null;
+
+  let existingDraftLineItems: PoLineItem[] = [];
+  let counterEvents: PurchaseOrderCounterEvent[] = [];
+  if (existingDraft?.id) {
+    const [{ data: lineItemsData, error: lineItemsError }, { data: counterEventData, error: counterEventError }] = await Promise.all([
+      supabase.from("po_line_items").select("*").eq("purchase_order_id", existingDraft.id).order("created_at", { ascending: true }),
+      supabase.from("purchase_order_counter_events").select("*").eq("purchase_order_id", existingDraft.id).order("created_at", { ascending: false }),
+    ]);
+    if (lineItemsError) throw lineItemsError;
+    if (counterEventError) throw counterEventError;
+    existingDraftLineItems = (lineItemsData ?? []) as PoLineItem[];
+    counterEvents = (counterEventData ?? []) as PurchaseOrderCounterEvent[];
+  }
 
   return {
     buyer,
-    retailer: retailerData as Retailer,
+    retailer,
     products,
-    existingDraft: (existingDraftResponse.data ?? null) as PurchaseOrder | null,
+    existingDraft,
+    existingDraftLineItems,
+    counterEvents,
+    expired: isExpired,
   };
 }
 
@@ -175,10 +201,29 @@ async function queueNotifications(purchaseOrder: PurchaseOrder, buyer: Buyer, re
 }
 
 export const lookbookOrderService = {
-  loadByToken: buildOrderContext,
+  async loadByToken(token: string) {
+    const context = await buildOrderContext(token);
+    await lookbookAnalyticsService.trackEvent({
+      buyer: context.buyer,
+      retailer: context.retailer,
+      eventType: "opened",
+      metadata: {
+        expired: context.expired,
+        hasDraft: Boolean(context.existingDraft),
+      },
+    });
+    return context;
+  },
 
   async save(token: string, lines: LookbookOrderInputLine[], action: "draft" | "quote" | "submit", notes?: string) {
     const { buyer, retailer, products, existingDraft } = await buildOrderContext(token);
+    if (buyer.token_expires_at && new Date(buyer.token_expires_at).getTime() < Date.now()) {
+      throw new Error("This lookbook link has expired.");
+    }
+    const orderingDisabled = !buyer.order_mode_enabled || retailer.order_mode_policy !== "enabled" || retailer.edi_required;
+    if (action === "submit" && orderingDisabled) {
+      throw new Error("This retailer must submit purchase orders through the normal channel.");
+    }
     if (action === "submit") {
       buyerService.validateProfile(buyer);
     }
@@ -200,17 +245,20 @@ export const lookbookOrderService = {
     );
     const complianceSnapshot = await buildComplianceForSelection(buyer, selectedProducts.map(({ product }) => product));
 
-    if (action === "submit" && complianceSnapshot.missingDocs.length) {
-      throw new Error(`Compliance requirements are incomplete: ${complianceSnapshot.missingDocs.join(", ")}`);
-    }
+    const hasComplianceGap = action === "submit" && complianceSnapshot.missingDocs.length > 0;
 
     const purchaseOrderPayload: Partial<PurchaseOrder> = {
-      id: existingDraft?.requested_action === action || action !== "submit" ? existingDraft?.id : undefined,
-      po_number: action === "submit" ? await generatePoNumber() : existingDraft?.po_number ?? `DRAFT-${await generatePoNumber()}`,
+      id: existingDraft?.id,
+      po_number:
+        action === "submit" && existingDraft?.requested_action === "submit"
+          ? existingDraft.po_number
+          : action === "submit"
+            ? await generatePoNumber()
+            : existingDraft?.po_number ?? `DRAFT-${await generatePoNumber()}`,
       retailer_id: buyer.retailer_id,
       buyer_id: buyer.id,
       po_type: "Retailer PO",
-      status: action === "submit" ? "Pending Approval" : "Draft",
+      status: action === "submit" ? (hasComplianceGap ? "On Hold" : "Pending Approval") : "Draft",
       approval_status: action === "submit" ? "Pending Approval" : "Not Requested",
       allocation_status: action === "submit" ? "Allocated" : "Not Allocated",
       order_date: new Date().toISOString().slice(0, 10),
@@ -219,9 +267,12 @@ export const lookbookOrderService = {
       start_ship_date: null,
       ship_complete_date: null,
       source_channel: "Lookbook",
+      currency_code: "USD",
       compliance_snapshot: complianceSnapshot as unknown as Record<string, unknown>,
       buyer_notes: notes ?? null,
       internal_notes: existingDraft?.internal_notes ?? null,
+      hold_reason: hasComplianceGap ? `Missing compliance docs: ${complianceSnapshot.missingDocs.join(", ")}` : null,
+      counter_status: existingDraft?.status === "Countered" ? "Accepted" : existingDraft?.counter_status ?? "None",
       requested_action: action,
       subtotal: totals.subtotal,
       total_units: totals.totalUnits,
@@ -257,7 +308,45 @@ export const lookbookOrderService = {
           units: caseQuantity * resolveCasePackQuantity(product),
         })),
       );
+      if (hasComplianceGap) {
+        await purchaseOrderService.saveComplianceHold({
+          purchase_order_id: savedPo.id,
+          buyer_id: buyer.id,
+          retailer_id: retailer.id,
+          status: "Open",
+          summary: "Buyer submission is waiting on compliance review.",
+          missing_docs: complianceSnapshot.missingDocs,
+          notes: notes ?? null,
+        });
+      }
       await queueNotifications(savedPo, buyer, retailer);
+    }
+
+    await lookbookAnalyticsService.trackEvent({
+      buyer,
+      retailer,
+      eventType: action === "draft" ? "draft_saved" : action === "quote" ? "quote_requested" : "submitted",
+      metadata: {
+        purchaseOrderId: savedPo.id,
+        totalUnits: savedPo.total_units,
+        skuCount: lines.length,
+      },
+    });
+
+    if (existingDraft?.status === "Countered" && action === "submit") {
+      await insertTable("purchase_order_counter_events", {
+        purchase_order_id: savedPo.id,
+        actor_user_id: null,
+        actor_label: buyer.buyer_name,
+        event_type: "buyer_revised",
+        notes: notes ?? null,
+        payload: {
+          buyerId: buyer.id,
+          skuCount: lines.length,
+          totalUnits: savedPo.total_units,
+          subtotal: savedPo.subtotal,
+        },
+      });
     }
 
     return savedPo;

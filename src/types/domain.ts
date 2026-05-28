@@ -26,6 +26,12 @@ export interface Retailer {
   sop_notes: string | null;
   parent_retailer_id: string | null;
   retailer_group: string | null;
+  logo_url: string | null;
+  brand_accent_color: string | null;
+  lookbook_intro: string | null;
+  default_payment_terms: string | null;
+  order_mode_policy: "enabled" | "catalog_only" | "edi_only";
+  edi_required: boolean;
   ordering_cadence_days: number | null;
   next_reorder_start: string | null;
   next_reorder_end: string | null;
@@ -49,6 +55,7 @@ export interface Buyer {
   compliance_requirements: string | null;
   assigned_sales_rep: string | null;
   access_token: string;
+  link_validity_days: number | null;
   token_expires_at: string | null;
   last_accessed_at: string | null;
   created_at: string;
@@ -174,10 +181,13 @@ export type PurchaseOrderStatus =
   | "Draft"
   | "Pending"
   | "Pending Approval"
+  | "On Hold"
   | "Ordered"
+  | "Countered"
   | "In Transit"
   | "Partially Received"
   | "Received"
+  | "Fulfilled"
   | "Cancelled"
   | "Delayed"
   | "Issue Flagged"
@@ -213,9 +223,12 @@ export interface PurchaseOrder {
   tracking_status: string | null;
   generated_form_url: string | null;
   source_channel: string | null;
+  currency_code: string | null;
   compliance_snapshot: Record<string, unknown>;
   buyer_notes: string | null;
   internal_notes: string | null;
+  hold_reason: string | null;
+  counter_status: "None" | "Countered" | "Accepted" | "Declined";
   start_ship_date: string | null;
   ship_complete_date: string | null;
   subtotal: number;
@@ -244,8 +257,10 @@ export interface PoLineItem {
   sku: string;
   upc: string | null;
   product_name: string;
+  variant_label: string | null;
   description: string | null;
   unit: string;
+  case_pack_quantity: number;
   case_quantity: number;
   unit_quantity: number;
   quantity_ordered: number;
@@ -296,6 +311,105 @@ export interface PurchaseOrderNotification {
   updated_at: string;
 }
 
+export interface InventoryReservation {
+  id: string;
+  purchase_order_id: string;
+  po_line_item_id: string | null;
+  product_id: string;
+  reserved_units: number;
+  status: "Reserved" | "Released" | "Committed";
+  action_type: "submit" | "reject" | "counter" | "approve" | "fulfill" | "manual";
+  actor_user_id: string | null;
+  actor_label: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PurchaseOrderStatusHistory {
+  id: string;
+  purchase_order_id: string;
+  from_status: string | null;
+  to_status: string;
+  actor_user_id: string | null;
+  actor_label: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface PurchaseOrderCounterEvent {
+  id: string;
+  purchase_order_id: string;
+  actor_user_id: string | null;
+  actor_label: string | null;
+  event_type: "countered" | "accepted" | "declined" | "buyer_revised";
+  notes: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ComplianceHold {
+  id: string;
+  purchase_order_id: string;
+  buyer_id: string | null;
+  retailer_id: string | null;
+  status: "Open" | "Resolved" | "Dismissed";
+  summary: string;
+  missing_docs: string[];
+  notes: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  purchase_orders?: PurchaseOrder | null;
+  buyers?: Buyer | null;
+  retailers?: Retailer | null;
+}
+
+export interface GeneratedPurchaseOrderDocument {
+  id: string;
+  purchase_order_id: string;
+  document_format: "html";
+  title: string;
+  body_html: string;
+  created_by_user_id: string | null;
+  created_by_label: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InboundIntakeRequest {
+  id: string;
+  request_type: "order" | "retailer" | "other";
+  source_channel: "Forwarded Email" | "Drag and Drop" | "Manual";
+  status: "Pending" | "In Review" | "Converted" | "Closed";
+  retailer_name: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  subject: string;
+  notes: string | null;
+  requested_action: string | null;
+  converted_purchase_order_id: string | null;
+  converted_retailer_id: string | null;
+  created_by_user_id: string | null;
+  created_by_label: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InboundIntakeAttachment {
+  id: string;
+  intake_request_id: string;
+  title: string;
+  file_url: string | null;
+  created_at: string;
+}
+
+export interface DashboardOperator {
+  id: string;
+  email: string;
+  display_name: string;
+}
+
 export interface ComplianceSnapshot {
   retailerId: string;
   buyerId: string;
@@ -321,6 +435,41 @@ export interface LookbookOrderTotals {
   totalUnits: number;
   subtotal: number;
   totalRetail: number;
+}
+
+export interface LookbookView {
+  id: string;
+  buyer_id: string | null;
+  retailer_id: string | null;
+  access_token: string;
+  event_type: "opened" | "draft_saved" | "quote_requested" | "submitted";
+  session_label: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface RetailerBuyerAnalytics {
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  orderModeEnabled: boolean;
+  linkValidityDays: number | null;
+  lastViewedAt: string | null;
+  totalViews: number;
+  totalDraftSaves: number;
+  totalQuoteRequests: number;
+  totalSubmissions: number;
+  activeOrderStatus: string | null;
+  activeOrderUpdatedAt: string | null;
+}
+
+export interface RetailerLookbookActivity {
+  buyerId: string | null;
+  buyerName: string;
+  buyerEmail: string | null;
+  eventType: LookbookView["event_type"];
+  createdAt: string;
+  metadata: Record<string, unknown>;
 }
 
 export type InventoryEventType =

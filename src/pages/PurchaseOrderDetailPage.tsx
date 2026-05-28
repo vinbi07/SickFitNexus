@@ -10,8 +10,35 @@ import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentVie
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
+import type { PurchaseOrderCounterEvent } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
 import { formatCurrency, formatDate } from "@/utils/format";
+
+function formatCounterEventTitle(event: PurchaseOrderCounterEvent) {
+  switch (event.event_type) {
+    case "countered":
+      return "SickFit countered the order";
+    case "buyer_revised":
+      return "Buyer revised the live link order";
+    case "accepted":
+      return "Counter accepted";
+    case "declined":
+      return "Counter declined";
+    default:
+      return String(event.event_type).replaceAll("_", " ");
+  }
+}
+
+function formatCounterEventMeta(event: PurchaseOrderCounterEvent) {
+  const payload = event.payload as { skuCount?: number; totalUnits?: number; subtotal?: number; priorStatus?: string } | null;
+  const parts = [
+    payload?.skuCount ? `${payload.skuCount} SKU${payload.skuCount === 1 ? "" : "s"}` : null,
+    payload?.totalUnits ? `${payload.totalUnits} units` : null,
+    payload?.subtotal ? formatCurrency(payload.subtotal) : null,
+    payload?.priorStatus ? `From ${payload.priorStatus}` : null,
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
 
 export function PurchaseOrderDetailPage() {
   const params = useParams();
@@ -50,13 +77,24 @@ export function PurchaseOrderDetailPage() {
             <button className="btn btn-secondary btn-small" onClick={() => window.print()}>Preview / Print</button>
             <button className="btn btn-primary btn-small" onClick={async () => {
               try {
-                await purchaseOrderService.approve(poId, "SickFit Team");
+                await purchaseOrderService.approve(poId);
                 await reload();
                 setNotice({ tone: "success", message: "PO approved successfully." });
               } catch (err) {
                 setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to approve PO." });
               }
             }}>Approve</button>
+            <button className="btn btn-secondary btn-small" onClick={async () => {
+              const response = window.prompt("Add counter note for the buyer", data.purchaseOrder.internal_notes ?? "");
+              if (response === null) return;
+              try {
+                await purchaseOrderService.counter(poId, response);
+                await reload();
+                setNotice({ tone: "success", message: "PO moved to countered status." });
+              } catch (err) {
+                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to counter this PO." });
+              }
+            }}>Counter</button>
             <button className="btn btn-ghost btn-small" onClick={async () => {
               try {
                 await purchaseOrderService.queueForFulfillment(poId);
@@ -66,6 +104,15 @@ export function PurchaseOrderDetailPage() {
                 setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to queue PO." });
               }
             }}>Queue for Fulfillment</button>
+            <button className="btn btn-secondary btn-small" onClick={async () => {
+              try {
+                await purchaseOrderService.fulfill(poId);
+                await reload();
+                setNotice({ tone: "success", message: "PO fulfilled and inventory committed." });
+              } catch (err) {
+                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to fulfill PO." });
+              }
+            }}>Fulfill</button>
             <button className="btn btn-danger btn-small" onClick={async () => {
               try {
                 await purchaseOrderService.reject(poId, "Cancelled from approval workspace.");
@@ -129,7 +176,9 @@ export function PurchaseOrderDetailPage() {
             <div className="detail-card"><span>Tracking</span><strong>{data.purchaseOrder.tracking_number ?? "None"}</strong></div>
             <div className="detail-card"><span>Source Channel</span><strong>{data.purchaseOrder.source_channel ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Generated Form</span><strong>{data.purchaseOrder.generated_form_url ? <a href={data.purchaseOrder.generated_form_url} target="_blank" rel="noreferrer">Open</a> : "Not generated"}</strong></div>
+            <div className="detail-card"><span>Counter Status</span><strong>{data.purchaseOrder.counter_status}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Compliance Snapshot</span><strong>{String((data.purchaseOrder.compliance_snapshot as { summary?: string } | null)?.summary ?? "No compliance snapshot recorded.")}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Hold Reason</span><strong>{data.purchaseOrder.hold_reason ?? "No hold reason."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Buyer Notes</span><strong>{data.purchaseOrder.buyer_notes ?? "No buyer notes added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Internal Notes</span><strong>{data.purchaseOrder.internal_notes ?? "No internal notes added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.purchaseOrder.notes ?? "No notes added."}</strong></div>
@@ -153,6 +202,83 @@ export function PurchaseOrderDetailPage() {
         </div>
       </div>
       <div className="split-grid">
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Reservation Ledger</h3></div>
+          <div className="scroll-panel">
+            <DataTable
+              columns={[
+                { key: "product_id", title: "Product", render: (row) => row.product_id },
+                { key: "reserved_units", title: "Units", render: (row) => row.reserved_units },
+                { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
+                { key: "actor_label", title: "Actor", render: (row) => row.actor_label ?? "Buyer flow" },
+                { key: "updated_at", title: "Updated", render: (row) => formatDate(row.updated_at) },
+              ]}
+              rows={data.reservations}
+              emptyMessage="No reservation records yet."
+            />
+          </div>
+        </div>
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Status History</h3></div>
+          <div className="scroll-panel">
+            <DataTable
+              columns={[
+                { key: "from_status", title: "From", render: (row) => row.from_status ?? "N/A" },
+                { key: "to_status", title: "To", render: (row) => row.to_status },
+                { key: "actor_label", title: "Actor", render: (row) => row.actor_label ?? "System" },
+                { key: "notes", title: "Notes", render: (row) => row.notes ?? "N/A" },
+                { key: "created_at", title: "When", render: (row) => formatDate(row.created_at) },
+              ]}
+              rows={data.statusHistory}
+              emptyMessage="No status history yet."
+            />
+          </div>
+        </div>
+      </div>
+      <div className="split-grid">
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Counter Workflow</h3></div>
+          <div className="timeline scroll-panel">
+            {data.counterEvents.length ? data.counterEvents.map((event) => (
+              <div key={event.id} className={`timeline-item ${event.event_type === "countered" ? "timeline-item-danger" : ""}`}>
+                <strong>{formatCounterEventTitle(event)}</strong>
+                <p>{event.actor_label ?? "Buyer"}</p>
+                {formatCounterEventMeta(event) ? <p>{formatCounterEventMeta(event)}</p> : null}
+                <p>{event.notes ?? "No note provided."}</p>
+                <span className="muted">{formatDate(event.created_at)}</span>
+              </div>
+            )) : <div className="empty-state">No counter activity yet.</div>}
+          </div>
+        </div>
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Compliance Holds</h3></div>
+          <div className="scroll-panel">
+            <DataTable
+              columns={[
+                { key: "summary", title: "Summary", render: (row) => row.summary },
+                { key: "missing_docs", title: "Missing Docs", render: (row) => row.missing_docs.join(", ") || "None" },
+                { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
+                { key: "created_at", title: "Created", render: (row) => formatDate(row.created_at) },
+              ]}
+              rows={data.complianceHolds}
+              emptyMessage="No compliance holds on this order."
+            />
+          </div>
+        </div>
+      </div>
+      <div className="split-grid">
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Generated PO Documents</h3></div>
+          <DataTable
+            columns={[
+              { key: "title", title: "Title", render: (row) => row.title },
+              { key: "created_by_label", title: "Created By", render: (row) => row.created_by_label ?? "System" },
+              { key: "created_at", title: "Created", render: (row) => formatDate(row.created_at) },
+            ]}
+            rows={data.generatedDocuments}
+            emptyMessage="No generated PO documents yet."
+          />
+        </div>
         <div className="panel section-stack">
           <div className="panel-header"><h3>Manufacturer / Retailer Comms</h3></div>
           <div className="timeline">

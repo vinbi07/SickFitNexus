@@ -71,6 +71,7 @@ const buyer: Buyer = {
   compliance_requirements: null,
   assigned_sales_rep: null,
   access_token: "token",
+  link_validity_days: 30,
   token_expires_at: null,
   last_accessed_at: null,
   created_at: "",

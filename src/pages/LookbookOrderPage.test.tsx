@@ -27,6 +27,7 @@ const buyer: Buyer = {
   compliance_requirements: null,
   assigned_sales_rep: null,
   access_token: "token-1",
+  link_validity_days: 30,
   token_expires_at: null,
   last_accessed_at: null,
   created_at: "",
@@ -49,6 +50,12 @@ const retailer: Retailer = {
   sop_notes: null,
   parent_retailer_id: null,
   retailer_group: null,
+  logo_url: null,
+  brand_accent_color: null,
+  lookbook_intro: null,
+  default_payment_terms: null,
+  order_mode_policy: "enabled",
+  edi_required: false,
   ordering_cadence_days: null,
   next_reorder_start: null,
   next_reorder_end: null,
@@ -115,6 +122,9 @@ describe("LookbookOrderPage", () => {
       retailer,
       products: [product],
       existingDraft: null,
+      existingDraftLineItems: [],
+      counterEvents: [],
+      expired: false,
     });
     vi.mocked(lookbookOrderService.save).mockResolvedValue({
       id: "po-1",
@@ -148,6 +158,9 @@ describe("LookbookOrderPage", () => {
       retailer,
       products: [],
       existingDraft: null,
+      existingDraftLineItems: [],
+      counterEvents: [],
+      expired: false,
     });
     renderPage();
     expect(await screen.findByText(/No products are available/i)).toBeInTheDocument();
@@ -166,6 +179,9 @@ describe("LookbookOrderPage", () => {
         },
       ],
       existingDraft: null,
+      existingDraftLineItems: [],
+      counterEvents: [],
+      expired: false,
     });
 
     renderPage();

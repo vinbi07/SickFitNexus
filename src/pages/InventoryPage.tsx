@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DashboardCard } from "@/components/DashboardCard";
 import { DataTable } from "@/components/DataTable";
@@ -155,7 +156,7 @@ export function InventoryPage() {
                     {row.products?.image_url ? <img className="product-thumb" src={row.products.image_url} alt={row.products.name} /> : <span className="product-thumb-fallback">{row.products?.sku?.slice(0, 2) ?? "NA"}</span>}
                   </div>
                   <div className="cell-stack">
-                    <strong>{row.products?.name ?? "Unknown Product"}</strong>
+                    <strong>{row.products?.id ? <Link className="table-link" to={`/products/${row.products.id}`}>{row.products.name}</Link> : row.products?.name ?? "Unknown Product"}</strong>
                     <span className="helper-text">{row.products?.sku ?? "No SKU"}</span>
                   </div>
                 </div>

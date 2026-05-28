@@ -2,6 +2,7 @@ import { assertSupabase } from "@/lib/supabase";
 import { insertTable, upsertTable } from "@/services/baseService";
 import type {
   ComplianceSnapshot,
+  ComplianceHold,
   ComplianceRequirementType,
   Product,
   Buyer,
@@ -85,5 +86,25 @@ export const complianceService = {
         requiredDocs: product.compliance_docs_status === "Missing" ? product.compliance_docs_required : [],
       })),
     });
+  },
+
+  async listHolds() {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("compliance_holds")
+      .select("*, purchase_orders(*), buyers(*), retailers(*)")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as ComplianceHold[];
+  },
+
+  async resolveHold(id: string, notes?: string) {
+    const [saved] = (await upsertTable<ComplianceHold>("compliance_holds", {
+      id,
+      status: "Resolved",
+      resolved_at: new Date().toISOString(),
+      notes: notes ?? null,
+    })) as ComplianceHold[];
+    return saved;
   },
 };

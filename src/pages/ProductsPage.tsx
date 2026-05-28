@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { EntityFormModal } from "@/components/EntityFormModal";
@@ -146,7 +147,7 @@ export function ProductsPage() {
               </div>
             ),
           },
-          { key: "sku", title: "SKU", render: (row) => <span className="table-link product-sku-cell">{row.sku}</span> },
+          { key: "sku", title: "SKU", render: (row) => <Link className="table-link product-sku-cell" to={`/products/${row.id}`}>{row.sku}</Link> },
           {
             key: "name",
             title: "Product",
@@ -183,6 +184,9 @@ export function ProductsPage() {
                 <button className="btn btn-ghost btn-small" onClick={() => setViewing(row)}>
                   View
                 </button>
+                <Link className="btn btn-ghost btn-small" to={`/products/${row.id}`}>
+                  Open
+                </Link>
                 <button
                   className="btn btn-ghost btn-small"
                   onClick={async () => {

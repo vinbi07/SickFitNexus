@@ -8,7 +8,7 @@ import {
 } from "react";
 import { supabase } from "@/lib/supabase";
 
-const SESSION_KEY = "sfn_admin_token";
+export const DASHBOARD_SESSION_KEY = "sfn_admin_token";
 
 export interface AuthUser {
   id:           string;
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let cancelled = false;
 
-    const token = localStorage.getItem(SESSION_KEY);
+    const token = localStorage.getItem(DASHBOARD_SESSION_KEY);
 
     if (!token || !supabase) {
       setLoading(false);
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       .then(({ data, error }: { data: { user: AuthUser } | null; error: { message: string } | null }) => {
         if (cancelled) return;
         if (error || !data?.user) {
-          localStorage.removeItem(SESSION_KEY);
+          localStorage.removeItem(DASHBOARD_SESSION_KEY);
           setUser(null);
         } else {
           setUser(data.user);
@@ -84,14 +84,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return { error: "Login failed. Please try again." };
     }
 
-    localStorage.setItem(SESSION_KEY, result.token);
+    localStorage.setItem(DASHBOARD_SESSION_KEY, result.token);
     setUser(result.user);
     return { error: null };
   }, []);
 
   const logout = useCallback(async () => {
-    const token = localStorage.getItem(SESSION_KEY);
-    localStorage.removeItem(SESSION_KEY);
+    const token = localStorage.getItem(DASHBOARD_SESSION_KEY);
+    localStorage.removeItem(DASHBOARD_SESSION_KEY);
     setUser(null);
 
     if (token && supabase) {

@@ -1,6 +1,7 @@
 import { assertSupabase } from "@/lib/supabase";
 import { deleteFromTable, upsertTable } from "@/services/baseService";
 import type { Buyer } from "@/types/domain";
+import { addDays, toDateInput } from "@/utils/date";
 
 function normalizeBuyer(payload: Partial<Buyer>) {
   const { retailers: _retailers, lookbook_templates: _lookbookTemplate, ...buyerPayload } = payload;
@@ -13,6 +14,10 @@ function normalizeBuyer(payload: Partial<Buyer>) {
     compliance_requirements: payload.compliance_requirements ? String(payload.compliance_requirements) : null,
     assigned_sales_rep: payload.assigned_sales_rep ? String(payload.assigned_sales_rep) : null,
     lookbook_template_id: payload.lookbook_template_id ? String(payload.lookbook_template_id) : null,
+    link_validity_days:
+      buyerPayload.link_validity_days === null || buyerPayload.link_validity_days === undefined
+        ? 30
+        : Number(buyerPayload.link_validity_days),
     token_expires_at: payload.token_expires_at ? String(payload.token_expires_at) : null,
     last_accessed_at: payload.last_accessed_at ? String(payload.last_accessed_at) : null,
     order_mode_enabled: Boolean(payload.order_mode_enabled),
@@ -30,7 +35,11 @@ export const buyerService = {
   },
 
   async upsert(payload: Partial<Buyer>) {
-    const [saved] = (await upsertTable<Buyer>("buyers", normalizeBuyer(payload))) as Buyer[];
+    const normalized = normalizeBuyer(payload);
+    if (!normalized.token_expires_at && !normalized.id) {
+      normalized.token_expires_at = toDateInput(addDays(new Date(), Number(normalized.link_validity_days ?? 30)));
+    }
+    const [saved] = (await upsertTable<Buyer>("buyers", normalized)) as Buyer[];
     return saved;
   },
 
@@ -46,9 +55,6 @@ export const buyerService = {
     if (error) throw error;
 
     const buyer = data as Buyer;
-    if (!buyer.order_mode_enabled) {
-      throw new Error("Order mode is not enabled for this buyer.");
-    }
     if (buyer.token_expires_at && new Date(buyer.token_expires_at).getTime() < Date.now()) {
       throw new Error("This ordering link has expired.");
     }

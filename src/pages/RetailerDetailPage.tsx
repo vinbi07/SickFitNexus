@@ -15,6 +15,21 @@ import { retailerService } from "@/services/retailerService";
 import type { Buyer } from "@/types/domain";
 import { formatCurrency, formatDate } from "@/utils/format";
 
+function formatLookbookEventLabel(eventType: string) {
+  switch (eventType) {
+    case "opened":
+      return "Opened lookbook";
+    case "draft_saved":
+      return "Saved draft";
+    case "quote_requested":
+      return "Requested quote";
+    case "submitted":
+      return "Submitted PO";
+    default:
+      return eventType.replaceAll("_", " ");
+  }
+}
+
 export function RetailerDetailPage() {
   const params = useParams();
   const retailerId = params.id ?? "";
@@ -51,6 +66,18 @@ export function RetailerDetailPage() {
           <span className="metric-label">Recent POs</span>
           <strong className="metric-value">{data.recentPos.length}</strong>
         </div>
+        <div className="card metric-card">
+          <span className="metric-label">Lookbook Views</span>
+          <strong className="metric-value">{data.lookbookAnalytics.totalViews}</strong>
+        </div>
+        <div className="card metric-card">
+          <span className="metric-label">Quote Requests</span>
+          <strong className="metric-value">{data.lookbookAnalytics.totalQuoteRequests}</strong>
+        </div>
+        <div className="card metric-card">
+          <span className="metric-label">Buyer Submits</span>
+          <strong className="metric-value">{data.lookbookAnalytics.totalSubmissions}</strong>
+        </div>
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
@@ -61,7 +88,12 @@ export function RetailerDetailPage() {
             <div className="detail-card"><span>Phone</span><strong>{data.retailer.primary_contact_phone ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Supplier ID</span><strong>{data.retailer.supplier_id ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Activation ID</span><strong>{data.retailer.activation_id ?? "N/A"}</strong></div>
+            <div className="detail-card"><span>Payment Terms</span><strong>{data.retailer.default_payment_terms ?? "Not set"}</strong></div>
+            <div className="detail-card"><span>Order Policy</span><strong>{data.retailer.order_mode_policy}</strong></div>
+            <div className="detail-card"><span>Brand Accent</span><strong>{data.retailer.brand_accent_color ?? "Default red"}</strong></div>
             <div className="detail-card"><span>Next Reorder Window</span><strong>{data.retailer.next_reorder_start ? `${formatDate(data.retailer.next_reorder_start)} - ${formatDate(data.retailer.next_reorder_end)}` : "Not set"}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Lookbook Intro</span><strong>{data.retailer.lookbook_intro ?? "No custom intro added yet."}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Retailer Logo</span><strong>{data.retailer.logo_url ? <a href={data.retailer.logo_url} target="_blank" rel="noreferrer">Open logo</a> : "No logo on file."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Additional Contacts</span><strong>{data.retailer.secondary_contacts ?? "No extra contacts added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>SOPs</span><strong>{data.retailer.sop_notes ?? "No SOP notes added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Shipping Requirements</span><strong>{data.retailer.shipping_requirements ?? "No shipping requirements added."}</strong></div>
@@ -107,6 +139,8 @@ export function RetailerDetailPage() {
               { key: "payment_terms", title: "Terms", render: (row) => row.payment_terms ?? "N/A" },
               { key: "template", title: "Lookbook", render: (row) => row.lookbook_templates?.name ?? "All wholesale products" },
               { key: "order_mode_enabled", title: "Order Mode", render: (row) => <StatusBadge label={row.order_mode_enabled ? "Enabled" : "Disabled"} /> },
+              { key: "link_validity_days", title: "Validity", render: (row) => `${row.link_validity_days ?? 30} days` },
+              { key: "last_accessed_at", title: "Last Viewed", render: (row) => row.last_accessed_at ? formatDate(row.last_accessed_at) : "Never" },
               { key: "access", title: "Magic Link", render: (row) => <span className="helper-text">{buildLookbookUrl(row.access_token)}</span> },
               {
                 key: "actions",
@@ -126,6 +160,49 @@ export function RetailerDetailPage() {
             rows={data.buyers}
           />
         </div>
+      </div>
+      <div className="split-grid">
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Buyer Engagement</h3></div>
+          <div className="scroll-panel">
+            <DataTable
+              emptyMessage="No buyer engagement yet for this retailer."
+              columns={[
+                {
+                  key: "buyerName",
+                  title: "Buyer",
+                  render: (row) => (
+                    <div className="cell-stack">
+                      <strong>{row.buyerName}</strong>
+                      <span className="helper-text">{row.buyerEmail}</span>
+                    </div>
+                  ),
+                },
+                { key: "totalViews", title: "Views", render: (row) => row.totalViews },
+                { key: "totalDraftSaves", title: "Drafts", render: (row) => row.totalDraftSaves },
+                { key: "totalQuoteRequests", title: "Quotes", render: (row) => row.totalQuoteRequests },
+                { key: "totalSubmissions", title: "Submits", render: (row) => row.totalSubmissions },
+                { key: "activeOrderStatus", title: "Active Order", render: (row) => row.activeOrderStatus ? <StatusBadge label={row.activeOrderStatus} /> : "None" },
+                { key: "lastViewedAt", title: "Last Viewed", render: (row) => row.lastViewedAt ? formatDate(row.lastViewedAt) : "Never" },
+              ]}
+              rows={data.buyerAnalytics}
+            />
+          </div>
+        </div>
+        <div className="panel section-stack">
+          <div className="panel-header"><h3>Recent Lookbook Activity</h3></div>
+          <div className="timeline scroll-panel">
+            {data.recentLookbookActivity.length ? data.recentLookbookActivity.map((entry) => (
+              <div key={`${entry.buyerId ?? "unknown"}-${entry.createdAt}-${entry.eventType}`} className="timeline-item">
+                <strong>{formatLookbookEventLabel(entry.eventType)}</strong>
+                <p>{entry.buyerName}{entry.buyerEmail ? ` | ${entry.buyerEmail}` : ""}</p>
+                <span className="muted">{formatDate(entry.createdAt)}</span>
+              </div>
+            )) : <div className="empty-state">No lookbook activity recorded yet.</div>}
+          </div>
+        </div>
+      </div>
+      <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header"><h3>Top SKUs</h3></div>
           <DataTable
@@ -170,6 +247,7 @@ export function RetailerDetailPage() {
             compliance_requirements: editingBuyer.compliance_requirements ?? "",
             assigned_sales_rep: editingBuyer.assigned_sales_rep ?? "",
             lookbook_template_id: editingBuyer.lookbook_template_id ?? "",
+            link_validity_days: editingBuyer.link_validity_days ?? 30,
             order_mode_enabled: editingBuyer.order_mode_enabled ?? true,
             token_expires_at: editingBuyer.token_expires_at ?? "",
           }}
@@ -181,6 +259,7 @@ export function RetailerDetailPage() {
             { key: "payment_terms", label: "Payment Terms" },
             { key: "assigned_sales_rep", label: "Assigned Sales Rep" },
             { key: "lookbook_template_id", label: "Lookbook Template", type: "select", options: data.lookbookTemplates.map((template) => ({ label: template.name, value: template.id })) },
+            { key: "link_validity_days", label: "Link Validity (days)", type: "number", min: 1, step: 1 },
             { key: "billing_address", label: "Billing Address", type: "textarea" },
             { key: "shipping_address", label: "Shipping Address", type: "textarea" },
             { key: "compliance_requirements", label: "Compliance Requirements", type: "textarea" },
@@ -192,6 +271,7 @@ export function RetailerDetailPage() {
               ...editingBuyer,
               ...values,
               retailer_id: data.retailer.id,
+              link_validity_days: Number(values.link_validity_days ?? 30),
             });
             await reload();
             setNotice({ tone: "success", message: editingBuyer.id ? "Buyer updated successfully." : "Buyer created successfully." });

@@ -52,7 +52,7 @@ export function RetailersPage() {
       <PageHeader
         title="Accounts"
         description="Operate wholesale retailer accounts with quick access to contacts, SOP notes, shipping requirements, account numbers, reorder windows, and recent PO activity."
-        actions={<button className="btn btn-primary" onClick={() => setEditing({ name: "", status: "Prospect" })}>Add Account</button>}
+        actions={<button className="btn btn-primary" onClick={() => setEditing({ name: "", status: "Prospect", order_mode_policy: "enabled", edi_required: false })}>Add Account</button>}
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="panel">
@@ -111,7 +111,13 @@ export function RetailersPage() {
             activation_id: editing.activation_id ?? "",
             retailer_group: editing.retailer_group ?? "",
             parent_retailer_id: editing.parent_retailer_id ?? "",
+            logo_url: editing.logo_url ?? "",
+            brand_accent_color: editing.brand_accent_color ?? "#e72027",
+            lookbook_intro: editing.lookbook_intro ?? "",
             ordering_cadence_days: editing.ordering_cadence_days ?? 0,
+            default_payment_terms: editing.default_payment_terms ?? "",
+            order_mode_policy: editing.order_mode_policy ?? "enabled",
+            edi_required: editing.edi_required ?? false,
             next_reorder_start: editing.next_reorder_start ?? "",
             next_reorder_end: editing.next_reorder_end ?? "",
             shipping_requirements: editing.shipping_requirements ?? "",
@@ -125,15 +131,21 @@ export function RetailersPage() {
             { key: "supplier_id", label: "Supplier ID" },
             { key: "activation_id", label: "Activation ID" },
             { key: "retailer_group", label: "Parent / Group" },
+            { key: "logo_url", label: "Retailer Logo URL" },
+            { key: "brand_accent_color", label: "Brand Accent Color" },
             { key: "primary_contact_name", label: "Primary Contact" },
             { key: "primary_contact_email", label: "Email" },
             { key: "primary_contact_phone", label: "Phone" },
             { key: "ordering_cadence_days", label: "Ordering Cadence (days)", type: "number", min: 0, step: 1 },
+            { key: "default_payment_terms", label: "Default Payment Terms" },
+            { key: "order_mode_policy", label: "Order Mode Policy", type: "select", options: [{ label: "Enabled", value: "enabled" }, { label: "Catalog Only", value: "catalog_only" }, { label: "EDI Only", value: "edi_only" }] },
+            { key: "edi_required", label: "EDI Required", type: "checkbox" },
             { key: "next_reorder_start", label: "Next Reorder Start", type: "date" },
             { key: "next_reorder_end", label: "Next Reorder End", type: "date" },
             { key: "secondary_contacts", label: "Additional Contacts", type: "textarea" },
             { key: "shipping_requirements", label: "Shipping Requirements", type: "textarea" },
             { key: "sop_notes", label: "SOP Notes", type: "textarea" },
+            { key: "lookbook_intro", label: "Lookbook Intro", type: "textarea" },
             { key: "notes", label: "Notes", type: "textarea" },
           ]}
           onSave={async (values) => {
@@ -150,7 +162,13 @@ export function RetailersPage() {
               activation_id: values.activation_id ? String(values.activation_id) : null,
               retailer_group: values.retailer_group ? String(values.retailer_group) : null,
               parent_retailer_id: values.parent_retailer_id ? String(values.parent_retailer_id) : null,
+              logo_url: values.logo_url ? String(values.logo_url) : null,
+              brand_accent_color: values.brand_accent_color ? String(values.brand_accent_color) : null,
+              lookbook_intro: values.lookbook_intro ? String(values.lookbook_intro) : null,
               ordering_cadence_days: Number(values.ordering_cadence_days ?? 0) || null,
+              default_payment_terms: values.default_payment_terms ? String(values.default_payment_terms) : null,
+              order_mode_policy: (values.order_mode_policy ? String(values.order_mode_policy) : "enabled") as Retailer["order_mode_policy"],
+              edi_required: Boolean(values.edi_required),
               next_reorder_start: values.next_reorder_start ? String(values.next_reorder_start) : null,
               next_reorder_end: values.next_reorder_end ? String(values.next_reorder_end) : null,
               shipping_requirements: values.shipping_requirements ? String(values.shipping_requirements) : null,

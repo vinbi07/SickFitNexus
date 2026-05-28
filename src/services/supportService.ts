@@ -5,13 +5,17 @@ import { getErrorMessage } from "@/utils/errors";
 import type {
   AppSettings,
   Comment,
+  GeneratedPurchaseOrderDocument,
   InventoryEvent,
   InventoryItem,
+  InventoryReservation,
   Location,
   Person,
+  PoLineItem,
   ProductBarcode,
   ProductBarcodeLink,
   Product,
+  PurchaseOrder,
   Sop,
   TrainingModule,
   TrainingProgress,
@@ -234,6 +238,46 @@ export const supportService = {
         })),
       ),
     );
+  },
+  getProductDetail: async (id: string) => {
+    const supabase = assertSupabase();
+    const [productResponse, vendorsResponse, eventsResponse, reservationsResponse, lineItemsResponse, generatedDocsResponse] = await Promise.all([
+      supabase
+        .from("products")
+        .select("*, vendors:vendors!products_vendor_id_fkey(*), product_barcode_links(*, product_barcodes(*))")
+        .eq("id", id)
+        .single(),
+      supabase.from("vendors").select("*"),
+      supabase.from("inventory_events").select("*").eq("product_id", id).order("event_date", { ascending: false }),
+      supabase.from("inventory_reservations").select("*").eq("product_id", id).order("created_at", { ascending: false }),
+      supabase.from("po_line_items").select("*, purchase_orders(*)").eq("product_id", id).order("created_at", { ascending: false }),
+      supabase.from("generated_purchase_order_documents").select("*").order("created_at", { ascending: false }),
+    ]);
+    if (productResponse.error) throw productResponse.error;
+    if (vendorsResponse.error) throw vendorsResponse.error;
+    if (eventsResponse.error) throw eventsResponse.error;
+    if (reservationsResponse.error) throw reservationsResponse.error;
+    if (lineItemsResponse.error) throw lineItemsResponse.error;
+    if (generatedDocsResponse.error) throw generatedDocsResponse.error;
+
+    const calculated = applyCalculatedSafetyStock(
+      [productResponse.data as Product],
+      (vendorsResponse.data ?? []) as Vendor[],
+      (eventsResponse.data ?? []) as InventoryEvent[],
+    )[0];
+
+    return {
+      product: attachVariantRelations([
+        {
+          ...calculated,
+          inventory_available: deriveInventoryAvailable(calculated),
+        },
+      ])[0],
+      events: (eventsResponse.data ?? []) as InventoryEvent[],
+      reservations: (reservationsResponse.data ?? []) as InventoryReservation[],
+      poLineItems: (lineItemsResponse.data ?? []) as Array<PoLineItem & { purchase_orders?: PurchaseOrder | null }>,
+      generatedDocuments: (generatedDocsResponse.data ?? []) as GeneratedPurchaseOrderDocument[],
+    };
   },
   saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),

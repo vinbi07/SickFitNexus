@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
@@ -31,6 +31,7 @@ export function LookbookOrderPage() {
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState<PurchaseOrder | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [hydratedDraftId, setHydratedDraftId] = useState<string | null>(null);
 
   const selectedProducts = useMemo(() => {
     if (!data) return [];
@@ -54,8 +55,26 @@ export function LookbookOrderPage() {
 
   const displayProducts = useMemo(() => sortProductsByFamily(data?.products ?? []), [data]);
 
+  useEffect(() => {
+    if (!data?.existingDraft?.id || hydratedDraftId === data.existingDraft.id) return;
+    const nextQuantities = data.existingDraftLineItems.reduce<Record<string, number>>((accumulator, line) => {
+      if (line.product_id) {
+        accumulator[line.product_id] = Number(line.case_quantity ?? 0);
+      }
+      return accumulator;
+    }, {});
+    setQuantities(nextQuantities);
+    setNotes(data.existingDraft.buyer_notes ?? data.existingDraft.notes ?? "");
+    setHydratedDraftId(data.existingDraft.id);
+  }, [data, hydratedDraftId]);
+
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load this lookbook"} />;
+
+  const orderingDisabled = !data.buyer.order_mode_enabled || data.retailer.order_mode_policy !== "enabled" || data.retailer.edi_required;
+  const accentColor = data.retailer.brand_accent_color ?? "#e72027";
+  const activeOrderState = data.existingDraft?.status ?? null;
+  const primarySubmitLabel = activeOrderState === "Countered" ? "Submit Revised PO" : "Submit PO to SickFit";
 
   async function handleSave(action: "draft" | "quote" | "submit") {
     try {
@@ -95,7 +114,7 @@ export function LookbookOrderPage() {
 
   if (submitted) {
     return (
-      <div className="lookbook-shell">
+      <div className="lookbook-shell" style={{ ["--lookbook-accent" as never]: accentColor }}>
         <div className="lookbook-confirmation card">
           <div className="lookbook-confirmation-mark">OK</div>
           <h1>Order submitted</h1>
@@ -107,16 +126,61 @@ export function LookbookOrderPage() {
     );
   }
 
-  return (
-    <div className="lookbook-shell">
-      <div className="lookbook-hero">
-        <div>
-          <p className="lookbook-kicker">Order mode | {data.retailer.name} can submit a PO from this page</p>
-          <h1>SickFit Wholesale Lookbook</h1>
-          <span>{data.buyer.buyer_name} | {data.buyer.payment_terms ?? "Terms pending"}</span>
+  if (data.expired) {
+    return (
+      <div className="lookbook-shell" style={{ ["--lookbook-accent" as never]: accentColor }}>
+        <div className="lookbook-hero">
+          <div>
+            <p className="lookbook-kicker">{data.retailer.name} | Buyer showroom</p>
+            <h1>SickFit Wholesale Lookbook</h1>
+            <span>This link has expired. Contact SickFit for a refreshed buyer link.</span>
+          </div>
+        </div>
+        <div className="lookbook-confirmation card">
+          <div className="lookbook-confirmation-mark">!</div>
+          <h1>Link expired</h1>
+          <p>{data.retailer.lookbook_intro ?? "This personalized wholesale showroom is no longer active."}</p>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="lookbook-shell" style={{ ["--lookbook-accent" as never]: accentColor }}>
+      <div className="lookbook-hero">
+        <div>
+          <p className="lookbook-kicker">{data.retailer.name} | {orderingDisabled ? "Catalog experience" : "Order mode"}</p>
+          <h1>SickFit Wholesale Lookbook</h1>
+          <span>{data.buyer.buyer_name} | {data.buyer.payment_terms ?? "Terms pending"}</span>
+          {data.retailer.lookbook_intro ? <p className="lookbook-intro">{data.retailer.lookbook_intro}</p> : null}
+        </div>
+        {data.retailer.logo_url ? (
+          <div className="lookbook-hero-logo">
+            <img src={data.retailer.logo_url} alt={`${data.retailer.name} logo`} />
+          </div>
+        ) : null}
+      </div>
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+      {activeOrderState === "Countered" ? (
+        <NotificationBanner tone="error" message={data.existingDraft?.internal_notes ?? "SickFit sent back a counter update for this order. Revise quantities below and resubmit in the same link."} />
+      ) : null}
+      {activeOrderState === "On Hold" ? (
+        <NotificationBanner tone="error" message={data.existingDraft?.hold_reason ?? "This order is waiting on compliance review. You can still review the assortment while SickFit follows up."} />
+      ) : null}
+      {activeOrderState === "Draft" ? (
+        <NotificationBanner tone="success" message="Your previous draft has been restored below so you can keep editing it." />
+      ) : null}
+      {activeOrderState === "Pending Approval" ? (
+        <NotificationBanner tone="success" message="Your order is already pending SickFit approval. You can review the saved order details below." />
+      ) : null}
+      {orderingDisabled ? (
+        <NotificationBanner
+          tone="error"
+          message={data.retailer.edi_required
+            ? "This retailer must submit purchase orders through the normal EDI channel."
+            : "Order mode is disabled for this retailer. Use the lookbook as a catalog and submit the PO through the normal channel."}
+        />
+      ) : null}
       {!data.products.length ? (
         <div className="empty-state">No products are available for ordering right now.</div>
       ) : (
@@ -232,6 +296,38 @@ export function LookbookOrderPage() {
               {totals.skuCount > 0 ? <span className="lookbook-summary-badge">{totals.skuCount} item{totals.skuCount !== 1 ? "s" : ""}</span> : null}
             </div>
 
+            {data.existingDraft ? (
+              <div className="lookbook-summary-section">
+                <p className="lookbook-summary-label">Live link status</p>
+                <div className="lookbook-line-item">
+                  <div className="lookbook-line-main">
+                    <strong className="lookbook-line-name">{data.existingDraft.po_number}</strong>
+                    <strong className="lookbook-line-price">{data.existingDraft.status}</strong>
+                  </div>
+                  <div className="lookbook-line-sub">
+                    <span>{data.existingDraft.requested_action} request</span>
+                    <span>{data.existingDraft.updated_at ? new Date(data.existingDraft.updated_at).toLocaleString() : ""}</span>
+                  </div>
+                </div>
+                {data.counterEvents.length ? (
+                  <div className="lookbook-line-list lookbook-scroll-area">
+                    {data.counterEvents.slice(0, 3).map((event) => (
+                      <div key={event.id} className="lookbook-line-item">
+                        <div className="lookbook-line-main">
+                          <strong className="lookbook-line-name">{event.event_type.replaceAll("_", " ")}</strong>
+                          <strong className="lookbook-line-price">{event.actor_label ?? "SickFit"}</strong>
+                        </div>
+                        <div className="lookbook-line-sub">
+                          <span>{event.notes ?? "No note provided"}</span>
+                          <span>{new Date(event.created_at).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="lookbook-summary-meta">
               <div>
                 <span>Ordering for</span>
@@ -242,7 +338,7 @@ export function LookbookOrderPage() {
             <div className="lookbook-summary-section">
               <p className="lookbook-summary-label">What you're ordering</p>
               {selectedProducts.length ? (
-                <div className="lookbook-line-list">
+                <div className="lookbook-line-list lookbook-scroll-area">
                   {selectedProducts.map((line) => {
                     const selectedProduct = data.products.find((product) => product.id === line.product_id);
                     const fallbackName = String(line.product_name ?? line.sku ?? "Selected item");
@@ -299,12 +395,20 @@ export function LookbookOrderPage() {
             </div>
 
             <div className="lookbook-actions">
-              <button className="btn btn-primary lookbook-submit-btn" disabled={Boolean(busyAction)} onClick={() => void handleSave("submit")}>
-                {busyAction === "submit" ? "Submitting..." : "Submit PO to SickFit"}
-              </button>
-              <div className="lookbook-secondary-actions">
-                <button className="btn btn-ghost" disabled={Boolean(busyAction)} onClick={() => void handleSave("quote")}>{busyAction === "quote" ? "Saving..." : "Request Quote"}</button>
-              </div>
+              {!orderingDisabled ? (
+                <>
+                  <button className="btn btn-primary lookbook-submit-btn" disabled={Boolean(busyAction)} onClick={() => void handleSave("submit")}>
+                    {busyAction === "submit" ? "Submitting..." : primarySubmitLabel}
+                  </button>
+                  <div className="lookbook-secondary-actions">
+                    <button className="btn btn-ghost" disabled={Boolean(busyAction)} onClick={() => void handleSave("quote")}>{busyAction === "quote" ? "Saving..." : "Request Quote"}</button>
+                  </div>
+                </>
+              ) : (
+                <div className="lookbook-secondary-actions">
+                  <button className="btn btn-secondary" disabled>Use Normal PO Channel</button>
+                </div>
+              )}
             </div>
           </aside>
         </div>

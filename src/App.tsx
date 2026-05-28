@@ -16,6 +16,7 @@ import { TrainingPage } from "@/pages/TrainingPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { LocationsPage } from "@/pages/LocationsPage";
 import { ProductsPage } from "@/pages/ProductsPage";
+import { ProductDetailPage } from "@/pages/ProductDetailPage";
 import { BarcodesPage } from "@/pages/BarcodesPage";
 import { RetailersPage } from "@/pages/RetailersPage";
 import { RetailerDetailPage } from "@/pages/RetailerDetailPage";
@@ -23,6 +24,7 @@ import { CompliancePage } from "@/pages/CompliancePage";
 import { ProductionPage } from "@/pages/ProductionPage";
 import { LookbookOrderPage } from "@/pages/LookbookOrderPage";
 import { LookbookTemplatesPage } from "@/pages/LookbookTemplatesPage";
+import { PendingQueuePage } from "@/pages/PendingQueuePage";
 import { AppShell } from "@/components/AppShell";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
 
@@ -30,6 +32,7 @@ const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/imports", label: "CSV Imports" },
   { to: "/purchase-orders", label: "Purchase Orders" },
+  { to: "/pending-queue", label: "Pending Queue" },
   { to: "/inventory", label: "Inventory" },
   { to: "/vendors", label: "Vendors" },
   { to: "/retailers", label: "Accounts" },
@@ -89,6 +92,7 @@ export default function App() {
               <Route path="/imports" element={<CsvImportsPage />} />
               <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
               <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
+              <Route path="/pending-queue" element={<PendingQueuePage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/vendors" element={<VendorsPage />} />
               <Route path="/retailers" element={<RetailersPage />} />
@@ -97,6 +101,7 @@ export default function App() {
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/:id" element={<ProductDetailPage />} />
               <Route path="/barcodes" element={<BarcodesPage />} />
               <Route path="/lookbook-templates" element={<LookbookTemplatesPage />} />
               <Route path="/alerts" element={<AlertsPage />} />

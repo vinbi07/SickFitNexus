@@ -1,6 +1,16 @@
 import { assertSupabase } from "@/lib/supabase";
 import { deleteFromTable, upsertTable } from "@/services/baseService";
-import type { Buyer, LookbookTemplate, PoLineItem, Product, PurchaseOrder, Retailer } from "@/types/domain";
+import type {
+  Buyer,
+  LookbookTemplate,
+  LookbookView,
+  PoLineItem,
+  Product,
+  PurchaseOrder,
+  Retailer,
+  RetailerBuyerAnalytics,
+  RetailerLookbookActivity,
+} from "@/types/domain";
 import { addDays, toDateInput } from "@/utils/date";
 import { getInvoiceStatus } from "@/utils/operations";
 
@@ -20,6 +30,12 @@ function toRetailerWritePayload(payload: Partial<Retailer>): Partial<Retailer> {
     sop_notes: payload.sop_notes,
     parent_retailer_id: payload.parent_retailer_id,
     retailer_group: payload.retailer_group,
+    logo_url: payload.logo_url,
+    brand_accent_color: payload.brand_accent_color,
+    lookbook_intro: payload.lookbook_intro,
+    default_payment_terms: payload.default_payment_terms,
+    order_mode_policy: payload.order_mode_policy,
+    edi_required: payload.edi_required,
     ordering_cadence_days: payload.ordering_cadence_days,
     next_reorder_start: payload.next_reorder_start,
     next_reorder_end: payload.next_reorder_end,
@@ -116,6 +132,7 @@ export const retailerService = {
       productsResponse,
       buyersResponse,
       templatesResponse,
+      lookbookViewsResponse,
     ] = await Promise.all([
       supabase.from("retailers").select("*").eq("id", id).single(),
       supabase.from("retailers").select("*").order("name", { ascending: true }),
@@ -125,6 +142,7 @@ export const retailerService = {
       supabase.from("products").select("*"),
       supabase.from("buyers").select("*, lookbook_templates(*)").eq("retailer_id", id).order("buyer_name", { ascending: true }),
       supabase.from("lookbook_templates").select("*").order("name", { ascending: true }),
+      supabase.from("lookbook_views").select("*").eq("retailer_id", id).order("created_at", { ascending: false }),
     ]);
 
     if (retailerResponse.error) throw retailerResponse.error;
@@ -135,6 +153,7 @@ export const retailerService = {
     if (productsResponse.error) throw productsResponse.error;
     if (buyersResponse.error) throw buyersResponse.error;
     if (templatesResponse.error) throw templatesResponse.error;
+    if (lookbookViewsResponse.error) throw lookbookViewsResponse.error;
 
     const retailer = retailerResponse.data as Retailer;
     const allRetailers = (retailersResponse.data ?? []) as Retailer[];
@@ -144,7 +163,9 @@ export const retailerService = {
     const products = (productsResponse.data ?? []) as Product[];
     const buyers = (buyersResponse.data ?? []) as Buyer[];
     const lookbookTemplates = (templatesResponse.data ?? []) as LookbookTemplate[];
+    const lookbookViews = (lookbookViewsResponse.data ?? []) as LookbookView[];
     const productById = new Map(products.map((product) => [product.id, product]));
+    const buyersById = new Map(buyers.map((buyer) => [buyer.id, buyer]));
     const lineItemsByPo = new Map<string, PoLineItem[]>();
     lineItems.forEach((item) => {
       const current = lineItemsByPo.get(item.purchase_order_id) ?? [];
@@ -175,6 +196,51 @@ export const retailerService = {
       ? allRetailers.find((entry) => entry.id === retailer.parent_retailer_id) ?? null
       : null;
     const childRetailers = allRetailers.filter((entry) => entry.parent_retailer_id === retailer.id);
+    const purchaseOrdersByBuyer = new Map<string, PurchaseOrder[]>();
+    purchaseOrders.forEach((po) => {
+      if (!po.buyer_id) return;
+      const current = purchaseOrdersByBuyer.get(po.buyer_id) ?? [];
+      current.push(po);
+      purchaseOrdersByBuyer.set(po.buyer_id, current);
+    });
+
+    const buyerAnalytics: RetailerBuyerAnalytics[] = buyers.map((buyer) => {
+      const views = lookbookViews.filter((view) => view.buyer_id === buyer.id);
+      const activeOrder = (purchaseOrdersByBuyer.get(buyer.id) ?? [])
+        .slice()
+        .sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0];
+
+      return {
+        buyerId: buyer.id,
+        buyerName: buyer.buyer_name,
+        buyerEmail: buyer.buyer_email,
+        orderModeEnabled: buyer.order_mode_enabled,
+        linkValidityDays: buyer.link_validity_days,
+        lastViewedAt: views.find((view) => view.event_type === "opened")?.created_at ?? buyer.last_accessed_at ?? null,
+        totalViews: views.filter((view) => view.event_type === "opened").length,
+        totalDraftSaves: views.filter((view) => view.event_type === "draft_saved").length,
+        totalQuoteRequests: views.filter((view) => view.event_type === "quote_requested").length,
+        totalSubmissions: views.filter((view) => view.event_type === "submitted").length,
+        activeOrderStatus: activeOrder?.status ?? null,
+        activeOrderUpdatedAt: activeOrder?.updated_at ?? null,
+      };
+    }).sort((left, right) => {
+      const leftViews = left.lastViewedAt ?? "";
+      const rightViews = right.lastViewedAt ?? "";
+      return rightViews.localeCompare(leftViews);
+    });
+
+    const recentLookbookActivity: RetailerLookbookActivity[] = lookbookViews.slice(0, 12).map((view) => {
+      const buyer = view.buyer_id ? buyersById.get(view.buyer_id) : null;
+      return {
+        buyerId: view.buyer_id,
+        buyerName: buyer?.buyer_name ?? "Unknown buyer",
+        buyerEmail: buyer?.buyer_email ?? null,
+        eventType: view.event_type,
+        createdAt: view.created_at,
+        metadata: view.metadata ?? {},
+      };
+    });
 
     return {
       retailer,
@@ -187,6 +253,15 @@ export const retailerService = {
       openInvoices,
       shippedInvoices,
       inRouteInvoices,
+      lookbookAnalytics: {
+        totalViews: lookbookViews.filter((view) => view.event_type === "opened").length,
+        totalDraftSaves: lookbookViews.filter((view) => view.event_type === "draft_saved").length,
+        totalQuoteRequests: lookbookViews.filter((view) => view.event_type === "quote_requested").length,
+        totalSubmissions: lookbookViews.filter((view) => view.event_type === "submitted").length,
+        lastViewedAt: lookbookViews.find((view) => view.event_type === "opened")?.created_at ?? null,
+      },
+      buyerAnalytics,
+      recentLookbookActivity,
       topSkus: [...topSkuMap.values()].sort((left, right) => right.units - left.units).slice(0, 8),
       recentPos: purchaseOrders.slice(0, 8),
     };

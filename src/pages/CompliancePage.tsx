@@ -27,6 +27,7 @@ export function CompliancePage() {
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       matrix: await complianceService.getMatrix(),
+      holds: await complianceService.listHolds(),
       retailers: await retailerService.list(),
       requirementTypes: await complianceService.listRequirementTypes(),
     }),
@@ -93,6 +94,36 @@ export function CompliancePage() {
         ]}
         rows={data.matrix}
       />
+      <div className="panel section-stack">
+        <div className="panel-header"><h3>Compliance Hold Queue</h3></div>
+        <DataTable
+          emptyMessage="No compliance holds are open."
+          columns={[
+            { key: "summary", title: "Summary", render: (row) => row.summary },
+            { key: "retailer", title: "Retailer", render: (row) => row.retailers?.name ?? "N/A" },
+            { key: "missing_docs", title: "Missing Docs", render: (row) => row.missing_docs.join(", ") || "None" },
+            { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
+            {
+              key: "actions",
+              title: "Actions",
+              render: (row) => (
+                <button
+                  className="btn btn-secondary btn-small"
+                  disabled={row.status !== "Open"}
+                  onClick={async () => {
+                    await complianceService.resolveHold(row.id, "Resolved from compliance queue.");
+                    await reload();
+                    setNotice({ tone: "success", message: "Compliance hold resolved." });
+                  }}
+                >
+                  Resolve
+                </button>
+              ),
+            },
+          ]}
+          rows={data.holds}
+        />
+      </div>
       {editing ? (
         <EntityFormModal<typeof editing>
           title="Add Compliance Requirement"

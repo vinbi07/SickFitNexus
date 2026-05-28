@@ -22,10 +22,13 @@ import { formatCurrency, formatDate } from "@/utils/format";
 const purchaseOrderStatuses: PurchaseOrderStatus[] = [
   "Draft",
   "Pending",
+  "On Hold",
+  "Countered",
   "Ordered",
   "In Transit",
   "Partially Received",
   "Received",
+  "Fulfilled",
   "Cancelled",
   "Delayed",
   "Issue Flagged",
@@ -373,11 +376,11 @@ export function PurchaseOrdersPage() {
     return new Date(left.expected_delivery_date ?? "").getTime() - new Date(right.expected_delivery_date ?? "").getTime();
   });
 
-  const openOrders = data.purchaseOrders.filter((po) => !["Received", "Closed", "Cancelled"].includes(po.status));
+  const openOrders = data.purchaseOrders.filter((po) => !["Received", "Closed", "Cancelled", "Fulfilled"].includes(po.status));
   const pendingOrders = data.purchaseOrders.filter((po) => po.status === "Pending");
   const pendingApprovalOrders = data.purchaseOrders.filter((po) => po.approval_status === "Pending Approval");
   const inTransitOrders = data.purchaseOrders.filter((po) => po.status === "In Transit");
-  const deliveredRecent = data.purchaseOrders.filter((po) => po.status === "Received" || po.status === "Closed");
+  const deliveredRecent = data.purchaseOrders.filter((po) => ["Received", "Closed", "Fulfilled"].includes(po.status));
 
   return (
     <div className="section-stack">
