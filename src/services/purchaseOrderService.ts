@@ -70,6 +70,11 @@ function normalizeOptionalDate(value: string | null | undefined) {
   return text ? text : null;
 }
 
+function normalizeOptionalText(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  return text ? text : null;
+}
+
 function escapeHtml(value: string | null | undefined) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -104,9 +109,6 @@ function buildGeneratedDocumentHtml(
   return `
     <style>${styles}</style>
     <div class="po-wrap">
-      <div class="po-banner">
-        <span>${escapeHtml(model.banner)}</span>
-      </div>
       <div class="po-doc">
         <div class="po-head">
           <div class="l">
@@ -283,6 +285,19 @@ async function upsertReservationLedger(
 }
 
 export const purchaseOrderService = {
+  async generatePoNumber() {
+    const supabase = assertSupabase();
+    const dateStamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const prefix = `PO-${dateStamp}`;
+    const { data, error } = await supabase
+      .from("purchase_orders")
+      .select("po_number")
+      .ilike("po_number", `${prefix}%`);
+    if (error) throw error;
+    const sequence = String((data ?? []).length + 1).padStart(4, "0");
+    return `${prefix}-${sequence}`;
+  },
+
   async list(filters?: {
     status?: string;
     vendorId?: string;
@@ -448,6 +463,7 @@ export const purchaseOrderService = {
       unit_retail: Number(item.unit_retail ?? 0),
       extended_cost: Number(item.extended_cost ?? Number(item.quantity_ordered ?? 0) * Number(item.unit_cost ?? 0)),
       extended_retail: Number(item.extended_retail ?? 0),
+      sort_order: Number(item.sort_order ?? 0),
     }));
     const totalCost = normalizedLineItems.reduce((sum, item) => sum + Number(item.extended_cost ?? item.line_total ?? 0), 0);
     const totalUnits = normalizedLineItems.reduce((sum, item) => sum + Number(item.unit_quantity ?? item.quantity_ordered ?? 0), 0);
@@ -464,6 +480,24 @@ export const purchaseOrderService = {
       invoice_status: purchaseOrderPayload.invoice_status ?? null,
       invoice_paid_at: normalizeOptionalDate(purchaseOrderPayload.invoice_paid_at),
       shipment_status: purchaseOrderPayload.shipment_status ? String(purchaseOrderPayload.shipment_status) : null,
+      bill_to_company_name: normalizeOptionalText(purchaseOrderPayload.bill_to_company_name),
+      bill_to_contact_name: normalizeOptionalText(purchaseOrderPayload.bill_to_contact_name),
+      bill_to_street: normalizeOptionalText(purchaseOrderPayload.bill_to_street),
+      bill_to_city: normalizeOptionalText(purchaseOrderPayload.bill_to_city),
+      bill_to_state: normalizeOptionalText(purchaseOrderPayload.bill_to_state),
+      bill_to_zip: normalizeOptionalText(purchaseOrderPayload.bill_to_zip),
+      bill_to_phone: normalizeOptionalText(purchaseOrderPayload.bill_to_phone),
+      bill_to_email: normalizeOptionalText(purchaseOrderPayload.bill_to_email),
+      ship_to_company_name: normalizeOptionalText(purchaseOrderPayload.ship_to_company_name),
+      ship_to_attention: normalizeOptionalText(purchaseOrderPayload.ship_to_attention),
+      ship_to_street: normalizeOptionalText(purchaseOrderPayload.ship_to_street),
+      ship_to_city: normalizeOptionalText(purchaseOrderPayload.ship_to_city),
+      ship_to_state: normalizeOptionalText(purchaseOrderPayload.ship_to_state),
+      ship_to_zip: normalizeOptionalText(purchaseOrderPayload.ship_to_zip),
+      ship_to_phone: normalizeOptionalText(purchaseOrderPayload.ship_to_phone),
+      payment_terms_snapshot: normalizeOptionalText(purchaseOrderPayload.payment_terms_snapshot),
+      buyer_name_snapshot: normalizeOptionalText(purchaseOrderPayload.buyer_name_snapshot),
+      approver_name_snapshot: normalizeOptionalText(purchaseOrderPayload.approver_name_snapshot),
       total_cost: totalCost,
       subtotal: Number(purchaseOrderPayload.subtotal ?? totalCost),
       total_units: Number(purchaseOrderPayload.total_units ?? totalUnits),

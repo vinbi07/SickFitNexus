@@ -22,9 +22,6 @@ export function PurchaseOrderDocumentView({
   return (
     <div className="po-wrap">
       <style>{getPurchaseOrderDocumentStyles()}</style>
-      <div className="po-banner">
-        <span>{documentModel.banner}</span>
-      </div>
       <div className="po-doc">
         <div className="po-head">
           <div className="l">

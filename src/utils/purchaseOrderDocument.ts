@@ -37,7 +37,7 @@ export type PurchaseOrderDocumentModel = {
 };
 
 export function formatPoDate(value: string | null | undefined) {
-  if (!value) return "TBD";
+  if (!value) return "";
   return new Intl.DateTimeFormat("en-US", {
     month: "2-digit",
     day: "2-digit",
@@ -68,10 +68,11 @@ export function buildPurchaseOrderDocumentModel(
   retailer?: Retailer | null,
 ): PurchaseOrderDocumentModel {
   const submittedDate = purchaseOrder.submitted_at ?? purchaseOrder.order_date ?? purchaseOrder.created_at ?? null;
-  const billToName = buyer?.company_name ?? retailer?.name ?? "Retailer Account";
-  const shipToName = buyer?.company_name ?? retailer?.name ?? "Retailer Account";
-  const buyerName = buyer?.buyer_name ?? "Buyer";
-  const approverName = purchaseOrder.approved_by ?? retailer?.name ?? "Pending approval";
+  const submittedDateLabel = formatPoDate(submittedDate);
+  const billToName = purchaseOrder.bill_to_company_name ?? buyer?.company_name ?? retailer?.name ?? "Retailer Account";
+  const shipToName = purchaseOrder.ship_to_company_name ?? buyer?.company_name ?? retailer?.name ?? "Retailer Account";
+  const buyerName = purchaseOrder.buyer_name_snapshot ?? buyer?.buyer_name ?? "Buyer";
+  const approverName = purchaseOrder.approver_name_snapshot ?? purchaseOrder.approved_by ?? retailer?.name ?? "Pending approval";
   const lineModels = lineItems.map((item, index) => ({
     index: index + 1,
     sku: String(item.sku ?? "N/A"),
@@ -87,7 +88,9 @@ export function buildPurchaseOrderDocumentModel(
 
   return {
     logoSrc: "/assets/SickFit Logo.png",
-    banner: `Auto-generated · ${buyerName} submitted via Look Book on ${formatPoDate(submittedDate)}`,
+    banner: submittedDateLabel
+      ? `Auto-generated · ${buyerName} submitted via Look Book on ${submittedDateLabel}`
+      : `Auto-generated · ${buyerName} submitted via Look Book`,
     poNumber: String(purchaseOrder.po_number ?? "Pending"),
     orderDate: formatPoDate(purchaseOrder.order_date),
     startShipDate: formatPoDate(purchaseOrder.start_ship_date ?? purchaseOrder.ship_date),
@@ -95,19 +98,25 @@ export function buildPurchaseOrderDocumentModel(
     currency: String(purchaseOrder.currency_code ?? "USD"),
     billToName,
     billToLines: compactLines(
-      `${buyerName}, Buyer`,
-      buyer?.billing_address,
-      buyer?.phone,
-      buyer?.buyer_email,
+      purchaseOrder.bill_to_contact_name ? `${purchaseOrder.bill_to_contact_name}, Buyer` : `${buyerName}, Buyer`,
+      compactLines(
+        purchaseOrder.bill_to_street,
+        [purchaseOrder.bill_to_city, purchaseOrder.bill_to_state, purchaseOrder.bill_to_zip].filter(Boolean).join(", "),
+      ).join("\n"),
+      purchaseOrder.bill_to_phone ?? buyer?.phone,
+      purchaseOrder.bill_to_email ?? buyer?.buyer_email,
     ),
     shipToName,
     shipToLines: compactLines(
-      `Attn: ${buyerName}`,
-      buyer?.shipping_address,
-      buyer?.phone,
+      `Attn: ${purchaseOrder.ship_to_attention ?? buyerName}`,
+      compactLines(
+        purchaseOrder.ship_to_street,
+        [purchaseOrder.ship_to_city, purchaseOrder.ship_to_state, purchaseOrder.ship_to_zip].filter(Boolean).join(", "),
+      ).join("\n"),
+      purchaseOrder.ship_to_phone ?? buyer?.phone,
       buyer?.compliance_requirements ? `Compliance: ${buyer.compliance_requirements}` : null,
     ),
-    paymentTerms: buyer?.payment_terms ?? retailer?.default_payment_terms ?? "Terms pending",
+    paymentTerms: purchaseOrder.payment_terms_snapshot ?? buyer?.payment_terms ?? retailer?.default_payment_terms ?? "Terms pending",
     buyerName,
     approverName,
     lines: lineModels,

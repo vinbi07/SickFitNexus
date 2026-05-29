@@ -5,6 +5,8 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { CsvImportsPage } from "@/pages/CsvImportsPage";
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage";
 import { PurchaseOrderDetailPage } from "@/pages/PurchaseOrderDetailPage";
+import { PurchaseOrderBuilderPage } from "@/pages/PurchaseOrderBuilderPage";
+import { PurchaseOrderPreviewPage } from "@/pages/PurchaseOrderPreviewPage";
 import { InventoryPage } from "@/pages/InventoryPage";
 import { VendorsPage } from "@/pages/VendorsPage";
 import { AlertsPage } from "@/pages/AlertsPage";
@@ -91,7 +93,10 @@ export default function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/imports" element={<CsvImportsPage />} />
               <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
+              <Route path="/purchase-orders/new" element={<PurchaseOrderBuilderPage />} />
               <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
+              <Route path="/purchase-orders/:id/edit" element={<PurchaseOrderBuilderPage />} />
+              <Route path="/purchase-orders/:id/preview" element={<PurchaseOrderPreviewPage />} />
               <Route path="/pending-queue" element={<PendingQueuePage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/vendors" element={<VendorsPage />} />

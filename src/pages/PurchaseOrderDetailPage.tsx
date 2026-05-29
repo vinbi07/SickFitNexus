@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { CommentsPanel } from "@/features/comments/CommentsPanel";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -13,6 +13,7 @@ import { purchaseOrderService } from "@/services/purchaseOrderService";
 import type { PurchaseOrderCounterEvent } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
 import { formatCurrency, formatDate } from "@/utils/format";
+import { printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
 
 function formatCounterEventTitle(event: PurchaseOrderCounterEvent) {
   switch (event.event_type) {
@@ -42,6 +43,7 @@ function formatCounterEventMeta(event: PurchaseOrderCounterEvent) {
 
 export function PurchaseOrderDetailPage() {
   const params = useParams();
+  const navigate = useNavigate();
   const poId = params.id ?? "";
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [newMessage, setNewMessage] = useState({
@@ -64,6 +66,7 @@ export function PurchaseOrderDetailPage() {
     data.purchaseOrder.invoice_paid_at && data.purchaseOrder.actual_delivery_date
       ? daysBetween(data.purchaseOrder.invoice_paid_at, data.purchaseOrder.actual_delivery_date)
       : null;
+  const generated = data.generatedDocuments[0];
 
   return (
     <div className="section-stack">
@@ -74,7 +77,28 @@ export function PurchaseOrderDetailPage() {
         actions={(
           <div className="btn-row">
             <StatusBadge label={data.purchaseOrder.status} />
-            <button className="btn btn-secondary btn-small" onClick={() => window.print()}>Preview / Print</button>
+            <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${poId}/edit`}>Edit PO</Link>
+            <button className="btn btn-secondary btn-small" onClick={() => navigate(`/purchase-orders/new?copyFrom=${poId}`)}>Duplicate PO</button>
+            <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${poId}/preview`}>Preview PO</Link>
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={() => {
+                if (generated) printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, generated.body_html);
+              }}
+            >
+              Print / Save PDF
+            </button>
+            <button
+              className="btn btn-ghost btn-small"
+              onClick={() => {
+                const recipients = [data.purchaseOrder.bill_to_email, data.purchaseOrder.retailers?.primary_contact_email]
+                  .filter(Boolean)
+                  .join(",");
+                window.location.href = `mailto:${encodeURIComponent(recipients)}?subject=${encodeURIComponent(`Purchase Order ${data.purchaseOrder.po_number}`)}&body=${encodeURIComponent(`Please review Purchase Order ${data.purchaseOrder.po_number}.\n\nPreview link: ${window.location.origin}/purchase-orders/${poId}/preview`)}`;
+              }}
+            >
+              Email PO
+            </button>
             <button className="btn btn-primary btn-small" onClick={async () => {
               try {
                 await purchaseOrderService.approve(poId);

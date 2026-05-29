@@ -72,7 +72,18 @@ async function getOrCreateDefaultLocation() {
 }
 
 async function saveProduct(payload: Partial<Product>) {
-  const { vendors: _vendors, parent_products: _parentProducts, variants: _variants, ...productPayload } = payload;
+  const {
+    vendors: _vendors,
+    parent_products: _parentProducts,
+    variants: _variants,
+    product_barcode_links: _productBarcodeLinks,
+    compliance_docs_required_input: _complianceDocsRequiredInput,
+    starting_inventory: _startingInventory,
+    ...productPayload
+  } = payload as Partial<Product> & {
+    compliance_docs_required_input?: string;
+    starting_inventory?: number;
+  };
   const isCreate = !productPayload.id;
   const startingInventory = Number(productPayload.current_inventory ?? 0);
   const [saved] = (await upsertTable<Product>("products", {
