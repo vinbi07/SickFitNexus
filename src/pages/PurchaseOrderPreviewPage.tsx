@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
+import { buildPurchaseOrderDocumentHtml } from "@/utils/purchaseOrderDocument";
 import { previewPurchaseOrderDocument, printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
 
 export function PurchaseOrderPreviewPage() {
@@ -15,7 +16,12 @@ export function PurchaseOrderPreviewPage() {
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load PO preview"} />;
 
-  const generated = data.generatedDocuments[0];
+  const currentDocumentHtml = buildPurchaseOrderDocumentHtml(
+    data.purchaseOrder,
+    data.lineItems,
+    data.purchaseOrder.buyers ?? null,
+    data.purchaseOrder.retailers ?? null,
+  );
 
   return (
     <div className="section-stack">
@@ -29,7 +35,7 @@ export function PurchaseOrderPreviewPage() {
             <button
               className="btn btn-secondary"
               onClick={() => {
-                if (generated) previewPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, generated.body_html);
+                previewPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, currentDocumentHtml);
               }}
             >
               Open Clean Preview
@@ -37,7 +43,7 @@ export function PurchaseOrderPreviewPage() {
             <button
               className="btn btn-primary"
               onClick={() => {
-                if (generated) printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, generated.body_html);
+                printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, currentDocumentHtml);
               }}
             >
               Print / Save PDF

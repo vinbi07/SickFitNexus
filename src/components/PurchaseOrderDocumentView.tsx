@@ -64,32 +64,50 @@ export function PurchaseOrderDocumentView({
           <div><div className="lab">Approver</div><div className="val">{documentModel.approverName}</div></div>
         </div>
         <div className="po-items">
-          <div className="h">
-            <div>#</div>
-            <div>SKU</div>
-            <div>Description</div>
-            <div>UPC</div>
-            <div>Unit</div>
-            <div className="r">Qty</div>
-            <div className="r">Unit Cost</div>
-            <div className="r">Ext. Cost</div>
-            <div className="r">Unit Retail</div>
-            <div className="r">Ext. Retail</div>
-          </div>
-          {documentModel.lines.map((line) => (
-            <div key={`${line.sku}-${line.index}`} className="row">
-              <div className="n">{line.index}</div>
-              <div className="code">{line.sku}</div>
-              <div>{line.description}</div>
-              <div className="code">{line.upc}</div>
-              <div className="r">{line.unit}</div>
-              <div className="r">{line.quantity}</div>
-              <div className="r">{formatPoCurrency(line.unitCost)}</div>
-              <div className="r">{formatPoCurrency(line.extendedCost)}</div>
-              <div className="r">{formatPoCurrency(line.unitRetail)}</div>
-              <div className="r">{formatPoCurrency(line.extendedRetail)}</div>
-            </div>
-          ))}
+          <table className="po-table">
+            <colgroup>
+              <col className="col-n" />
+              <col className="col-sku" />
+              <col className="col-description" />
+              <col className="col-upc" />
+              <col className="col-unit" />
+              <col className="col-qty" />
+              <col className="col-money" />
+              <col className="col-money" />
+              <col className="col-money" />
+              <col className="col-money-wide" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>SKU</th>
+                <th>Description</th>
+                <th>UPC</th>
+                <th>Unit</th>
+                <th className="r">Qty</th>
+                <th className="r">Unit Cost</th>
+                <th className="r">Ext. Cost</th>
+                <th className="r">Unit Retail</th>
+                <th className="r">Ext. Retail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {documentModel.lines.map((line) => (
+                <tr key={`${line.sku}-${line.index}`}>
+                  <td className="n">{line.index}</td>
+                  <td className="code">{line.sku}</td>
+                  <td>{line.description}</td>
+                  <td className="code">{line.upc}</td>
+                  <td className="r">{line.unit}</td>
+                  <td className="r">{line.quantity}</td>
+                  <td className="r">{formatPoCurrency(line.unitCost)}</td>
+                  <td className="r">{formatPoCurrency(line.extendedCost)}</td>
+                  <td className="r">{formatPoCurrency(line.unitRetail)}</td>
+                  <td className="r">{formatPoCurrency(line.extendedRetail)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <div className="po-totals">
           <div><div className="lab">Total Units</div><div className="val">{documentModel.totalUnits}</div></div>

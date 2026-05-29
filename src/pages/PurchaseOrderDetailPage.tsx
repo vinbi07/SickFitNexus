@@ -14,6 +14,7 @@ import type { PurchaseOrderCounterEvent } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
+import { buildPurchaseOrderDocumentHtml } from "@/utils/purchaseOrderDocument";
 
 function formatCounterEventTitle(event: PurchaseOrderCounterEvent) {
   switch (event.event_type) {
@@ -67,6 +68,12 @@ export function PurchaseOrderDetailPage() {
       ? daysBetween(data.purchaseOrder.invoice_paid_at, data.purchaseOrder.actual_delivery_date)
       : null;
   const generated = data.generatedDocuments[0];
+  const currentDocumentHtml = buildPurchaseOrderDocumentHtml(
+    data.purchaseOrder,
+    data.lineItems,
+    data.purchaseOrder.buyers ?? null,
+    data.purchaseOrder.retailers ?? null,
+  );
 
   return (
     <div className="section-stack">
@@ -79,15 +86,6 @@ export function PurchaseOrderDetailPage() {
             <StatusBadge label={data.purchaseOrder.status} />
             <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${poId}/edit`}>Edit PO</Link>
             <button className="btn btn-secondary btn-small" onClick={() => navigate(`/purchase-orders/new?copyFrom=${poId}`)}>Duplicate PO</button>
-            <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${poId}/preview`}>Preview PO</Link>
-            <button
-              className="btn btn-secondary btn-small"
-              onClick={() => {
-                if (generated) printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, generated.body_html);
-              }}
-            >
-              Print / Save PDF
-            </button>
             <button
               className="btn btn-ghost btn-small"
               onClick={() => {
@@ -180,7 +178,19 @@ export function PurchaseOrderDetailPage() {
         </div>
       </div>
       <div className="panel">
-        <div className="panel-header"><h3>PO Preview</h3></div>
+        <div className="panel-header">
+          <h3>PO Preview</h3>
+          <div className="btn-row">
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={() => {
+                printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, currentDocumentHtml);
+              }}
+            >
+              Print / Save PDF
+            </button>
+          </div>
+        </div>
         <PurchaseOrderDocumentView purchaseOrder={data.purchaseOrder} lineItems={data.lineItems} />
       </div>
       <div className="split-grid">

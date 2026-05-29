@@ -5,6 +5,7 @@ import { dashboardSessionService } from "@/services/dashboardSessionService";
 import { inventoryService } from "@/services/inventoryService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import {
+  buildPurchaseOrderDocumentHtml,
   buildPurchaseOrderDocumentModel,
   formatPoCurrency,
   getPurchaseOrderDocumentStyles,
@@ -75,13 +76,12 @@ function normalizeOptionalText(value: string | null | undefined) {
   return text ? text : null;
 }
 
-function escapeHtml(value: string | null | undefined) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function omitEmptyId<T extends { id?: string | null }>(payload: T): Omit<T, "id"> | T {
+  if (!payload.id) {
+    const { id: _id, ...rest } = payload;
+    return rest;
+  }
+  return payload;
 }
 
 function buildGeneratedDocumentHtml(
@@ -90,97 +90,7 @@ function buildGeneratedDocumentHtml(
   buyer?: Buyer | null,
   retailer?: Retailer | null,
 ) {
-  const model = buildPurchaseOrderDocumentModel(purchaseOrder, lineItems, buyer, retailer);
-  const styles = getPurchaseOrderDocumentStyles();
-  const linesMarkup = model.lines.map((line) => `
-    <div class="row">
-      <div class="n">${line.index}</div>
-      <div class="code">${escapeHtml(line.sku)}</div>
-      <div>${escapeHtml(line.description)}</div>
-      <div class="code">${escapeHtml(line.upc)}</div>
-      <div class="r">${escapeHtml(line.unit)}</div>
-      <div class="r">${line.quantity}</div>
-      <div class="r">${escapeHtml(formatPoCurrency(line.unitCost))}</div>
-      <div class="r">${escapeHtml(formatPoCurrency(line.extendedCost))}</div>
-      <div class="r">${escapeHtml(formatPoCurrency(line.unitRetail))}</div>
-      <div class="r">${escapeHtml(formatPoCurrency(line.extendedRetail))}</div>
-    </div>
-  `).join("");
-  return `
-    <style>${styles}</style>
-    <div class="po-wrap">
-      <div class="po-doc">
-        <div class="po-head">
-          <div class="l">
-            <div class="sf">
-              <img src="${escapeHtml(model.logoSrc)}" alt="SickFit logo" />
-            </div>
-            <div>
-              <div class="title">SICKFIT</div>
-              <div class="titlesub">Purchase Order</div>
-            </div>
-          </div>
-          <div class="r">
-            <div>1000 Ballpark Way</div>
-            <div>Arlington, TX 76011</div>
-            <div>sales@sickfitofficial.com</div>
-          </div>
-        </div>
-        <div class="po-meta">
-          <div><div class="lab">PO Number</div><div class="val">${escapeHtml(model.poNumber)}</div></div>
-          <div><div class="lab">Order Date</div><div class="val">${escapeHtml(model.orderDate)}</div></div>
-          <div><div class="lab">Start Ship</div><div class="val">${escapeHtml(model.startShipDate)}</div></div>
-          <div><div class="lab">Ship Complete</div><div class="val">${escapeHtml(model.shipCompleteDate)}</div></div>
-          <div><div class="lab">Currency</div><div class="val">${escapeHtml(model.currency)}</div></div>
-        </div>
-        <div class="po-addr">
-          <div>
-            <div class="lab">Bill To</div>
-            <div class="name">${escapeHtml(model.billToName)}</div>
-            ${model.billToLines.map((line) => `<div class="row">${escapeHtml(line)}</div>`).join("")}
-          </div>
-          <div>
-            <div class="lab">Ship To</div>
-            <div class="name">${escapeHtml(model.shipToName)}</div>
-            ${model.shipToLines.map((line) => `<div class="row">${escapeHtml(line)}</div>`).join("")}
-          </div>
-        </div>
-        <div class="po-terms">
-          <div><div class="lab">Payment Terms</div><div class="val">${escapeHtml(model.paymentTerms)}</div></div>
-          <div><div class="lab">Buyer</div><div class="val">${escapeHtml(model.buyerName)}</div></div>
-          <div><div class="lab">Approver</div><div class="val">${escapeHtml(model.approverName)}</div></div>
-        </div>
-        <div class="po-items">
-          <div class="h">
-            <div>#</div>
-            <div>SKU</div>
-            <div>Description</div>
-            <div>UPC</div>
-            <div>Unit</div>
-            <div class="r">Qty</div>
-            <div class="r">Unit Cost</div>
-            <div class="r">Ext. Cost</div>
-            <div class="r">Unit Retail</div>
-            <div class="r">Ext. Retail</div>
-          </div>
-          ${linesMarkup}
-        </div>
-        <div class="po-totals">
-          <div><div class="lab">Total Units</div><div class="val">${model.totalUnits}</div></div>
-          <div><div class="lab">Total Cost</div><div class="val">${escapeHtml(formatPoCurrency(model.totalCost))}</div></div>
-          <div><div class="lab">Total Retail</div><div class="val accent">${escapeHtml(formatPoCurrency(model.totalRetail))}</div></div>
-        </div>
-        <div class="po-notes">
-          <div class="lab">Notes / Special Instructions</div>
-          <div class="note">${escapeHtml(model.notes)}</div>
-        </div>
-        <div class="po-foot">
-          <span>${escapeHtml(model.footerLabel)}</span>
-          <span>PAGE 1 OF 1</span>
-        </div>
-      </div>
-    </div>
-  `.trim();
+  return buildPurchaseOrderDocumentHtml(purchaseOrder, lineItems, buyer, retailer);
 }
 
 async function getDashboardActor(): Promise<DashboardActor> {
@@ -469,42 +379,45 @@ export const purchaseOrderService = {
     const totalUnits = normalizedLineItems.reduce((sum, item) => sum + Number(item.unit_quantity ?? item.quantity_ordered ?? 0), 0);
     const totalRetail = normalizedLineItems.reduce((sum, item) => sum + Number(item.extended_retail ?? 0), 0);
 
-    const [savedPo] = (await upsertTable<PurchaseOrder>("purchase_orders", {
-      ...purchaseOrderPayload,
-      order_date: normalizeOptionalDate(purchaseOrderPayload.order_date),
-      ship_date: normalizeOptionalDate(purchaseOrderPayload.ship_date),
-      submitted_at: normalizeOptionalDate(purchaseOrderPayload.submitted_at),
-      eta_date: normalizeOptionalDate(purchaseOrderPayload.eta_date),
-      expected_delivery_date: normalizeOptionalDate(purchaseOrderPayload.expected_delivery_date),
-      actual_delivery_date: normalizeOptionalDate(purchaseOrderPayload.actual_delivery_date),
-      invoice_status: purchaseOrderPayload.invoice_status ?? null,
-      invoice_paid_at: normalizeOptionalDate(purchaseOrderPayload.invoice_paid_at),
-      shipment_status: purchaseOrderPayload.shipment_status ? String(purchaseOrderPayload.shipment_status) : null,
-      bill_to_company_name: normalizeOptionalText(purchaseOrderPayload.bill_to_company_name),
-      bill_to_contact_name: normalizeOptionalText(purchaseOrderPayload.bill_to_contact_name),
-      bill_to_street: normalizeOptionalText(purchaseOrderPayload.bill_to_street),
-      bill_to_city: normalizeOptionalText(purchaseOrderPayload.bill_to_city),
-      bill_to_state: normalizeOptionalText(purchaseOrderPayload.bill_to_state),
-      bill_to_zip: normalizeOptionalText(purchaseOrderPayload.bill_to_zip),
-      bill_to_phone: normalizeOptionalText(purchaseOrderPayload.bill_to_phone),
-      bill_to_email: normalizeOptionalText(purchaseOrderPayload.bill_to_email),
-      ship_to_company_name: normalizeOptionalText(purchaseOrderPayload.ship_to_company_name),
-      ship_to_attention: normalizeOptionalText(purchaseOrderPayload.ship_to_attention),
-      ship_to_street: normalizeOptionalText(purchaseOrderPayload.ship_to_street),
-      ship_to_city: normalizeOptionalText(purchaseOrderPayload.ship_to_city),
-      ship_to_state: normalizeOptionalText(purchaseOrderPayload.ship_to_state),
-      ship_to_zip: normalizeOptionalText(purchaseOrderPayload.ship_to_zip),
-      ship_to_phone: normalizeOptionalText(purchaseOrderPayload.ship_to_phone),
-      payment_terms_snapshot: normalizeOptionalText(purchaseOrderPayload.payment_terms_snapshot),
-      buyer_name_snapshot: normalizeOptionalText(purchaseOrderPayload.buyer_name_snapshot),
-      approver_name_snapshot: normalizeOptionalText(purchaseOrderPayload.approver_name_snapshot),
-      total_cost: totalCost,
-      subtotal: Number(purchaseOrderPayload.subtotal ?? totalCost),
-      total_units: Number(purchaseOrderPayload.total_units ?? totalUnits),
-      total_retail: Number(purchaseOrderPayload.total_retail ?? totalRetail),
-      currency_code: purchaseOrderPayload.currency_code ?? "USD",
-      generated_form_url: null,
-    })) as PurchaseOrder[];
+    const [savedPo] = (await upsertTable<PurchaseOrder>(
+      "purchase_orders",
+      omitEmptyId({
+        ...purchaseOrderPayload,
+        order_date: normalizeOptionalDate(purchaseOrderPayload.order_date),
+        ship_date: normalizeOptionalDate(purchaseOrderPayload.ship_date),
+        submitted_at: normalizeOptionalDate(purchaseOrderPayload.submitted_at),
+        eta_date: normalizeOptionalDate(purchaseOrderPayload.eta_date),
+        expected_delivery_date: normalizeOptionalDate(purchaseOrderPayload.expected_delivery_date),
+        actual_delivery_date: normalizeOptionalDate(purchaseOrderPayload.actual_delivery_date),
+        invoice_status: purchaseOrderPayload.invoice_status ?? null,
+        invoice_paid_at: normalizeOptionalDate(purchaseOrderPayload.invoice_paid_at),
+        shipment_status: purchaseOrderPayload.shipment_status ? String(purchaseOrderPayload.shipment_status) : null,
+        bill_to_company_name: normalizeOptionalText(purchaseOrderPayload.bill_to_company_name),
+        bill_to_contact_name: normalizeOptionalText(purchaseOrderPayload.bill_to_contact_name),
+        bill_to_street: normalizeOptionalText(purchaseOrderPayload.bill_to_street),
+        bill_to_city: normalizeOptionalText(purchaseOrderPayload.bill_to_city),
+        bill_to_state: normalizeOptionalText(purchaseOrderPayload.bill_to_state),
+        bill_to_zip: normalizeOptionalText(purchaseOrderPayload.bill_to_zip),
+        bill_to_phone: normalizeOptionalText(purchaseOrderPayload.bill_to_phone),
+        bill_to_email: normalizeOptionalText(purchaseOrderPayload.bill_to_email),
+        ship_to_company_name: normalizeOptionalText(purchaseOrderPayload.ship_to_company_name),
+        ship_to_attention: normalizeOptionalText(purchaseOrderPayload.ship_to_attention),
+        ship_to_street: normalizeOptionalText(purchaseOrderPayload.ship_to_street),
+        ship_to_city: normalizeOptionalText(purchaseOrderPayload.ship_to_city),
+        ship_to_state: normalizeOptionalText(purchaseOrderPayload.ship_to_state),
+        ship_to_zip: normalizeOptionalText(purchaseOrderPayload.ship_to_zip),
+        ship_to_phone: normalizeOptionalText(purchaseOrderPayload.ship_to_phone),
+        payment_terms_snapshot: normalizeOptionalText(purchaseOrderPayload.payment_terms_snapshot),
+        buyer_name_snapshot: normalizeOptionalText(purchaseOrderPayload.buyer_name_snapshot),
+        approver_name_snapshot: normalizeOptionalText(purchaseOrderPayload.approver_name_snapshot),
+        total_cost: totalCost,
+        subtotal: Number(purchaseOrderPayload.subtotal ?? totalCost),
+        total_units: Number(purchaseOrderPayload.total_units ?? totalUnits),
+        total_retail: Number(purchaseOrderPayload.total_retail ?? totalRetail),
+        currency_code: purchaseOrderPayload.currency_code ?? "USD",
+        generated_form_url: null,
+      }),
+    )) as PurchaseOrder[];
 
     const supabase = assertSupabase();
     const { data: existingItems, error: existingError } = await supabase.from("po_line_items").select("id").eq("purchase_order_id", savedPo.id);
@@ -520,7 +433,7 @@ export const purchaseOrderService = {
       savedLineItems = (await upsertTable<PoLineItem>(
         "po_line_items",
         normalizedLineItems.map((item) => ({
-          ...item,
+          ...omitEmptyId(item),
           purchase_order_id: savedPo.id,
         })),
       )) as PoLineItem[];

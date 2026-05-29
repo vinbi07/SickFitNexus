@@ -802,9 +802,10 @@ export interface DashboardSnapshot {
   skuOosRiskCriticalCount: number;
   productionPosInFlightCount: number;
   productionNextLandDate: string | null;
-  dtcOrdersTodayCount: number;
-  dtcOrdersTodayValue: number;
-  priorRevenueYtd: number;
+    dtcOrdersTodayCount: number;
+    dtcOrdersTodayValue: number;
+    dtcShopifyRevenueTrailingYear: number;
+    priorRevenueYtd: number;
   projectedRevenueYearEnd: number;
   revenuePaceDeltaPercent: number;
   revenueByChannelYtd: Array<{ channel: string; value: number }>;

@@ -186,16 +186,15 @@ async function fetchShopifyGraphql({
 async function fetchShopifyOrders({
   storeDomain,
   adminToken,
-  lookbackDays,
+  queryFilter,
 }: {
   storeDomain: string;
   adminToken: string;
-  lookbackDays: number;
+  queryFilter: string;
 }) {
   const orders: ShopifyOrderNode[] = [];
   let after: string | null = null;
   let hasNextPage = true;
-  const sinceDate = new Date(Date.now() - lookbackDays * 86400000).toISOString();
 
   while (hasNextPage) {
     const payload = await fetchShopifyGraphql({
@@ -205,7 +204,7 @@ async function fetchShopifyOrders({
       variables: {
         first: 50,
         after,
-        query: `created_at:>=${sinceDate}`,
+        query: queryFilter,
       },
     });
 
@@ -223,6 +222,62 @@ async function fetchShopifyOrders({
   }
 
   return orders;
+}
+
+type SyncRequestBody = {
+  mode?: "year" | "lookback";
+  lookbackDays?: number;
+  startDate?: string;
+  endDate?: string;
+};
+
+function getUtcDateString(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildOrderQueryWindow(body: SyncRequestBody | null | undefined) {
+  const now = new Date();
+  const mode = body?.mode ?? "lookback";
+  const explicitStartDate = body?.startDate?.trim();
+  const explicitEndDate = body?.endDate?.trim();
+
+  if (explicitStartDate || explicitEndDate) {
+    const parts = [
+      explicitStartDate ? `created_at:>=${explicitStartDate}` : null,
+      explicitEndDate ? `created_at:<=${explicitEndDate}` : null,
+    ].filter(Boolean);
+    return {
+      mode: explicitStartDate && explicitEndDate ? "custom_range" : "custom_boundary",
+      lookbackDays: null,
+      queryFilter: parts.join(" "),
+      rangeStart: explicitStartDate ?? null,
+      rangeEnd: explicitEndDate ?? null,
+    };
+  }
+
+  if (mode === "year") {
+    const lookbackDays = 365;
+    const rangeStart = getUtcDateString(new Date(now.getTime() - lookbackDays * 86400000));
+    const rangeEnd = getUtcDateString(now);
+    return {
+      mode,
+      lookbackDays,
+      queryFilter: `created_at:>=${rangeStart} created_at:<=${rangeEnd}`,
+      rangeStart,
+      rangeEnd,
+    };
+  }
+
+  const lookbackDays = Number(body?.lookbackDays ?? Deno.env.get("SHOPIFY_DASHBOARD_LOOKBACK_DAYS") ?? "365");
+  const rangeStart = getUtcDateString(new Date(now.getTime() - lookbackDays * 86400000));
+  const rangeEnd = getUtcDateString(now);
+  return {
+    mode,
+    lookbackDays,
+    queryFilter: `created_at:>=${rangeStart}`,
+    rangeStart,
+    rangeEnd,
+  };
 }
 
 async function syncShopifyOrdersData({
@@ -346,7 +401,8 @@ Deno.serve(async (request) => {
     const adminToken = Deno.env.get("SHOPIFY_ADMIN_ACCESS_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const lookbackDays = Number(Deno.env.get("SHOPIFY_DASHBOARD_LOOKBACK_DAYS") ?? "365");
+    const requestBody = request.method === "POST" ? ((await request.json().catch(() => ({}))) as SyncRequestBody) : {};
+    const orderWindow = buildOrderQueryWindow(requestBody);
 
     stage = "validate_secrets";
     if (!storeDomain || !adminToken || !supabaseUrl || !serviceRoleKey) {
@@ -372,9 +428,16 @@ Deno.serve(async (request) => {
     const orders = await fetchShopifyOrders({
       storeDomain,
       adminToken,
-      lookbackDays,
+      queryFilter: orderWindow.queryFilter,
     });
-    logInfo("orders_fetched", { count: orders.length, lookbackDays });
+    logInfo("orders_fetched", {
+      count: orders.length,
+      mode: orderWindow.mode,
+      lookbackDays: orderWindow.lookbackDays,
+      rangeStart: orderWindow.rangeStart,
+      rangeEnd: orderWindow.rangeEnd,
+      queryFilter: orderWindow.queryFilter,
+    });
 
     stage = "sync_shopify_orders";
     const { ordersSynced, lineItemsSynced } = await syncShopifyOrdersData({
@@ -386,7 +449,10 @@ Deno.serve(async (request) => {
     return jsonResponse(200, {
       ok: true,
       stage,
-      lookbackDays,
+      mode: orderWindow.mode,
+      lookbackDays: orderWindow.lookbackDays,
+      rangeStart: orderWindow.rangeStart,
+      rangeEnd: orderWindow.rangeEnd,
       matchedOrders: orders.length,
       ordersSynced,
       lineItemsSynced,

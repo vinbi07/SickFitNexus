@@ -24,7 +24,7 @@ export function DashboardPage() {
   const channelRevenueRows = data.revenueByChannelYtd.filter((item) => item.channel !== "DTC + Shopify");
   const topChannelValue = channelRevenueRows[0]?.value ?? 0;
   const totalChannelRevenue = channelRevenueRows.reduce((sum, item) => sum + item.value, 0);
-  const dtcShopifyRevenue = data.revenueByChannelYtd.find((item) => item.channel === "DTC + Shopify")?.value ?? 0;
+  const dtcShopifyRevenue = data.dtcShopifyRevenueTrailingYear;
 
   return (
     <div className="section-stack">
@@ -40,11 +40,11 @@ export function DashboardPage() {
         </div>
         <div className="card-grid dashboard-card-grid">
           <DashboardCard label="Wholesale Revenue" value={formatCurrency(data.wholesaleRevenueTotal)} footnote="Wholesale only. Shopify / DTC excluded." highlight to="/reports" />
-          <DashboardCard
-            label="DTC + Shopify Revenue"
-            value={formatCurrency(dtcShopifyRevenue)}
-            footnote="Direct-to-consumer revenue contribution"
-            to="/reports"
+            <DashboardCard
+              label="DTC + Shopify Revenue"
+              value={formatCurrency(dtcShopifyRevenue)}
+              footnote="Last 12 months of synced Shopify and DTC channel revenue"
+              to="/reports"
             action={(
               <button
                 type="button"

@@ -48,6 +48,10 @@ function getMonthLabel(index: number) {
   return new Date(new Date().getFullYear(), index, 1).toLocaleString("en-US", { month: "short" });
 }
 
+function toDateOnly(value: string) {
+  return value.slice(0, 10);
+}
+
 export const dashboardService = {
   async syncShopifyDashboard() {
     const supabase = assertSupabase();
@@ -59,7 +63,10 @@ export const dashboardService = {
     if (!data?.ok) throw new Error(data?.error ?? "Shopify dashboard sync failed.");
     return data as {
       ok: true;
-      lookbackDays: number;
+      mode: string;
+      lookbackDays: number | null;
+      rangeStart: string | null;
+      rangeEnd: string | null;
       matchedOrders: number;
       ordersSynced: number;
       lineItemsSynced: number;
@@ -175,17 +182,22 @@ export const dashboardService = {
     const currentYearStart = `${currentYear}-01-01`;
     const priorYearStart = `${currentYear - 1}-01-01`;
     const priorYearCutoff = `${currentYear - 1}-${today.slice(5)}`;
+    const trailingYearStart = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
     const wholesaleOrdersYtd = wholesaleOrders.filter((po) => {
-      const effectiveDate = po.submitted_at ?? po.order_date ?? po.created_at.slice(0, 10);
+      const effectiveDate = po.submitted_at ?? po.order_date ?? toDateOnly(po.created_at);
       return effectiveDate >= currentYearStart;
     });
     const retailerOrdersYtd = retailerOrders.filter((po) => {
-      const effectiveDate = po.submitted_at ?? po.order_date ?? po.created_at.slice(0, 10);
+      const effectiveDate = po.submitted_at ?? po.order_date ?? toDateOnly(po.created_at);
       return effectiveDate >= currentYearStart && po.status !== "Cancelled";
     });
     const retailerOrdersPriorYtd = retailerOrders.filter((po) => {
-      const effectiveDate = po.submitted_at ?? po.order_date ?? po.created_at.slice(0, 10);
+      const effectiveDate = po.submitted_at ?? po.order_date ?? toDateOnly(po.created_at);
       return effectiveDate >= priorYearStart && effectiveDate <= priorYearCutoff && po.status !== "Cancelled";
+    });
+    const retailerOrdersTrailingYear = retailerOrders.filter((po) => {
+      const effectiveDate = po.submitted_at ?? po.order_date ?? toDateOnly(po.created_at);
+      return effectiveDate >= trailingYearStart && po.status !== "Cancelled";
     });
     const getWholesaleRevenue = (po: PurchaseOrder) =>
       (lineItemsByPo.get(po.id) ?? []).reduce((sum, item) => {
@@ -382,14 +394,23 @@ export const dashboardService = {
 
     const shopifyOrderById = new Map(shopifyOrders.map((order) => [order.id, order]));
     const shopifyOrdersYtd = shopifyOrders.filter(
-      (order) => !order.cancelled_at && order.order_created_at.slice(0, 10) >= currentYearStart,
+      (order) => !order.cancelled_at && toDateOnly(order.order_created_at) >= currentYearStart,
     );
     const shopifyOrdersPriorYtd = shopifyOrders.filter((order) => {
-      const orderDate = order.order_created_at.slice(0, 10);
+      const orderDate = toDateOnly(order.order_created_at);
       return !order.cancelled_at && orderDate >= priorYearStart && orderDate <= priorYearCutoff;
+    });
+    const shopifyOrdersTrailingYear = shopifyOrders.filter((order) => {
+      const orderDate = toDateOnly(order.order_created_at);
+      return !order.cancelled_at && orderDate >= trailingYearStart;
     });
     const shopifyRevenueYtd = shopifyOrdersYtd.reduce((sum, order) => sum + Number(order.current_total_price ?? 0), 0);
     const shopifyRevenuePriorYtd = shopifyOrdersPriorYtd.reduce((sum, order) => sum + Number(order.current_total_price ?? 0), 0);
+    const shopifyRevenueTrailingYear = shopifyOrdersTrailingYear.reduce((sum, order) => sum + Number(order.current_total_price ?? 0), 0);
+    const dtcRetailRevenueTrailingYear = retailerOrdersTrailingYear
+      .filter((po) => normalizeChannelName(po.source_channel) === "DTC + Shopify")
+      .reduce((sum, po) => sum + getRetailRevenue(po), 0);
+    const dtcShopifyRevenueTrailingYear = dtcRetailRevenueTrailingYear + shopifyRevenueTrailingYear;
 
     const revenueYtd = retailerOrdersYtd.reduce((sum, po) => sum + getRetailRevenue(po), 0) + shopifyRevenueYtd;
     const derivedPriorRevenueYtd = retailerOrdersPriorYtd.reduce((sum, po) => sum + getRetailRevenue(po), 0) + shopifyRevenuePriorYtd;
@@ -581,6 +602,7 @@ export const dashboardService = {
       productionNextLandDate: manufacturingSnapshotRows[0]?.etaDate ?? null,
       dtcOrdersTodayCount: dtcOrdersToday.length,
       dtcOrdersTodayValue,
+      dtcShopifyRevenueTrailingYear,
       priorRevenueYtd,
       projectedRevenueYearEnd,
       revenuePaceDeltaPercent,
