@@ -135,47 +135,53 @@ export function ProductsPage() {
         </div>
       </div>
       <DataTable
-        className="table-shell-wide"
         emptyMessage="No products yet. Add your first product to start managing catalog and inventory links."
         columns={[
           {
-            key: "image",
-            title: "Image",
+            key: "product",
+            title: "Product / SKU",
             render: (row) => (
-              <div className="product-thumb-shell">
-                {row.image_url ? <img className="product-thumb" src={row.image_url} alt={row.name} /> : <span className="product-thumb-fallback">{row.sku.slice(0, 2)}</span>}
+              <div className="inventory-product-cell">
+                <div className="product-thumb-shell">
+                  {row.image_url ? <img className="product-thumb" src={row.image_url} alt={row.name} /> : <span className="product-thumb-fallback">{row.sku.slice(0, 2)}</span>}
+                </div>
+                <div className="cell-stack">
+                  <Link className="table-link product-sku-cell" to={`/products/${row.id}`}>{row.sku}</Link>
+                  <strong>{getProductFamilyName(row)}</strong>
+                  <span className="helper-text">
+                    {getProductVariantLabel(row)}{row.category ? ` | ${row.category}` : ""}
+                  </span>
+                </div>
               </div>
             ),
           },
-          { key: "sku", title: "SKU", render: (row) => <Link className="table-link product-sku-cell" to={`/products/${row.id}`}>{row.sku}</Link> },
           {
-            key: "name",
-            title: "Product",
+            key: "vendor",
+            title: "Vendor / Pack",
             render: (row) => (
               <div className="cell-stack">
-                <strong>{getProductFamilyName(row)}</strong>
-                <span className="helper-text">
-                  {getProductVariantLabel(row)}{row.category ? ` | ${row.category}` : ""}
-                </span>
+                <strong>{row.vendors?.name ?? "Unassigned"}</strong>
+                <span className="helper-text">Weight {row.weight ?? "N/A"}</span>
+                <span className="helper-text">{row.no_bundles ? "No bundles" : "Bundles allowed"}</span>
               </div>
             ),
           },
-          { key: "variant", title: "Variant", render: (row) => <span className="product-compact-cell">{getProductVariantLabel(row)}</span> },
-          { key: "vendor", title: "Vendor", render: (row) => <span className="product-compact-cell">{row.vendors?.name ?? "Unassigned"}</span> },
-          { key: "cogs", title: "COGS", render: (row) => formatCurrency(row.unit_cost) },
-          { key: "unit_price", title: "Price", render: (row) => formatCurrency(row.unit_price ?? 0) },
-          { key: "weight", title: "Weight", render: (row) => row.weight ?? "N/A" },
           {
-            key: "margin",
-            title: "Margin",
+            key: "pricing",
+            title: "Price / Margin",
             render: (row) => {
               const margin = getMarginMetrics(row.unit_cost, row.unit_price);
-              return `${formatCurrency(margin.marginDollars)} | ${margin.marginPercent.toFixed(0)}%`;
+              return (
+                <div className="cell-stack">
+                  <strong>{formatCurrency(row.unit_price ?? 0)}</strong>
+                  <span className="helper-text">COGS {formatCurrency(row.unit_cost)}</span>
+                  <span className="helper-text">{formatCurrency(margin.marginDollars)} | {margin.marginPercent.toFixed(0)}%</span>
+                </div>
+              );
             },
           },
           { key: "inventory", title: "Inventory", render: (row) => row.current_inventory },
           { key: "danger", title: "Health", render: (row) => <StatusBadge label={isInventoryDanger(row.current_inventory) ? "Danger" : "Healthy"} /> },
-          { key: "no_bundles", title: "No Bundles", render: (row) => row.no_bundles ? <StatusBadge label="No Bundles" /> : "Allowed" },
           {
             key: "actions",
             title: "Actions",

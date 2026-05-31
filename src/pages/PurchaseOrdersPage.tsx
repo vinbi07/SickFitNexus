@@ -137,24 +137,48 @@ export function PurchaseOrdersPage() {
         columns={[
           {
             key: "po_number",
-            title: "PO",
+            title: "PO / Account",
             render: (row) => (
               <div className="cell-stack">
                 <Link className="table-link" to={`/purchase-orders/${row.id}`}>{row.po_number}</Link>
-                <span className="helper-text">{formatDate(row.order_date)}</span>
+                <span className="helper-text">{row.retailers?.name ?? "No retailer"} | {row.po_type}</span>
+                <span className="helper-text">{row.buyers?.buyer_name ?? row.buyer_name_snapshot ?? "No buyer"}</span>
               </div>
             ),
           },
-          { key: "po_type", title: "Type", render: (row) => row.po_type },
-          { key: "retailer", title: "Retailer", render: (row) => row.retailers?.name ?? "N/A" },
-          { key: "buyer", title: "Buyer", render: (row) => row.buyers?.buyer_name ?? row.buyer_name_snapshot ?? "N/A" },
-          { key: "vendor", title: "Vendor", render: (row) => row.vendors?.name ?? "Unassigned" },
-          { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
-          { key: "approval_status", title: "Approval", render: (row) => <StatusBadge label={row.approval_status} /> },
-          { key: "invoice_status", title: "Invoice", render: (row) => <StatusBadge label={row.invoice_status ?? "Open"} /> },
-          { key: "eta_date", title: "ETA", render: (row) => formatDate(row.eta_date ?? row.expected_delivery_date) },
-          { key: "tracking", title: "Shipment", render: (row) => row.shipment_status ?? row.tracking_status ?? row.tracking_number ?? "N/A" },
-          { key: "total_cost", title: "Total Cost", render: (row) => formatCurrency(row.total_cost) },
+          {
+            key: "status",
+            title: "Status",
+            render: (row) => (
+              <div className="cell-stack">
+                <StatusBadge label={row.status} />
+                <StatusBadge label={row.approval_status} />
+                <StatusBadge label={row.invoice_status ?? "Open"} />
+              </div>
+            ),
+          },
+          {
+            key: "dates",
+            title: "Dates",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{formatDate(row.eta_date ?? row.expected_delivery_date)}</strong>
+                <span className="helper-text">Ordered {formatDate(row.order_date)}</span>
+                <span className="helper-text">{row.shipment_status ?? row.tracking_status ?? row.tracking_number ?? "No shipment status"}</span>
+              </div>
+            ),
+          },
+          {
+            key: "source",
+            title: "Source",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{row.source_channel ?? "Manual"}</strong>
+                <span className="helper-text">{row.vendors?.name ?? "Unassigned vendor"}</span>
+              </div>
+            ),
+          },
+          { key: "total_cost", title: "Total", render: (row) => formatCurrency(row.total_cost) },
           {
             key: "actions",
             title: "Actions",

@@ -162,19 +162,31 @@ export function InventoryPage() {
                 </div>
               ),
             },
-            { key: "location", title: "Location", render: (row) => row.locations?.name ?? "Unknown Location" },
-            { key: "quantity_on_hand", title: "Current Qty", render: (row) => row.quantity_on_hand },
-            { key: "incoming", title: "Incoming Qty", render: (row) => reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0 },
-            { key: "cogs", title: "COGS", render: (row) => formatCurrency(Number(row.products?.unit_cost ?? 0)) },
             {
-              key: "margin",
-              title: "Margin",
+              key: "quantities",
+              title: "Inventory",
+              render: (row) => (
+                <div className="cell-stack">
+                  <strong>On hand {row.quantity_on_hand}</strong>
+                  <span className="helper-text">Incoming {reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0}</span>
+                  <span className="helper-text">{row.locations?.name ?? "Unknown Location"}</span>
+                </div>
+              ),
+            },
+            {
+              key: "planning",
+              title: "Planning",
               render: (row) => {
                 const margin = getMarginMetrics(Number(row.products?.unit_cost ?? 0), Number(row.products?.unit_price ?? 0));
-                return `${formatCurrency(margin.marginDollars)} | ${margin.marginPercent.toFixed(0)}%`;
+                return (
+                  <div className="cell-stack">
+                    <strong>{formatCurrency(Number(row.products?.unit_cost ?? 0))} COGS</strong>
+                    <span className="helper-text">{formatCurrency(margin.marginDollars)} | {margin.marginPercent.toFixed(0)}% margin</span>
+                    <span className="helper-text">{row.products?.no_bundles ? "No bundles" : "Bundles allowed"}</span>
+                  </div>
+                );
               },
             },
-            { key: "no_bundles", title: "No Bundles", render: (row) => row.products?.no_bundles ? <StatusBadge label="No Bundles" /> : "Allowed" },
             {
               key: "status",
               title: "Status",

@@ -72,7 +72,7 @@ export function LookbookOrderPage() {
   if (error || !data) return <ErrorState message={error ?? "Unable to load this lookbook"} />;
 
   const orderingDisabled = !data.buyer.order_mode_enabled || data.retailer.order_mode_policy !== "enabled" || data.retailer.edi_required;
-  const accentColor = data.retailer.brand_accent_color ?? "#e72027";
+  const accentColor = data.retailer.brand_accent_color ?? "#344054";
   const activeOrderState = data.existingDraft?.status ?? null;
   const primarySubmitLabel = activeOrderState === "Countered" ? "Submit Revised PO" : "Submit PO to SickFit";
 

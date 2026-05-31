@@ -80,13 +80,36 @@ export function VendorsPage() {
       <DataTable
         emptyMessage="No vendors yet. Add suppliers to connect products and purchase orders."
         columns={[
-          { key: "name", title: "Vendor", render: (row) => <span className="table-link">{row.name}</span> },
-          { key: "contact", title: "Contact", render: (row) => row.contact_email ?? row.contact_phone ?? "No contact info" },
-          { key: "lead_time", title: "Lead Time", render: (row) => `${row.lead_time_days ?? 0} days` },
-          { key: "totalPos", title: "POs", render: (row) => row.totalPos },
-          { key: "totalSpend", title: "Spend", render: (row) => formatCurrency(row.totalSpend) },
-          { key: "averageDeliveryDelay", title: "Avg Delay", render: (row) => `${formatNumber(row.averageDeliveryDelay, 1)} days` },
-          { key: "fillRate", title: "Fill Rate", render: (row) => `${formatNumber(row.fillRate, 1)}%` },
+          {
+            key: "name",
+            title: "Vendor / Contact",
+            render: (row) => (
+              <div className="cell-stack">
+                <span className="table-link">{row.name}</span>
+                <span className="helper-text">{row.contact_email ?? row.contact_phone ?? "No contact info"}</span>
+              </div>
+            ),
+          },
+          {
+            key: "activity",
+            title: "Spend / POs",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{formatCurrency(row.totalSpend)}</strong>
+                <span className="helper-text">{row.totalPos} POs | Lead {row.lead_time_days ?? 0} days</span>
+              </div>
+            ),
+          },
+          {
+            key: "performance",
+            title: "Performance",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{formatNumber(row.fillRate, 1)}% fill</strong>
+                <span className="helper-text">{formatNumber(row.averageDeliveryDelay, 1)} days avg delay</span>
+              </div>
+            ),
+          },
           {
             key: "reliabilityScore",
             title: "Reliability",

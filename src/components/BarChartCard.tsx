@@ -33,7 +33,7 @@ export function BarChartCard({
               width={isHorizontal ? 120 : 60}
             />
             <Tooltip />
-            <Bar dataKey={dataKey} fill="#e72027" radius={[10, 10, 0, 0]} />
+            <Bar dataKey={dataKey} fill="#475467" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

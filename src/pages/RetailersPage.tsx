@@ -76,11 +76,36 @@ export function RetailersPage() {
               </div>
             ),
           },
-          { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
-          { key: "contact", title: "Primary Contact", render: (row) => row.primary_contact_name ?? row.primary_contact_email ?? "N/A" },
-          { key: "window", title: "Next Reorder Window", render: (row) => row.next_reorder_start ? `${formatDate(row.next_reorder_start)} - ${formatDate(row.next_reorder_end)}` : "Not set" },
-          { key: "spend", title: "Wholesale Revenue", render: (row) => formatCurrency(row.totalSpend) },
-          { key: "locations", title: "Locations", render: (row) => row.activeLocations },
+          {
+            key: "status",
+            title: "Status / Contact",
+            render: (row) => (
+              <div className="cell-stack">
+                <StatusBadge label={row.status} />
+                <span className="helper-text">{row.primary_contact_name ?? row.primary_contact_email ?? "No primary contact"}</span>
+              </div>
+            ),
+          },
+          {
+            key: "activity",
+            title: "Revenue / Activity",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{formatCurrency(row.totalSpend)}</strong>
+                <span className="helper-text">{row.activeLocations} active locations</span>
+              </div>
+            ),
+          },
+          {
+            key: "window",
+            title: "Reorder Window",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{row.next_reorder_start ? formatDate(row.next_reorder_start) : "Not set"}</strong>
+                <span className="helper-text">{row.next_reorder_end ? `Ends ${formatDate(row.next_reorder_end)}` : "No end date"}</span>
+              </div>
+            ),
+          },
           {
             key: "actions",
             title: "Actions",

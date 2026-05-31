@@ -258,12 +258,27 @@ export function AlertsPage() {
         </div>
         <DataTable
           columns={[
-            { key: "alert_type", title: "Type", render: (row) => row.alert_type },
             { key: "severity", title: "Severity", render: (row) => <StatusBadge label={row.severity} /> },
-            { key: "message", title: "Message", render: (row) => row.message },
-            { key: "source", title: "Source", render: (row) => <AlertSource alert={row} /> },
-            { key: "related_entity_type", title: "Entity", render: (row) => row.related_entity_type ?? "N/A" },
-            { key: "created_at", title: "Created", render: (row) => formatDate(row.created_at) },
+            {
+              key: "message",
+              title: "Alert",
+              render: (row) => (
+                <div className="cell-stack">
+                  <strong>{row.message}</strong>
+                  <span className="helper-text">{row.alert_type} | {row.related_entity_type ?? "No entity"}</span>
+                </div>
+              ),
+            },
+            {
+              key: "source",
+              title: "Source / Created",
+              render: (row) => (
+                <div className="cell-stack">
+                  <AlertSource alert={row} />
+                  <span className="helper-text">{formatDate(row.created_at)}</span>
+                </div>
+              ),
+            },
             {
               key: "action",
               title: "Action",

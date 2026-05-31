@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { LoginPage } from "@/pages/LoginPage";
@@ -30,30 +31,66 @@ import { PendingQueuePage } from "@/pages/PendingQueuePage";
 import { AppShell } from "@/components/AppShell";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
 
-const navItems = [
-  { to: "/", label: "Dashboard" },
-  { to: "/imports", label: "CSV Imports" },
-  { to: "/purchase-orders", label: "Purchase Orders" },
-  { to: "/pending-queue", label: "Pending Queue" },
-  { to: "/inventory", label: "Inventory" },
-  { to: "/vendors", label: "Vendors" },
-  { to: "/retailers", label: "Accounts" },
-  { to: "/compliance", label: "Compliance" },
-  { to: "/production", label: "Manufacturing" },
-  { to: "/locations", label: "Locations" },
-  { to: "/products", label: "Products" },
-  { to: "/barcodes", label: "Barcodes" },
-  { to: "/lookbook-templates", label: "Lookbooks" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/reports", label: "Reports" },
-  { to: "/sops", label: "SOPs" },
-  { to: "/wins", label: "Wins" },
-  { to: "/people", label: "People" },
-  { to: "/training", label: "Training" },
-  { to: "/settings", label: "Settings" },
+const RAIL_COLLAPSED_KEY = "sickfit-nexus-rail-collapsed";
+
+const navGroups = [
+  {
+    label: "Command",
+    items: [
+      { to: "/", label: "Dashboard", icon: "OC" },
+      { to: "/alerts", label: "Alerts", icon: "AL" },
+      { to: "/reports", label: "Reports", icon: "RP" },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { to: "/imports", label: "CSV Imports", icon: "IM" },
+      { to: "/purchase-orders", label: "Purchase Orders", icon: "PO" },
+      { to: "/pending-queue", label: "Pending Queue", icon: "PQ" },
+      { to: "/inventory", label: "Inventory", icon: "IV" },
+      { to: "/vendors", label: "Vendors", icon: "VN" },
+      { to: "/retailers", label: "Accounts", icon: "AC" },
+      { to: "/compliance", label: "Compliance", icon: "CP" },
+      { to: "/production", label: "Manufacturing", icon: "MF" },
+      { to: "/locations", label: "Locations", icon: "LC" },
+    ],
+  },
+  {
+    label: "Catalog",
+    items: [
+      { to: "/products", label: "Products", icon: "PR" },
+      { to: "/barcodes", label: "Barcodes", icon: "BC" },
+      { to: "/lookbook-templates", label: "Lookbooks", icon: "LB" },
+    ],
+  },
+  {
+    label: "Knowledge",
+    items: [
+      { to: "/sops", label: "SOPs", icon: "SP" },
+      { to: "/wins", label: "Wins", icon: "WN" },
+      { to: "/people", label: "People", icon: "PL" },
+      { to: "/training", label: "Training", icon: "TR" },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { to: "/settings", label: "Settings", icon: "ST" },
+    ],
+  },
 ];
 
 export default function App() {
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "true";
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(RAIL_COLLAPSED_KEY, String(railCollapsed));
+  }, [railCollapsed]);
+
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -63,29 +100,49 @@ export default function App() {
         element={(
           <ProtectedRoute>
           <AppShell
+            railCollapsed={railCollapsed}
             sidebar={
-              <div className="sidebar-nav">
+              <div className="rail-nav">
                 <div className="brand-lockup">
                   <div className="brand-mark brand-mark-image">
                     <img src={DEFAULT_LOGO_URL} alt="SickFit" />
                   </div>
-                  <div>
+                  <div className="brand-copy">
                     <p>SickFit Nexus</p>
                     <span>Operational Command Center</span>
                   </div>
                 </div>
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === "/"}
-                    className={({ isActive }) =>
-                      `nav-link${isActive ? " nav-link-active" : ""}`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
+                <button
+                  type="button"
+                  className="rail-toggle"
+                  aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+                  title={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+                  onClick={() => setRailCollapsed((current) => !current)}
+                >
+                  <span aria-hidden="true">{railCollapsed ? ">>" : "<<"}</span>
+                  <span className="rail-toggle-label">{railCollapsed ? "Expand" : "Collapse"}</span>
+                </button>
+                <nav className="rail-groups" aria-label="Primary navigation">
+                  {navGroups.map((group) => (
+                    <div className="rail-group" key={group.label}>
+                      <p className="rail-group-label">{group.label}</p>
+                      {group.items.map((item) => (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.to === "/"}
+                          title={railCollapsed ? item.label : undefined}
+                          className={({ isActive }) =>
+                            `nav-link${isActive ? " nav-link-active" : ""}`
+                          }
+                        >
+                          <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                          <span className="nav-label">{item.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  ))}
+                </nav>
               </div>
             }
           >

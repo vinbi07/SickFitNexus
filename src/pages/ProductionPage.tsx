@@ -51,12 +51,36 @@ export function ProductionPage() {
           <DataTable
             emptyMessage="No active manufacturing invoices yet."
             columns={[
-              { key: "poNumber", title: "PO", render: (row) => row.poNumber },
-              { key: "manufacturer", title: "Manufacturer", render: (row) => row.manufacturer },
-              { key: "invoiceStatus", title: "Invoice Status", render: (row) => <StatusBadge label={row.invoiceStatus} /> },
-              { key: "shipmentStatus", title: "Shipment Status", render: (row) => row.shipmentStatus || "N/A" },
-              { key: "shipDate", title: "Ship Date", render: (row) => formatDate(row.shipDate) },
-              { key: "etaDate", title: "ETA", render: (row) => formatDate(row.etaDate) },
+              {
+                key: "poNumber",
+                title: "PO / Manufacturer",
+                render: (row) => (
+                  <div className="cell-stack">
+                    <strong>{row.poNumber}</strong>
+                    <span className="helper-text">{row.manufacturer}</span>
+                  </div>
+                ),
+              },
+              {
+                key: "status",
+                title: "Invoice / Shipment",
+                render: (row) => (
+                  <div className="cell-stack">
+                    <StatusBadge label={row.invoiceStatus} />
+                    <span className="helper-text">{row.shipmentStatus || "No shipment status"}</span>
+                  </div>
+                ),
+              },
+              {
+                key: "dates",
+                title: "Dates",
+                render: (row) => (
+                  <div className="cell-stack">
+                    <strong>ETA {formatDate(row.etaDate)}</strong>
+                    <span className="helper-text">Ship {formatDate(row.shipDate)}</span>
+                  </div>
+                ),
+              },
               { key: "incomingUnits", title: "Units", render: (row) => formatNumber(row.incomingUnits) },
             ]}
             rows={data.snapshot.manufacturingSnapshotRows}
@@ -85,10 +109,26 @@ export function ProductionPage() {
             emptyMessage="No manufacturer capacity snapshots yet."
             columns={[
               { key: "snapshot_date", title: "Date", render: (row) => formatDate(row.snapshot_date) },
-              { key: "partner_name", title: "Partner", render: (row) => row.partner_name },
-              { key: "lane_name", title: "Lane", render: (row) => row.lane_name ?? "N/A" },
-              { key: "available_units", title: "Available", render: (row) => row.available_units },
-              { key: "committed_units", title: "Committed", render: (row) => row.committed_units },
+              {
+                key: "partner",
+                title: "Partner / Lane",
+                render: (row) => (
+                  <div className="cell-stack">
+                    <strong>{row.partner_name}</strong>
+                    <span className="helper-text">{row.lane_name ?? "No lane"}</span>
+                  </div>
+                ),
+              },
+              {
+                key: "capacity",
+                title: "Capacity",
+                render: (row) => (
+                  <div className="cell-stack">
+                    <strong>{row.available_units} available</strong>
+                    <span className="helper-text">{row.committed_units} committed</span>
+                  </div>
+                ),
+              },
             ]}
             rows={manufacturerCapacity}
           />

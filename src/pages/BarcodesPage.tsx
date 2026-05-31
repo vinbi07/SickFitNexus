@@ -179,26 +179,30 @@ export function BarcodesPage() {
         </div>
       </div>
       <DataTable
-        className="table-shell-wide"
         emptyMessage="No barcode rows yet. Import the barcode book CSV or add a record manually."
         columns={[
-          { key: "sku", title: "SKU", render: (row) => <span className="table-link product-sku-cell">{row.sku}</span> },
           {
             key: "product_name",
-            title: "Barcode Product",
+            title: "Barcode Product / SKU",
             render: (row) => (
               <div className="cell-stack">
                 <strong>{row.product_name}</strong>
+                <span className="helper-text">{row.sku}</span>
                 <span className="helper-text">{row.handle ?? "No handle"}{row.collection ? ` | ${row.collection}` : ""}</span>
               </div>
             ),
           },
+          { key: "barcode", title: "UPC", render: (row) => <span className="product-compact-cell">{row.barcode_upc ?? "Pending"}</span> },
           {
             key: "pack",
-            title: "Pack",
-            render: (row) => `${row.pack_quantity ?? "?"} ${row.pack_unit ?? "Unit"}${row.size ? ` | ${row.size}` : ""}`,
+            title: "Pack / Size",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{row.pack_quantity ?? "?"} {row.pack_unit ?? "Unit"}</strong>
+                <span className="helper-text">{row.size ?? "No size"}</span>
+              </div>
+            ),
           },
-          { key: "barcode", title: "Barcode UPC", render: (row) => <span className="product-compact-cell">{row.barcode_upc ?? "Pending"}</span> },
           {
             key: "linked_products",
             title: "Linked Products",

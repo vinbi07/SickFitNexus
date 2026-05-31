@@ -30,13 +30,36 @@ export function PendingQueuePage() {
         emptyMessage="No pending intake requests yet."
         columns={[
           { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
-          { key: "request_type", title: "Type", render: (row) => row.request_type },
-          { key: "source_channel", title: "Source", render: (row) => row.source_channel },
-          { key: "subject", title: "Subject", render: (row) => row.subject },
-          { key: "retailer_name", title: "Retailer", render: (row) => row.retailer_name ?? "N/A" },
-          { key: "buyer_name", title: "Buyer", render: (row) => row.buyer_name ?? "N/A" },
-          { key: "created_by_label", title: "Created By", render: (row) => row.created_by_label ?? "System" },
-          { key: "created_at", title: "Created", render: (row) => formatDate(row.created_at) },
+          {
+            key: "request",
+            title: "Request",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{row.subject}</strong>
+                <span className="helper-text">{row.request_type} | {row.source_channel}</span>
+              </div>
+            ),
+          },
+          {
+            key: "account",
+            title: "Account / Buyer",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{row.retailer_name ?? "No retailer"}</strong>
+                <span className="helper-text">{row.buyer_name ?? "No buyer"}</span>
+              </div>
+            ),
+          },
+          {
+            key: "created",
+            title: "Created",
+            render: (row) => (
+              <div className="cell-stack">
+                <strong>{formatDate(row.created_at)}</strong>
+                <span className="helper-text">{row.created_by_label ?? "System"}</span>
+              </div>
+            ),
+          },
           {
             key: "actions",
             title: "Actions",

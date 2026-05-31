@@ -444,7 +444,7 @@ export const dashboardService = {
     retailerOrdersYtd.forEach((po) => {
       const normalizedSource = normalizeChannelName(po.source_channel);
       const retailerName = retailerById.get(po.retailer_id ?? "")?.name ?? "";
-      const channel = normalizedSource || retailerName;
+      const channel = retailerName || normalizedSource;
       if (!channel) return;
       revenueByChannelMap.set(channel, (revenueByChannelMap.get(channel) ?? 0) + getRetailRevenue(po));
     });

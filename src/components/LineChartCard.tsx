@@ -22,7 +22,7 @@ export function LineChartCard({
             <XAxis dataKey={xKey} />
             <YAxis />
             <Tooltip />
-            <Line type="monotone" dataKey={dataKey} stroke="#e72027" strokeWidth={3} />
+            <Line type="monotone" dataKey={dataKey} stroke="#475467" strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       </div>
