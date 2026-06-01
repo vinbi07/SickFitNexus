@@ -44,12 +44,35 @@ function endOfWindow(start: string | null, end: string | null) {
   return "Window not set";
 }
 
+function isWholesaleChannel(channel: string | null | undefined) {
+  return normalizeChannelName(channel) !== "DTC + Shopify";
+}
+
 function getMonthLabel(index: number) {
   return new Date(new Date().getFullYear(), index, 1).toLocaleString("en-US", { month: "short" });
 }
 
+function getMonthPeriod(value: string) {
+  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleString("en-US", { month: "short" });
+}
+
 function toDateOnly(value: string) {
   return value.slice(0, 10);
+}
+
+function dateOnlyDaysAgo(daysAgo: number) {
+  return new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
+}
+
+function getInitials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("")
+    .padEnd(2, "X")
+    .slice(0, 2);
 }
 
 export const dashboardService = {
@@ -178,6 +201,10 @@ export const dashboardService = {
     const activeWholesalePipelineOrders = openRetailerOrders.filter((po) => normalizeChannelName(po.source_channel) !== "DTC + Shopify");
 
     const today = new Date().toISOString().slice(0, 10);
+    const sixDaysAgo = dateOnlyDaysAgo(6);
+    const sevenDaysAgo = dateOnlyDaysAgo(7);
+    const thirteenDaysAgo = dateOnlyDaysAgo(13);
+    const twentySevenDaysAgo = dateOnlyDaysAgo(27);
     const currentYear = new Date().getFullYear();
     const currentYearStart = `${currentYear}-01-01`;
     const priorYearStart = `${currentYear - 1}-01-01`;
@@ -212,6 +239,60 @@ export const dashboardService = {
         const price = Number(product?.unit_price ?? 0) > 0 ? Number(product?.unit_price ?? 0) : Number(item.unit_cost ?? 0);
         return sum + price * Number(item.quantity_ordered ?? 0);
       }, 0);
+
+    const poMapPoints = activeWholesalePipelineOrders
+      .map((po) => ({
+        poId: po.id,
+        poNumber: po.po_number,
+        account: retailerById.get(po.retailer_id ?? "")?.name ?? po.ship_to_company_name ?? "Unassigned account",
+        city: po.ship_to_city ?? po.bill_to_city,
+        state: po.ship_to_state ?? po.bill_to_state,
+        status: po.status,
+        sourceChannel: po.source_channel,
+        value: getRetailRevenue(po),
+        units: Number(po.total_units ?? 0),
+      }))
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 24);
+
+    const poStatusCounts = activeWholesalePipelineOrders
+      .reduce<Map<string, number>>((acc, po) => {
+        acc.set(po.status, (acc.get(po.status) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>());
+
+    const missingPoLocationCount = activeWholesalePipelineOrders.filter((po) => !(po.ship_to_state ?? po.bill_to_state)).length;
+
+    const latePurchaseOrders = [...activeWholesalePipelineOrders, ...activeManufacturerOrders]
+      .filter((po) => {
+        const dueDate = po.eta_date ?? po.expected_delivery_date;
+        return po.status === "Delayed" || (!!dueDate && dueDate < today);
+      })
+      .map((po) => ({
+        poId: po.id,
+        poNumber: po.po_number,
+        partner: retailerById.get(po.retailer_id ?? "")?.name ?? vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned",
+        etaDate: po.eta_date ?? po.expected_delivery_date,
+        status: po.status === "Delayed" ? po.status : getShipmentStatus(po),
+      }))
+      .sort((left, right) => (left.etaDate ?? "9999-12-31").localeCompare(right.etaDate ?? "9999-12-31"))
+      .slice(0, 8);
+
+    const getShippedUnitsBetween = (startDate: string, endDate: string) =>
+      purchaseOrders.filter((po) => {
+        const shipDate = po.ship_date ?? po.actual_delivery_date;
+        return !!shipDate && shipDate >= startDate && shipDate <= endDate && po.status !== "Cancelled";
+      })
+      .reduce((sum, po) => sum + Number(po.total_units ?? 0), 0);
+    const unitsShippedThisWeek = getShippedUnitsBetween(sixDaysAgo, today);
+    const unitsShippedLastWeek = getShippedUnitsBetween(thirteenDaysAgo, sevenDaysAgo);
+    const unitsShippedFourWeekAverage = Math.round(getShippedUnitsBetween(twentySevenDaysAgo, today) / 4);
+    const unitsShippedVsLastWeekPercent =
+      unitsShippedLastWeek > 0
+        ? Math.round(((unitsShippedThisWeek - unitsShippedLastWeek) / unitsShippedLastWeek) * 100)
+        : unitsShippedThisWeek > 0
+          ? 100
+          : 0;
 
     const incomingByProduct = new Map<string, number>();
     products.forEach((product) => {
@@ -325,6 +406,31 @@ export const dashboardService = {
         };
       })
       .filter((item) => item.openInvoices > 0 || item.shippedInvoices > 0 || item.recentPoCount > 0)
+      .slice(0, 8);
+
+    const behindPaceAccounts = retailers
+      .map((retailer) => {
+        const accountOrders = wholesaleOrders.filter((po) => po.retailer_id === retailer.id);
+        const recentSubmittedOrders = accountOrders.filter((po) => {
+          const date = po.submitted_at ?? po.order_date ?? toDateOnly(po.created_at);
+          return date >= trailingYearStart;
+        }).length;
+        const windowEnd = retailer.next_reorder_end;
+        const windowStart = retailer.next_reorder_start;
+        const windowExpired = !!windowEnd && windowEnd < today;
+        const windowOpen = !!windowStart && windowStart <= today && (!windowEnd || windowEnd >= today);
+        const hasOpenOrder = accountOrders.some((po) => !["Closed", "Received", "Cancelled"].includes(po.status));
+        const status: "danger" | "warning" | "healthy" = windowExpired && !hasOpenOrder ? "danger" : windowOpen && !hasOpenOrder ? "warning" : "healthy";
+        return {
+          retailerId: retailer.id,
+          retailer: retailer.name,
+          currentPace: `${recentSubmittedOrders} PO${recentSubmittedOrders === 1 ? "" : "s"} trailing year`,
+          comparison: endOfWindow(windowStart, windowEnd),
+          status,
+        };
+      })
+      .filter((item) => item.status !== "healthy")
+      .sort((left, right) => left.status === "danger" && right.status !== "danger" ? -1 : 1)
       .slice(0, 8);
 
     const priorityFeed: DashboardSnapshot["priorityFeed"] = [
@@ -453,6 +559,94 @@ export const dashboardService = {
       .map(([channel, value]) => ({ channel, value }))
       .sort((left, right) => right.value - left.value)
       .slice(0, 7);
+
+    const wholesaleChannelRows = [...wholesaleOrdersYtd
+      .reduce<Map<string, { channel: string; count: number; value: number }>>((acc, po) => {
+        if (!isWholesaleChannel(po.source_channel)) return acc;
+        const retailerName = retailerById.get(po.retailer_id ?? "")?.name;
+        const channel = (po.source_channel && po.source_channel.trim()) || retailerName || "Wholesale";
+        const current = acc.get(channel) ?? { channel, count: 0, value: 0 };
+        current.count += 1;
+        current.value += getRetailRevenue(po);
+        acc.set(channel, current);
+        return acc;
+      }, new Map<string, { channel: string; count: number; value: number }>())
+      .values()]
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 6);
+
+    const getPoUnits = (po: PurchaseOrder) => {
+      const lineUnits = (lineItemsByPo.get(po.id) ?? []).reduce((sum, item) => sum + Number(item.quantity_ordered ?? 0), 0);
+      return lineUnits > 0 ? lineUnits : Number(po.total_units ?? 0);
+    };
+    const purchaserVelocityBase = retailers
+      .map((retailer) => {
+        const accountOrders = wholesaleOrders
+          .filter((po) => po.retailer_id === retailer.id)
+          .map((po) => ({
+            date: po.submitted_at ?? po.order_date ?? toDateOnly(po.created_at),
+            units: getPoUnits(po),
+          }))
+          .filter((entry) => entry.units > 0)
+          .sort((left, right) => left.date.localeCompare(right.date));
+
+        if (!accountOrders.length) return null;
+
+        const recentPairs = accountOrders
+          .filter((entry) => entry.date >= twentySevenDaysAgo)
+          .reduce((sum, entry) => sum + entry.units, 0);
+        const monthlyPeaks = accountOrders.reduce<Map<string, number>>((acc, entry) => {
+          const monthKey = entry.date.slice(0, 7);
+          acc.set(monthKey, (acc.get(monthKey) ?? 0) + entry.units);
+          return acc;
+        }, new Map<string, number>());
+        const best = [...monthlyPeaks.entries()]
+          .map(([monthKey, units]) => ({
+            pairsPerWeek: Math.round(units / 4.345),
+            period: getMonthPeriod(`${monthKey}-01`),
+          }))
+          .sort((left, right) => right.pairsPerWeek - left.pairsPerWeek)[0];
+
+        return {
+          retailerId: retailer.id,
+          purchaser: retailer.name,
+          initials: getInitials(retailer.name),
+          pairsPerWeek: Math.round(recentPairs / 4),
+          bestPairsPerWeek: best?.pairsPerWeek ?? null,
+          bestPeriod: best?.period ?? null,
+          recentPairs,
+          orderCount: accountOrders.length,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+    const purchaserVelocityAverage = purchaserVelocityBase.length
+      ? Math.round(purchaserVelocityBase.reduce((sum, row) => sum + row.pairsPerWeek, 0) / purchaserVelocityBase.length)
+      : 0;
+    const purchaserVelocityRowsWithDelta = purchaserVelocityBase.map((row) => {
+      const deltaVsAverage = row.pairsPerWeek - purchaserVelocityAverage;
+      const status: "moving" | "steady" | "stalling" =
+        row.pairsPerWeek === 0 || deltaVsAverage < -Math.max(5, Math.round(purchaserVelocityAverage * 0.25))
+          ? "stalling"
+          : deltaVsAverage > Math.max(5, Math.round(purchaserVelocityAverage * 0.15))
+            ? "moving"
+            : "steady";
+      return {
+        ...row,
+        deltaVsAverage,
+        status,
+      };
+    });
+    const purchaserVelocityRows = [
+      ...purchaserVelocityRowsWithDelta
+        .sort((left, right) => right.pairsPerWeek - left.pairsPerWeek)
+        .slice(0, 3),
+      ...purchaserVelocityRowsWithDelta
+        .filter((row) => row.deltaVsAverage < 0)
+        .sort((left, right) => left.deltaVsAverage - right.deltaVsAverage)
+        .slice(0, 2),
+    ]
+      .filter((row, index, rows) => rows.findIndex((candidate) => candidate.retailerId === row.retailerId) === index)
+      .slice(0, 5);
 
     const topSkusMap = new Map<string, { sku: string; label: string; value: number; units: number }>();
     retailerOrdersYtd.forEach((po) => {
@@ -607,6 +801,19 @@ export const dashboardService = {
       projectedRevenueYearEnd,
       revenuePaceDeltaPercent,
       revenueByChannelYtd,
+      wholesaleChannelRows,
+      poMapPoints,
+      poStatusCounts: [...poStatusCounts.entries()]
+        .map(([status, count]) => ({ status, count }))
+        .sort((left, right) => right.count - left.count),
+      missingPoLocationCount,
+      latePurchaseOrders,
+      behindPaceAccounts,
+      unitsShippedThisWeek,
+      unitsShippedVsLastWeekPercent,
+      unitsShippedFourWeekAverage,
+      purchaserVelocityAverage,
+      purchaserVelocityRows,
       topSkusYtd,
       revenueProjectionTrend,
       priorityFeed,

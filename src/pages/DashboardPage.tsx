@@ -1,432 +1,708 @@
-import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { DashboardCard } from "@/components/DashboardCard";
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { geoAlbersUsa, geoPath } from "d3-geo";
+import { Link, useNavigate } from "react-router-dom";
+import { feature } from "topojson-client";
+import usStatesTopology from "us-atlas/states-10m.json";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
-import { MultiLineChartCard } from "@/components/MultiLineChartCard";
-import { NotificationBanner } from "@/components/NotificationBanner";
-import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardService } from "@/services/dashboardService";
+import type { DashboardSnapshot } from "@/types/domain";
 import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
+import type { FeatureCollection, Geometry } from "geojson";
+import type { GeometryCollection, Topology } from "topojson-specification";
+
+type MapPoint = DashboardSnapshot["poMapPoints"][number];
+type ChannelRow = DashboardSnapshot["wholesaleChannelRows"][number];
+type StatusRow = DashboardSnapshot["poStatusCounts"][number];
+type AccountRow = DashboardSnapshot["wholesaleAccounts"][number];
+type UrgentAction = {
+  id: string;
+  label: string;
+  title: string;
+  meta: string;
+  tone: "danger" | "warning" | "success" | "info";
+  to: string;
+};
+
+const US_STATES_FEATURES = (
+  feature(
+    usStatesTopology as unknown as Topology,
+    (usStatesTopology as unknown as { objects: { states: GeometryCollection } }).objects.states,
+  ) as FeatureCollection<Geometry, Record<string, unknown>>
+).features;
+
+const US_MAP_PROJECTION = geoAlbersUsa()
+  .translate([490, 280])
+  .scale(1120);
+const US_MAP_PATH = geoPath(US_MAP_PROJECTION);
+
+const STATE_COORDINATES: Record<string, [number, number]> = {
+  AL: [-86.8, 32.8],
+  AK: [-150.0, 64.0],
+  AZ: [-111.7, 34.2],
+  AR: [-92.4, 34.9],
+  CA: [-119.5, 37.2],
+  CO: [-105.5, 39.0],
+  CT: [-72.7, 41.6],
+  DE: [-75.5, 39.0],
+  FL: [-81.7, 27.8],
+  GA: [-83.4, 32.7],
+  HI: [-157.5, 20.9],
+  IA: [-93.5, 42.0],
+  ID: [-114.5, 44.2],
+  IL: [-89.2, 40.1],
+  IN: [-86.1, 40.0],
+  KS: [-98.4, 38.5],
+  KY: [-84.8, 37.8],
+  LA: [-91.9, 30.9],
+  MA: [-71.8, 42.3],
+  MD: [-76.7, 39.0],
+  ME: [-69.2, 45.2],
+  MI: [-85.5, 44.3],
+  MN: [-94.6, 46.0],
+  MO: [-92.5, 38.5],
+  MS: [-89.7, 32.7],
+  MT: [-110.4, 46.9],
+  NC: [-79.8, 35.5],
+  ND: [-100.5, 47.5],
+  NE: [-99.8, 41.5],
+  NH: [-71.6, 43.7],
+  NJ: [-74.5, 40.1],
+  NM: [-106.1, 34.4],
+  NV: [-116.6, 39.3],
+  NY: [-75.5, 42.9],
+  OH: [-82.8, 40.4],
+  OK: [-97.5, 35.6],
+  OR: [-120.5, 44.0],
+  PA: [-77.7, 40.9],
+  RI: [-71.5, 41.7],
+  SC: [-80.9, 33.8],
+  SD: [-100.2, 44.4],
+  TN: [-86.4, 35.8],
+  TX: [-99.9, 31.1],
+  UT: [-111.7, 39.3],
+  VA: [-78.6, 37.5],
+  VT: [-72.7, 44.0],
+  WA: [-120.7, 47.4],
+  WI: [-89.8, 44.6],
+  WV: [-80.6, 38.6],
+  WY: [-107.6, 43.0],
+};
+
+const STATE_NAMES: Record<string, string> = {
+  ALABAMA: "AL",
+  ALASKA: "AK",
+  ARIZONA: "AZ",
+  ARKANSAS: "AR",
+  CALIFORNIA: "CA",
+  COLORADO: "CO",
+  CONNECTICUT: "CT",
+  DELAWARE: "DE",
+  FLORIDA: "FL",
+  GEORGIA: "GA",
+  HAWAII: "HI",
+  IDAHO: "ID",
+  ILLINOIS: "IL",
+  INDIANA: "IN",
+  IOWA: "IA",
+  KANSAS: "KS",
+  KENTUCKY: "KY",
+  LOUISIANA: "LA",
+  MAINE: "ME",
+  MARYLAND: "MD",
+  MASSACHUSETTS: "MA",
+  MICHIGAN: "MI",
+  MINNESOTA: "MN",
+  MISSISSIPPI: "MS",
+  MISSOURI: "MO",
+  MONTANA: "MT",
+  NEBRASKA: "NE",
+  NEVADA: "NV",
+  "NEW HAMPSHIRE": "NH",
+  "NEW JERSEY": "NJ",
+  "NEW MEXICO": "NM",
+  "NEW YORK": "NY",
+  "NORTH CAROLINA": "NC",
+  "NORTH DAKOTA": "ND",
+  OHIO: "OH",
+  OKLAHOMA: "OK",
+  OREGON: "OR",
+  PENNSYLVANIA: "PA",
+  "RHODE ISLAND": "RI",
+  "SOUTH CAROLINA": "SC",
+  "SOUTH DAKOTA": "SD",
+  TENNESSEE: "TN",
+  TEXAS: "TX",
+  UTAH: "UT",
+  VERMONT: "VT",
+  VIRGINIA: "VA",
+  WASHINGTON: "WA",
+  "WEST VIRGINIA": "WV",
+  WISCONSIN: "WI",
+  WYOMING: "WY",
+};
+
+const PREVIEW_MAP_POINTS: MapPoint[] = [
+  { poId: "preview-po-1", poNumber: "DEMO-1048", account: "Preview Northeast Account", city: "Boston", state: "MA", status: "In Transit", sourceChannel: "Wholesale preview", value: 42000, units: 1800 },
+  { poId: "preview-po-2", poNumber: "DEMO-1062", account: "Sample Campus Bookstore", city: "Austin", state: "TX", status: "Delayed", sourceChannel: "Wholesale preview", value: 28000, units: 920 },
+  { poId: "preview-po-3", poNumber: "DEMO-1080", account: "Demo Health Retailer", city: "Phoenix", state: "AZ", status: "Pending Approval", sourceChannel: "Wholesale preview", value: 18500, units: 620 },
+  { poId: "preview-po-4", poNumber: "DEMO-1091", account: "Preview Stadium Shop", city: "Atlanta", state: "GA", status: "Ordered", sourceChannel: "Wholesale preview", value: 35000, units: 1250 },
+  { poId: "preview-po-5", poNumber: "DEMO-1104", account: "Sample Western Chain", city: "Seattle", state: "WA", status: "In Transit", sourceChannel: "Wholesale preview", value: 24500, units: 760 },
+];
+
+const PREVIEW_ACCOUNTS: AccountRow[] = [
+  { retailerId: "preview-account-1", retailer: "Preview Northeast Account", openInvoices: 3, shippedInvoices: 1, recentPoCount: 4, nextWindow: "Demo reorder window" },
+  { retailerId: "preview-account-2", retailer: "Sample Campus Bookstore", openInvoices: 1, shippedInvoices: 2, recentPoCount: 3, nextWindow: "Demo review needed" },
+  { retailerId: "preview-account-3", retailer: "Demo Health Retailer", openInvoices: 2, shippedInvoices: 0, recentPoCount: 2, nextWindow: "Demo active lane" },
+];
+
+const PREVIEW_CHANNELS: ChannelRow[] = [
+  { channel: "Wholesale preview", count: 5, value: 148000 },
+  { channel: "Field sales preview", count: 3, value: 73000 },
+  { channel: "Distributor preview", count: 2, value: 42000 },
+];
+
+const PREVIEW_STATUSES: StatusRow[] = [
+  { status: "In Transit", count: 1 },
+  { status: "Delayed", count: 1 },
+  { status: "Pending Approval", count: 1 },
+  { status: "Ordered", count: 1 },
+  { status: "Shipped", count: 1 },
+];
+
+function normalizeState(value: string | null) {
+  if (!value) return null;
+  const clean = value.trim().toUpperCase();
+  if (clean.length === 2 && STATE_COORDINATES[clean]) return clean;
+  return STATE_NAMES[clean] ?? null;
+}
+
+function getStatusTone(status: string) {
+  const clean = status.toLowerCase();
+  if (clean.includes("delayed") || clean.includes("danger") || clean.includes("critical")) return "danger";
+  if (clean.includes("pending") || clean.includes("hold") || clean.includes("open") || clean.includes("warning")) return "warning";
+  if (clean.includes("shipped") || clean.includes("route") || clean.includes("ordered") || clean.includes("healthy")) return "success";
+  return "info";
+}
+
+function CommandMetricStrip({ data }: { data: DashboardSnapshot }) {
+  const shippedDelta = data.unitsShippedVsLastWeekPercent;
+  const shippedDeltaLabel = `${shippedDelta > 0 ? "+" : ""}${shippedDelta}% vs last wk`;
+
+  const metrics = [
+    { label: "Open wholesale POs", value: formatNumber(data.activeWholesalePipelineCount), note: formatCurrency(data.activeWholesalePipelineValue), to: "/purchase-orders" },
+    { label: "PO Action", value: formatNumber(data.latePurchaseOrders.length), note: "Late or delayed", to: "/purchase-orders" },
+    { label: "Incoming inventory", value: formatNumber(data.incomingInventoryUnits), note: `${data.activeSkusInRoute} SKUs in route`, to: "/production" },
+    { label: "Wholesale revenue", value: formatCurrency(data.wholesaleRevenueTotal), note: `${data.revenuePaceDeltaPercent >= 0 ? "+" : ""}${data.revenuePaceDeltaPercent}% pace`, to: "/reports" },
+  ];
+
+  return (
+    <section className="command-strip-v2">
+      <Link className="command-hero-metric" to="/purchase-orders">
+        <span>Units shipped this week</span>
+        <strong>{formatNumber(data.unitsShippedThisWeek)} prs</strong>
+        <em>{shippedDeltaLabel} · 4-wk avg {formatNumber(data.unitsShippedFourWeekAverage)}</em>
+      </Link>
+      <div className="command-support-metrics">
+        {metrics.map((metric) => (
+          <Link key={metric.label} className="command-support-metric" to={metric.to}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <em>{metric.note}</em>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function buildMapRegions(points: MapPoint[]) {
+  const regions = new Map<string, { state: string; count: number; value: number; units: number; firstPoint: MapPoint; tone: string }>();
+  points.forEach((point) => {
+    const state = normalizeState(point.state);
+    if (!state) return;
+    const current = regions.get(state) ?? {
+      state,
+      count: 0,
+      value: 0,
+      units: 0,
+      firstPoint: point,
+      tone: getStatusTone(point.status),
+    };
+    current.count += 1;
+    current.value += Number(point.value ?? 0);
+    current.units += Number(point.units ?? 0);
+    if (getStatusTone(point.status) === "danger") current.tone = "danger";
+    else if (current.tone !== "danger" && getStatusTone(point.status) === "warning") current.tone = "warning";
+    regions.set(state, current);
+  });
+  return [...regions.values()].sort((left, right) => right.value - left.value);
+}
+
+function buildPoUrgentActions(data: DashboardSnapshot): UrgentAction[] {
+  const today = new Date();
+  return data.latePurchaseOrders.slice(0, 3).map((po) => ({
+    id: `po-action-${po.poId}`,
+    label: po.status === "Delayed" ? "LATE / DELAYED" : "LATE ETA",
+    title: po.poNumber,
+    meta: `${getPoUrgencyReason(po.etaDate, today)} | ${po.partner}`,
+    tone: "danger" as const,
+    to: `/purchase-orders/${po.poId}`,
+  }));
+}
+
+function getPoUrgencyReason(etaDate: string | null, today: Date) {
+  if (!etaDate) return "Missing ETA";
+  const eta = new Date(`${etaDate}T00:00:00`);
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const daysLate = Math.floor((todayDate.getTime() - eta.getTime()) / 86400000);
+  if (daysLate > 0) return `${daysLate} day${daysLate === 1 ? "" : "s"} late`;
+  if (daysLate === 0) return "Due today";
+  return `ETA ${formatDate(etaDate)}`;
+}
+
+function PoCommandMap({ data }: { data: DashboardSnapshot }) {
+  const [previewMode, setPreviewMode] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const liveActions = useMemo(() => buildPoUrgentActions(data), [data]);
+  const points = previewMode ? PREVIEW_MAP_POINTS : data.poMapPoints;
+  const accounts = previewMode ? PREVIEW_ACCOUNTS : data.wholesaleAccounts;
+  const channels = previewMode ? PREVIEW_CHANNELS : data.wholesaleChannelRows;
+  const statuses = previewMode ? PREVIEW_STATUSES : data.poStatusCounts;
+  const urgentActions = previewMode
+    ? [
+      { id: "preview-po-action-1", label: "LATE / DELAYED", title: "DEMO-1062", meta: "4 days late | Sample Campus Bookstore", tone: "danger" as const, to: "/purchase-orders" },
+      { id: "preview-po-action-2", label: "APPROVAL BLOCKED", title: "DEMO-1080", meta: "Pending approval | Demo Health Retailer", tone: "warning" as const, to: "/purchase-orders" },
+      { id: "preview-po-action-3", label: "TRACKING GAP", title: "DEMO-1104", meta: "No tracking update | Sample Western Chain", tone: "warning" as const, to: "/purchase-orders" },
+    ]
+    : liveActions;
+  const regions = buildMapRegions(points);
+  const missingLocationCount = previewMode ? 0 : data.missingPoLocationCount;
+  const maxAccountActivity = Math.max(...accounts.map((account) => account.openInvoices + account.shippedInvoices + account.recentPoCount), 1);
+  const maxChannelValue = Math.max(...channels.map((channel) => channel.value), 1);
+
+  return (
+    <section className={`po-command-map panel${previewMode ? " po-command-map-preview" : ""}${fullscreen ? " po-command-map-fullscreen" : ""}`}>
+      <div className="po-map-header">
+        <div>
+          <div className="po-map-title-row">
+            <p className="section-eyebrow">PO Map</p>
+            {previewMode ? <span className="preview-badge">Preview data</span> : null}
+          </div>
+          <h2>Account & PO Map</h2>
+          <span>Open wholesale POs, account movement, and regional action signals.</span>
+        </div>
+        <div className="po-map-controls">
+          <button type="button" className="btn btn-secondary btn-small" onClick={() => setPreviewMode((current) => !current)}>
+            {previewMode ? "Return to Live Data" : "Preview Map Data"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-small"
+            aria-pressed={fullscreen}
+            onClick={() => setFullscreen((current) => !current)}
+          >
+            {fullscreen ? "Exit Fullscreen" : "Fullscreen Map"}
+          </button>
+        </div>
+      </div>
+
+      <div className="po-map-stage">
+        <div className="po-map-canvas" aria-label={previewMode ? "Preview PO map" : "Live PO map"}>
+          <UsPoMap regions={regions} previewMode={previewMode} />
+          {!regions.length ? (
+            <div className="po-map-empty">
+              <strong>No mapped PO states yet</strong>
+              <span>{missingLocationCount ? `${missingLocationCount} open wholesale POs need ship-to state data.` : "Use preview mode to demonstrate the overlay model."}</span>
+            </div>
+          ) : null}
+          {missingLocationCount ? <div className="po-map-missing">{missingLocationCount} missing location</div> : null}
+          <MapLegend />
+          <div className="po-map-overlays">
+          <MapOverlayCard title="Accounts" actionTo="/retailers" position="top-left">
+            {accounts.slice(0, 4).map((account) => (
+              <AccountOverlayRow
+                key={account.retailerId}
+                account={account}
+                maxActivity={maxAccountActivity}
+                to={previewMode ? "/retailers" : `/retailers/${account.retailerId}`}
+              />
+            ))}
+          </MapOverlayCard>
+
+          <MapOverlayCard title="Sales Channels" actionTo="/reports" position="bottom-left">
+            {channels.slice(0, 4).map((channel) => (
+              <ChannelOverlayRow key={channel.channel} channel={channel} maxValue={maxChannelValue} />
+            ))}
+          </MapOverlayCard>
+
+          <MapOverlayCard title="PO Status" actionTo="/purchase-orders" position="top-right">
+            {statuses.slice(0, 5).map((status) => (
+              <Link key={status.status} className="overlay-row" to="/purchase-orders">
+                <span>{status.status}</span>
+                <StatusBadge label={String(status.count)} />
+              </Link>
+            ))}
+          </MapOverlayCard>
+
+          <MapOverlayCard title="Urgent Actions" actionTo="/alerts" position="bottom-right">
+            {urgentActions.length ? urgentActions.map((action) => (
+              <Link key={action.id} className={`overlay-action overlay-action-${action.tone}`} to={action.to}>
+                <span>{action.label}</span>
+                <strong>{action.title}</strong>
+                <em>{action.meta}</em>
+              </Link>
+            )) : <div className="overlay-empty">No urgent PO actions right now.</div>}
+          </MapOverlayCard>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AccountOverlayRow({
+  account,
+  maxActivity,
+  to,
+}: {
+  account: AccountRow;
+  maxActivity: number;
+  to: string;
+}) {
+  const activity = account.openInvoices + account.shippedInvoices + account.recentPoCount;
+  const width = Math.max((activity / maxActivity) * 100, 8);
+  const status = account.openInvoices > 0 ? "ATTENTION" : account.recentPoCount > 0 ? "ACTIVE" : "WATCH";
+
+  return (
+    <Link className="overlay-visual-row" to={to}>
+      <div className="overlay-visual-head">
+        <span>{account.retailer}</span>
+        <strong>{status}</strong>
+      </div>
+      <div className="overlay-bar-track" aria-hidden="true">
+        <div className="overlay-bar-fill overlay-bar-fill-account" style={{ width: `${width}%` }} />
+      </div>
+      <em>{account.openInvoices} open · {account.recentPoCount} recent POs</em>
+    </Link>
+  );
+}
+
+function ChannelOverlayRow({ channel, maxValue }: { channel: ChannelRow; maxValue: number }) {
+  const width = Math.max((channel.value / maxValue) * 100, channel.value > 0 ? 8 : 0);
+
+  return (
+    <Link className="overlay-visual-row" to="/reports">
+      <div className="overlay-visual-head">
+        <span>{channel.channel}</span>
+        <strong>{formatCurrency(channel.value)}</strong>
+      </div>
+      <div className="overlay-bar-track" aria-hidden="true">
+        <div className="overlay-bar-fill overlay-bar-fill-channel" style={{ width: `${width}%` }} />
+      </div>
+      <em>{channel.count} wholesale PO{channel.count === 1 ? "" : "s"}</em>
+    </Link>
+  );
+}
+
+function UsPoMap({
+  regions,
+  previewMode,
+}: {
+  regions: Array<{ state: string; count: number; firstPoint: MapPoint; tone: string }>;
+  previewMode: boolean;
+}) {
+  return (
+    <svg
+      className="po-map-svg"
+      viewBox="0 0 980 560"
+      role="img"
+      aria-label="United States purchase order activity map"
+    >
+      {US_STATES_FEATURES.map((stateFeature, index) => {
+        const pathData = US_MAP_PATH(stateFeature);
+        if (!pathData) return null;
+        return (
+          <path
+            key={String(stateFeature.id ?? index)}
+            className="po-map-geography"
+            d={pathData}
+          />
+        );
+      })}
+      {regions.map((region) => {
+        const coordinates = STATE_COORDINATES[region.state];
+        if (!coordinates) return null;
+        return (
+          <MapMarker
+            key={region.state}
+            state={region.state}
+            count={region.count}
+            tone={region.tone}
+            radius={Math.min(17, Math.max(9, 7 + region.count * 2.2))}
+            coordinates={coordinates}
+            to={previewMode ? "/purchase-orders" : `/purchase-orders/${region.firstPoint.poId}`}
+            title={`${region.state}: ${region.count} PO${region.count === 1 ? "" : "s"}`}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function MapMarker({
+  state,
+  count,
+  tone,
+  radius,
+  coordinates,
+  to,
+  title,
+}: {
+  state: string;
+  count: number;
+  tone: string;
+  radius: number;
+  coordinates: [number, number];
+  to: string;
+  title: string;
+}) {
+  const navigate = useNavigate();
+
+  const openRoute = () => navigate(to);
+  const projectedCoordinates = US_MAP_PROJECTION(coordinates);
+  if (!projectedCoordinates) return null;
+
+  return (
+    <g
+      className={`po-region-bubble po-region-${tone}`}
+      role="link"
+      tabIndex={0}
+      transform={`translate(${projectedCoordinates[0]} ${projectedCoordinates[1]})`}
+      onClick={openRoute}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openRoute();
+        }
+      }}
+    >
+      <title>{title}</title>
+      <circle r={radius} />
+      <text y="-1">{state}</text>
+      <text y="9" className="po-region-count">{count}</text>
+    </g>
+  );
+}
+
+function MapLegend() {
+  return (
+    <div className="po-map-legend" aria-label="Map marker legend">
+      <span><i className="legend-dot legend-dot-danger" />Late</span>
+      <span><i className="legend-dot legend-dot-warning" />Attention</span>
+      <span><i className="legend-dot legend-dot-success" />In route</span>
+      <span><i className="legend-dot legend-dot-info" />Open</span>
+    </div>
+  );
+}
+
+function MapOverlayCard({ title, actionTo, position, children }: { title: string; actionTo: string; position: "top-left" | "top-right" | "bottom-left" | "bottom-right"; children: ReactNode }) {
+  return (
+    <div className={`map-overlay-card map-overlay-${position}`}>
+      <div className="map-overlay-head">
+        <h3>{title}</h3>
+        <Link to={actionTo}>View</Link>
+      </div>
+      <div className="map-overlay-list">{children}</div>
+    </div>
+  );
+}
+
+function DashboardActionLane({
+  title,
+  to,
+  children,
+}: {
+  title: string;
+  to: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="dashboard-action-lane panel">
+      <div className="lane-header">
+        <h2>{title}</h2>
+        <Link to={to}>View all</Link>
+      </div>
+      <div className="lane-list">{children}</div>
+    </section>
+  );
+}
+
+function DashboardSummaryPanel({
+  title,
+  to,
+  children,
+}: {
+  title: string;
+  to: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="dashboard-summary-panel panel">
+      <div className="lane-header">
+        <h2>{title}</h2>
+        <Link to={to}>View all</Link>
+      </div>
+      <div className="lane-list">{children}</div>
+    </section>
+  );
+}
+
+function PurchaserVelocityPanel({ data }: { data: DashboardSnapshot }) {
+  return (
+    <section className="purchaser-velocity-panel panel">
+      <div className="purchaser-velocity-header">
+        <div>
+          <h2>Socks per purchaser</h2>
+          <span>who's moving, who's stalling</span>
+        </div>
+        <div className="purchaser-velocity-average">avg {formatNumber(data.purchaserVelocityAverage)}/wk</div>
+      </div>
+
+      <div className="purchaser-velocity-table" role="table" aria-label="Socks per purchaser">
+        <div className="purchaser-velocity-columns" role="row">
+          <span>Purchaser</span>
+          <span>Pairs / wk</span>
+          <span>Vs avg</span>
+          <span>Best</span>
+          <span />
+        </div>
+        {data.purchaserVelocityRows.length ? data.purchaserVelocityRows.map((row) => (
+          <Link key={row.retailerId} className="purchaser-velocity-row" to={`/retailers/${row.retailerId}`} role="row">
+            <div className="purchaser-cell" role="cell">
+              <span className="purchaser-mark">{row.initials}</span>
+              <div>
+                <strong>{row.purchaser}</strong>
+                <em>{row.orderCount} wholesale PO{row.orderCount === 1 ? "" : "s"}</em>
+              </div>
+            </div>
+            <strong className="purchaser-rate" role="cell">{formatNumber(row.pairsPerWeek)}/wk</strong>
+            <span className={`purchaser-delta purchaser-delta-${row.deltaVsAverage > 0 ? "up" : row.deltaVsAverage < 0 ? "down" : "flat"}`} role="cell">
+              {row.deltaVsAverage > 0 ? "▲ +" : row.deltaVsAverage < 0 ? "▼ -" : "• "}
+              {formatNumber(Math.abs(row.deltaVsAverage))}
+            </span>
+            <div className="purchaser-best" role="cell">
+              <strong>{row.bestPairsPerWeek !== null ? formatNumber(row.bestPairsPerWeek) : "—"}</strong>
+              {row.bestPeriod ? <em>{row.bestPeriod}</em> : null}
+            </div>
+            <span className="purchaser-chevron" aria-hidden="true">›</span>
+          </Link>
+        )) : (
+          <div className="purchaser-velocity-empty">Purchaser velocity needs wholesale PO history.</div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export function DashboardPage() {
-  const [syncingShopifyDashboard, setSyncingShopifyDashboard] = useState(false);
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [priorityDrawerOpen, setPriorityDrawerOpen] = useState(false);
-  const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
-  const highlightTimeoutRef = useRef<number | null>(null);
-  const { data, loading, error, reload } = useAsyncData(() => dashboardService.getSnapshot(), []);
-
-  useEffect(() => () => {
-    if (highlightTimeoutRef.current) {
-      window.clearTimeout(highlightTimeoutRef.current);
-    }
-  }, []);
+  const { data, loading, error } = useAsyncData(() => dashboardService.getSnapshot(), []);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load dashboard"} />;
 
-  const channelRevenueRows = data.revenueByChannelYtd.filter((item) => item.channel !== "DTC + Shopify");
-  const activeChannelRows = channelRevenueRows.filter((item) => item.value > 0);
-  const inactiveChannelRows = channelRevenueRows.filter((item) => item.value <= 0);
-  const topChannelValue = activeChannelRows[0]?.value ?? 0;
-  const totalChannelRevenue = activeChannelRows.reduce((sum, item) => sum + item.value, 0);
-  const urgentPriorityItems = data.priorityFeed.filter((item) => item.severity === "danger" || item.severity === "warning");
-  const priorityItems = (urgentPriorityItems.length ? urgentPriorityItems : data.priorityFeed).slice(0, 4);
-  const criticalAlerts = data.recentAlerts
-    .filter((alert) => ["Critical", "High"].includes(alert.severity))
-    .slice(0, 3);
-  const highlightSection = (sectionId: string) => {
-    setHighlightedSectionId(sectionId);
-
-    if (highlightTimeoutRef.current) {
-      window.clearTimeout(highlightTimeoutRef.current);
-    }
-
-    highlightTimeoutRef.current = window.setTimeout(() => {
-      setHighlightedSectionId((currentSectionId) => currentSectionId === sectionId ? null : currentSectionId);
-    }, 1400);
-  };
-  const dashboardSectionClass = (sectionId: string, className: string) => (
-    highlightedSectionId === sectionId ? `${className} dashboard-section-highlight` : className
-  );
+  const reorderRows = data.skuReorderWindows
+    .filter((item) => item.recommendation.toLowerCase().includes("reorder") || item.currentQuantity <= 25)
+    .slice(0, 5);
+  const lateRows = data.latePurchaseOrders.slice(0, 5);
+  const behindRows = data.behindPaceAccounts.slice(0, 5);
 
   return (
-    <div className="dashboard-command dashboard-calm">
-      <PageHeader
-        title="Operations Dashboard"
-        description="A calmer command overview: what is healthy, what is moving, and what needs action."
-      />
-      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+    <div className="dashboard-command dashboard-v2">
+      <CommandMetricStrip data={data} />
+      <PoCommandMap data={data} />
+      <PurchaserVelocityPanel data={data} />
 
-      <nav className="dashboard-jump-nav" aria-label="Dashboard sections">
-        <a href="#dashboard-summary" onClick={() => highlightSection("dashboard-summary")}>Summary</a>
-        <a href="#dashboard-accounts" onClick={() => highlightSection("dashboard-accounts")}>Revenue & Accounts</a>
-        <a href="#dashboard-health" onClick={() => highlightSection("dashboard-health")}>Wholesale Health</a>
-        <a href="#dashboard-manufacturing" onClick={() => highlightSection("dashboard-manufacturing")}>Manufacturing</a>
-        <a href="#dashboard-inventory" onClick={() => highlightSection("dashboard-inventory")}>Inventory Risk</a>
-        <button type="button" onClick={() => setPriorityDrawerOpen(true)}>Needs Attention</button>
-      </nav>
-
-      <section id="dashboard-summary" className={dashboardSectionClass("dashboard-summary", "dashboard-section")}>
-        <div className="dashboard-section-header">
-          <div>
-            <p className="section-eyebrow">Command Summary</p>
-            <h2>Business state in one pass</h2>
-          </div>
-          <div className="btn-row">
-            <Link className="btn btn-secondary btn-small" to="/alerts">Open Alerts</Link>
-            <Link className="btn btn-primary btn-small" to="/purchase-orders/new">New PO</Link>
-          </div>
-        </div>
-        <div className="command-kpi-strip dashboard-kpi-strip">
-          <DashboardCard label="Wholesale Revenue" value={formatCurrency(data.wholesaleRevenueTotal)} footnote={`${data.revenuePaceDeltaPercent >= 0 ? "+" : ""}${data.revenuePaceDeltaPercent}% vs prior pace`} highlight to="/reports" />
-          <DashboardCard label="Danger SKUs" value={data.dangerSkuCount} footnote={`${data.skuOosRiskCriticalCount} critical OOS risks`} to="/inventory" />
-          <DashboardCard label="Awaiting Action" value={data.awaitingActionCount} footnote="Stops and follow-ups" to="/alerts" />
-          <DashboardCard label="Incoming Inventory" value={formatNumber(data.incomingInventoryUnits)} footnote={`${data.activeSkusInRoute} active SKUs in route`} to="/production" />
-          <DashboardCard label="Open Invoices" value={data.openInvoiceCount} footnote="POs in flight" to="/purchase-orders" />
-          <DashboardCard label="Shipped Invoices" value={data.shippedInvoiceCount} footnote={`${data.inventoryInRouteCount} still in route`} to="/production" />
-        </div>
-      </section>
-
-      <div className="dashboard-focus-grid">
-        <main className="dashboard-main-column">
-          <section id="dashboard-accounts" className={dashboardSectionClass("dashboard-accounts", "dashboard-section panel section-stack")}>
-            <div className="dashboard-section-header">
+      <div className="dashboard-action-grid">
+        <DashboardActionLane title="Reorder Now" to="/inventory">
+          {reorderRows.length ? reorderRows.map((item) => (
+            <Link key={item.sku} className="lane-row lane-row-danger" to="/inventory">
               <div>
-                <p className="section-eyebrow">Revenue & Accounts</p>
-                <h2>Channel and retailer signals</h2>
+                <strong>{item.sku || item.productName}</strong>
+                <span>{item.productName}</span>
               </div>
-              <div className="btn-row">
-                <Link className="btn btn-secondary btn-small" to="/retailers">Open Accounts</Link>
-                <Link className="btn btn-secondary btn-small" to="/products">Open Products</Link>
-              </div>
-            </div>
-            <div className="dashboard-summary-grid">
-              <div className="section-stack">
-                <div className="panel-header">
-                  <h3>Channel Lanes</h3>
-                  <span className="helper-text">Top wholesale channels</span>
-                </div>
-                <div className="channel-lane-board">
-                  {activeChannelRows.length ? activeChannelRows.map((item, index) => {
-                    const widthPercent = topChannelValue > 0 ? Math.max((item.value / topChannelValue) * 100, 8) : 0;
-                    const sharePercent = totalChannelRevenue > 0 ? Math.round((item.value / totalChannelRevenue) * 100) : 0;
+              <em>{formatNumber(item.currentQuantity)} left | REORDER</em>
+            </Link>
+          )) : <div className="lane-empty">No reorder-now SKUs.</div>}
+        </DashboardActionLane>
 
-                    return (
-                      <div key={item.channel} className="channel-lane-row">
-                        <div className="channel-lane-meta">
-                          <span className="channel-lane-rank">{String(index + 1).padStart(2, "0")}</span>
-                          <div className="cell-stack">
-                            <strong>{item.channel}</strong>
-                            <span className="muted">{sharePercent}% of channel revenue</span>
-                          </div>
-                        </div>
-                        <div className="channel-lane-track" aria-hidden="true">
-                          <div className="channel-lane-fill" style={{ width: `${widthPercent}%` }} />
-                        </div>
-                        <strong className="channel-lane-value">{formatCurrency(item.value)}</strong>
-                      </div>
-                    );
-                  }) : <div className="empty-state">No wholesale channel revenue data is available yet.</div>}
-                </div>
-                {inactiveChannelRows.length ? (
-                  <details className="channel-zero-foldout">
-                    <summary>
-                      <span>Accounts without YTD sales</span>
-                      <strong>{inactiveChannelRows.length} hidden</strong>
-                    </summary>
-                    <div className="compact-data-list">
-                      {inactiveChannelRows.map((item) => (
-                        <div key={item.channel} className="compact-data-row">
-                          <div className="cell-stack">
-                            <strong>{item.channel}</strong>
-                            <span className="muted">No YTD revenue attached</span>
-                          </div>
-                          <strong>{formatCurrency(item.value)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ) : null}
-              </div>
-
-              <div className="section-stack">
-                <div className="panel-header">
-                  <h3>Account Velocity</h3>
-                  <span className="helper-text">Top active accounts</span>
-                </div>
-                <div className="compact-data-list">
-                  {data.wholesaleAccounts.length ? data.wholesaleAccounts.slice(0, 3).map((account) => (
-                    <Link key={account.retailerId} className="compact-data-row dashboard-row-airy" to={`/retailers/${account.retailerId}`}>
-                      <div className="cell-stack">
-                        <strong>{account.retailer}</strong>
-                        <span className="muted">{account.recentPoCount} recent POs | {account.nextWindow}</span>
-                      </div>
-                      <div className="cell-stack">
-                        <span>{account.openInvoices} open</span>
-                        <span>{account.shippedInvoices} shipped</span>
-                      </div>
-                    </Link>
-                  )) : <div className="empty-state">No retailer activity has been logged yet.</div>}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section id="dashboard-health" className={dashboardSectionClass("dashboard-health", "dashboard-section dashboard-primary-panel")}>
-            <div className="dashboard-section-header">
+        <DashboardActionLane title="Late / Delayed" to="/purchase-orders">
+          {lateRows.length ? lateRows.map((po) => (
+            <Link key={po.poId} className="lane-row lane-row-danger" to={`/purchase-orders/${po.poId}`}>
               <div>
-                <p className="section-eyebrow">Revenue & Wholesale Health</p>
-                <h2>Revenue pace and active operating context</h2>
+                <strong>{po.poNumber}</strong>
+                <span>{po.partner}</span>
               </div>
-              <Link className="btn btn-secondary btn-small" to="/reports">Open Reports</Link>
-            </div>
-            <div className="dashboard-primary-grid">
-              <div className="dashboard-chart-shell">
-                <MultiLineChartCard
-                  title="Revenue Projection"
-                  data={data.revenueProjectionTrend}
-                  xKey="label"
-                  series={[
-                    { dataKey: "actualRevenue", label: "Actual YTD", stroke: "#0f172a" },
-                    { dataKey: "projectedRevenue", label: "Projected Pace", stroke: "#475467" },
-                    { dataKey: "priorBaselineRevenue", label: "Prior YTD Pace", stroke: "#94a3b8", strokeDasharray: "6 4" },
-                  ]}
-                />
+              <em>{formatDate(po.etaDate)} | DELAYED</em>
+            </Link>
+          )) : <div className="lane-empty">No late POs.</div>}
+        </DashboardActionLane>
+
+        <DashboardActionLane title="Behind Pace" to="/retailers">
+          {behindRows.length ? behindRows.map((account) => (
+            <Link key={account.retailerId} className={`lane-row lane-row-${account.status}`} to={`/retailers/${account.retailerId}`}>
+              <div>
+                <strong>{account.retailer}</strong>
+                <span>{account.currentPace}</span>
               </div>
-              <div className="dashboard-summary-stack">
-                <div className="detail-card"><span>Current YTD</span><strong>{formatCurrency(data.revenueYtd)}</strong></div>
-                <div className="detail-card"><span>Prior YTD</span><strong>{formatCurrency(data.priorRevenueYtd)}</strong></div>
-                <div className="detail-card"><span>Projected Year End</span><strong>{formatCurrency(data.projectedRevenueYearEnd)}</strong></div>
-                <div className="detail-card">
-                  <span>Pace Signal</span>
-                  <strong className={data.revenuePaceDeltaPercent >= 0 ? "success-text" : "danger-text"}>
-                    {data.revenuePaceDeltaPercent >= 0 ? "+" : ""}{data.revenuePaceDeltaPercent}% vs prior pace
-                  </strong>
-                </div>
+              <em>{account.comparison} | REVIEW</em>
+            </Link>
+          )) : <div className="lane-empty">No account pace stops.</div>}
+        </DashboardActionLane>
+      </div>
+
+      <div className="dashboard-summary-row">
+        <DashboardSummaryPanel title="Manufacturing Pulse" to="/production">
+          {data.manufacturingSnapshotRows.slice(0, 4).map((row) => (
+            <Link key={row.poId} className="lane-row" to={`/purchase-orders/${row.poId}`}>
+              <div>
+                <strong>{row.poNumber} | {row.manufacturer}</strong>
+                <span>{formatNumber(row.incomingUnits)} units | {row.skuCount} SKUs</span>
               </div>
-            </div>
-          </section>
+              <StatusBadge label={row.invoiceStatus || row.shipmentStatus} />
+            </Link>
+          ))}
+          {!data.manufacturingSnapshotRows.length ? <div className="lane-empty">No active inbound manufacturing.</div> : null}
+        </DashboardSummaryPanel>
 
-          <div className="dashboard-secondary-grid">
-            <section id="dashboard-manufacturing" className={dashboardSectionClass("dashboard-manufacturing", "dashboard-section panel section-stack")}>
-              <div className="dashboard-section-header">
-                <div>
-                  <p className="section-eyebrow">Manufacturing Pulse</p>
-                  <h2>Inbound production needing visibility</h2>
-                </div>
-                <Link className="btn btn-secondary btn-small" to="/production">Open Manufacturing</Link>
+        <DashboardSummaryPanel title="Inventory Risk" to="/inventory">
+          {data.inventoryAlerts.slice(0, 4).map((item) => (
+            <Link key={item.sku} className={`lane-row lane-row-${item.status}`} to="/inventory">
+              <div>
+                <strong>{item.sku || item.productName}</strong>
+                <span>{item.productName}</span>
               </div>
-              <div className="density-table">
-                {data.manufacturingSnapshotRows.length ? data.manufacturingSnapshotRows.slice(0, 3).map((row) => (
-                  <Link key={row.poId} className="density-row dashboard-row-airy" to={`/purchase-orders/${row.poId}`}>
-                    <div className="cell-stack">
-                      <strong>{row.poNumber} | {row.manufacturer}</strong>
-                      <span className="muted">{row.reorderWindowSummary}</span>
-                    </div>
-                    <span className="density-value">{formatNumber(row.incomingUnits)} units</span>
-                    <span>{formatDate(row.etaDate)}</span>
-                    <StatusBadge label={row.invoiceStatus || row.shipmentStatus} />
-                  </Link>
-                )) : <div className="empty-state">No active manufacturing invoices are in route right now.</div>}
+              <em>{formatNumber(item.currentQuantity)} on hand | {formatNumber(item.incomingQuantity)} incoming</em>
+            </Link>
+          ))}
+          {!data.inventoryAlerts.length ? <div className="lane-empty">Inventory risk is clear.</div> : null}
+        </DashboardSummaryPanel>
+
+        <DashboardSummaryPanel title="Account Activity" to="/retailers">
+          {data.wholesaleAccounts.slice(0, 4).map((account) => (
+            <Link key={account.retailerId} className="lane-row" to={`/retailers/${account.retailerId}`}>
+              <div>
+                <strong>{account.retailer}</strong>
+                <span>{account.recentPoCount} recent POs | {account.nextWindow}</span>
               </div>
-            </section>
-
-            <section id="dashboard-inventory" className={dashboardSectionClass("dashboard-inventory", "dashboard-section panel section-stack")}>
-              <div className="dashboard-section-header">
-                <div>
-                  <p className="section-eyebrow">Inventory Risk</p>
-                  <h2>Top stops and reorder pressure</h2>
-                </div>
-                <Link className="btn btn-secondary btn-small" to="/inventory">Open Inventory</Link>
-              </div>
-              <div className="compact-data-list">
-                {data.inventoryAlerts.length ? data.inventoryAlerts.slice(0, 3).map((item) => (
-                  <Link key={item.sku} className={`compact-data-row dashboard-row-airy${item.status === "danger" ? " compact-data-row-danger" : ""}`} to="/inventory">
-                    <div className="cell-stack">
-                      <strong>{item.productName}</strong>
-                      <span className="muted">{item.sku} | On hand {item.currentQuantity} | Incoming {item.incomingQuantity}</span>
-                    </div>
-                    <StatusBadge label={item.status === "danger" ? "Critical" : item.status === "warning" ? "Low" : "Healthy"} />
-                  </Link>
-                )) : <div className="empty-state">No inventory alerts right now.</div>}
-              </div>
-            </section>
-          </div>
-
-          <details className="dashboard-more panel">
-            <summary>
-              <span>Secondary insights</span>
-              <strong>Top SKUs, reorder windows, Shopify sync, and recent activity</strong>
-            </summary>
-            <div className="dashboard-more-grid">
-              <section className="section-stack">
-                <div className="panel-header">
-                  <h3>Top SKUs YTD</h3>
-                  <Link className="btn btn-secondary btn-small" to="/products">Products</Link>
-                </div>
-                <div className="compact-data-list">
-                  {data.topSkusYtd.slice(0, 5).map((item) => (
-                    <Link key={item.sku || item.label} className="compact-data-row" to="/products">
-                      <div className="cell-stack">
-                        <strong>{item.label}</strong>
-                        <span className="muted">{item.sku || "SKU unavailable"}</span>
-                      </div>
-                      <div className="cell-stack">
-                        <strong>{formatCurrency(item.value)}</strong>
-                        <span>{formatNumber(item.units)} units</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-
-              <section className="section-stack">
-                <div className="panel-header">
-                  <h3>SKU Reorder Windows</h3>
-                  <Link className="btn btn-secondary btn-small" to="/products">Products</Link>
-                </div>
-                <div className="compact-data-list">
-                  {data.skuReorderWindows.slice(0, 5).map((item) => (
-                    <Link key={item.sku} className="compact-data-row" to="/products">
-                      <div className="cell-stack">
-                        <strong>{item.productName}</strong>
-                        <span className="muted">{item.sku}</span>
-                      </div>
-                      <div className="cell-stack">
-                        <strong>{item.recommendation}</strong>
-                        <span>{item.reorderByDate ? formatDate(item.reorderByDate) : "Manual review"}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-
-              <section className="section-stack">
-                <div className="panel-header">
-                  <h3>DTC + Shopify</h3>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    disabled={syncingShopifyDashboard}
-                    onClick={async () => {
-                      try {
-                        setSyncingShopifyDashboard(true);
-                        const result = await dashboardService.syncShopifyDashboard();
-                        await reload();
-                        setNotice({
-                          tone: "success",
-                          message: `Shopify dashboard sync completed. ${result.ordersSynced ?? 0} orders and ${result.lineItemsSynced ?? 0} line items refreshed.`,
-                        });
-                      } catch (err) {
-                        setNotice({
-                          tone: "error",
-                          message: err instanceof Error ? err.message : "Shopify dashboard sync failed.",
-                        });
-                      } finally {
-                        setSyncingShopifyDashboard(false);
-                      }
-                    }}
-                  >
-                    {syncingShopifyDashboard ? "Syncing..." : "Sync"}
-                  </button>
-                </div>
-                <div className="detail-card">
-                  <span>Trailing 12 Months</span>
-                  <strong>{formatCurrency(data.dtcShopifyRevenueTrailingYear)}</strong>
-                </div>
-              </section>
-
-              <section className="section-stack">
-                <div className="panel-header">
-                  <h3>Recent Activity</h3>
-                  <Link className="btn btn-secondary btn-small" to="/reports">Reports</Link>
-                </div>
-                <div className="timeline">
-                  {data.recentActivity.slice(0, 4).map((item) => (
-                    <div key={item.id} className="timeline-item">
-                      <strong>{item.title}</strong>
-                      <p>{item.description}</p>
-                      <span className="muted">{formatDate(item.created_at)}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-          </details>
-        </main>
-
-        {priorityDrawerOpen ? (
-          <>
-            <button
-              type="button"
-              className="priority-drawer-backdrop"
-              aria-label="Close priority drawer"
-              onClick={() => setPriorityDrawerOpen(false)}
-            />
-
-            <aside className="inspector-panel dashboard-priority-rail priority-drawer priority-drawer-open">
-              <section id="dashboard-actions" className="panel section-stack">
-                <div className="dashboard-section-header">
-                  <div>
-                    <p className="section-eyebrow">Needs Attention</p>
-                    <h2>Action rail</h2>
-                  </div>
-                  <div className="btn-row">
-                    <Link className="btn btn-secondary btn-small" to="/alerts">View all</Link>
-                    <button type="button" className="btn btn-ghost btn-small" onClick={() => setPriorityDrawerOpen(false)}>Close</button>
-                  </div>
-                </div>
-                <div className="timeline">
-                  {priorityItems.map((item) => (
-                    <div key={item.id} className={`timeline-item${item.severity === "danger" ? " timeline-item-danger" : ""}`}>
-                      <div className="panel-header">
-                        <strong>{item.title}</strong>
-                        <StatusBadge label={item.severity} />
-                      </div>
-                      <p>{item.detail}</p>
-                      {item.actionLabel ? <span className="helper-text">{item.actionLabel}</span> : null}
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel section-stack">
-                <div className="panel-header">
-                  <h3>Critical Alerts</h3>
-                  <Link className="btn btn-secondary btn-small" to="/alerts">Open</Link>
-                </div>
-                <div className="timeline">
-                  {(criticalAlerts.length ? criticalAlerts : data.recentAlerts.slice(0, 3)).map((alert) => (
-                    <Link key={alert.id} className="dashboard-link-row" to="/alerts">
-                      <div className="timeline-item">
-                        <strong>{alert.message}</strong>
-                        <p>{formatDate(alert.created_at)}</p>
-                        <StatusBadge label={`${alert.severity} ${alert.alert_type}`} />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel section-stack">
-                <div className="panel-header">
-                  <h3>Awaiting Action</h3>
-                  <Link className="btn btn-secondary btn-small" to="/purchase-orders">Open POs</Link>
-                </div>
-                <div className="detail-grid">
-                  <div className="detail-card"><span>Awaiting</span><strong>{data.awaitingActionCount}</strong></div>
-                  <div className="detail-card"><span>PO Submit</span><strong>{data.awaitingPoSubmissionCount}</strong></div>
-                  <div className="detail-card"><span>Open Invoices</span><strong>{data.openInvoiceCount}</strong></div>
-                  <div className="detail-card"><span>Danger SKUs</span><strong className="danger-text">{data.dangerSkuCount}</strong></div>
-                </div>
-              </section>
-            </aside>
-          </>
-        ) : null}
+              <em>{account.openInvoices} open | {account.shippedInvoices} shipped</em>
+            </Link>
+          ))}
+          {!data.wholesaleAccounts.length ? <div className="lane-empty">No wholesale account activity yet.</div> : null}
+        </DashboardSummaryPanel>
       </div>
     </div>
   );

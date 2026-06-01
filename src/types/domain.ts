@@ -809,6 +809,50 @@ export interface DashboardSnapshot {
   projectedRevenueYearEnd: number;
   revenuePaceDeltaPercent: number;
   revenueByChannelYtd: Array<{ channel: string; value: number }>;
+  wholesaleChannelRows: Array<{ channel: string; count: number; value: number }>;
+  poMapPoints: Array<{
+    poId: string;
+    poNumber: string;
+    account: string;
+    city: string | null;
+    state: string | null;
+    status: PurchaseOrderStatus;
+    sourceChannel: string | null;
+    value: number;
+    units: number;
+  }>;
+  poStatusCounts: Array<{ status: PurchaseOrderStatus | string; count: number }>;
+  missingPoLocationCount: number;
+  latePurchaseOrders: Array<{
+    poId: string;
+    poNumber: string;
+    partner: string;
+    etaDate: string | null;
+    status: PurchaseOrderStatus | string;
+  }>;
+  behindPaceAccounts: Array<{
+    retailerId: string;
+    retailer: string;
+    currentPace: string;
+    comparison: string;
+    status: "danger" | "warning" | "healthy";
+  }>;
+  unitsShippedThisWeek: number;
+  unitsShippedVsLastWeekPercent: number;
+  unitsShippedFourWeekAverage: number;
+  purchaserVelocityAverage: number;
+  purchaserVelocityRows: Array<{
+    retailerId: string;
+    purchaser: string;
+    initials: string;
+    pairsPerWeek: number;
+    deltaVsAverage: number;
+    bestPairsPerWeek: number | null;
+    bestPeriod: string | null;
+    recentPairs: number;
+    orderCount: number;
+    status: "moving" | "steady" | "stalling";
+  }>;
   topSkusYtd: Array<{ sku: string; label: string; value: number; units: number }>;
   revenueProjectionTrend: Array<{
     label: string;
