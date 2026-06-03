@@ -151,7 +151,11 @@ function buildLineItemFromBarcode(barcode: ProductBarcode, index: number): Build
   return {
     tempId: `line-${barcode.id}-${Date.now()}-${index}`,
     product_id: product?.id ?? null,
-    sku: normalizePoSku(product?.sku || barcode.sku),
+    sku: normalizePoSku(
+      /^SF-\d+$/.test(String(barcode.sku ?? ""))
+        ? (product?.sku || barcode.sku)
+        : (barcode.sku || product?.sku)
+    ),
     upc: barcode.barcode_upc ?? product?.upc ?? "",
     product_name: barcode.product_name,
     description: barcode.product_name,
