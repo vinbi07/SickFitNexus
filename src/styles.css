@@ -1800,6 +1800,10 @@ textarea {
 .po-line-grid {
   display: grid;
   gap: 10px;
+}
+
+.po-line-grid-scroll {
+  overflow-x: auto;
   margin-top: 18px;
 }
 

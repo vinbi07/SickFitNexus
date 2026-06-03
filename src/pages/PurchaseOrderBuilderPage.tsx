@@ -805,6 +805,7 @@ export function PurchaseOrderBuilderPage() {
                 <button className="btn btn-primary btn-small" onClick={() => addProductsByIds(selectedProductIds)}>Add Selected Products</button>
               </div>
             </div>
+            <div className="po-line-grid-scroll">
             <div className="po-line-grid">
               <div className="po-line-grid-head">
                 <span>Line</span><span>SKU</span><span>Description</span><span>UPC</span><span>Unit</span><span>Qty</span><span>Unit Cost</span><span>Ext Cost</span><span>Unit Retail</span><span>Ext Retail</span><span>Actions</span>
@@ -829,6 +830,7 @@ export function PurchaseOrderBuilderPage() {
                   </div>
                 </div>
               ))}
+            </div>
             </div>
             <div className="po-totals-bar">
               <div className="detail-card"><span>Total Units</span><strong>{totalUnits}</strong></div>
