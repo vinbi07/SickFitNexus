@@ -87,7 +87,7 @@ export function PurchaseOrderDocumentView({
                 <th className="r">Qty</th>
                 <th className="r">Unit Cost</th>
                 <th className="r">Ext. Cost</th>
-                <th className="r">Unit Retail</th>
+                <th className="r"><strong>Suggested</strong> <strong>Retail</strong></th>
                 <th className="r">Ext. Retail</th>
               </tr>
             </thead>
@@ -111,8 +111,9 @@ export function PurchaseOrderDocumentView({
         </div>
         <div className="po-totals">
           <div><div className="lab">Total Units</div><div className="val">{documentModel.totalUnits}</div></div>
+          <div><div className="lab">Total Gross Cost</div><div className="val">{formatPoCurrency(documentModel.totalGrossCost)}</div></div>
           <div><div className="lab">Total Cost</div><div className="val">{formatPoCurrency(documentModel.totalCost)}</div></div>
-          <div><div className="lab">Total Retail</div><div className="val accent">{formatPoCurrency(documentModel.totalRetail)}</div></div>
+          <div><div className="lab">Total Suggested Retail</div><div className="val accent">{formatPoCurrency(documentModel.totalRetail)}</div></div>
         </div>
         <div className="po-notes">
           <div className="lab">Notes / Special Instructions</div>

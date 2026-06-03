@@ -238,7 +238,11 @@ function buildLineItemFromBarcode(barcode: ProductBarcode, index: number): Build
   return {
     tempId: `line-${barcode.id}-${Date.now()}-${index}`,
     product_id: product?.id ?? null,
-    sku: normalizePoSku(product?.sku || barcode.sku),
+    sku: normalizePoSku(
+      /^SF-\d+$/.test(String(barcode.sku ?? ""))
+        ? (product?.sku || barcode.sku)
+        : (barcode.sku || product?.sku)
+    ),
     upc: barcode.barcode_upc ?? product?.upc ?? "",
     product_name: barcode.product_name,
     description: barcode.product_name,
@@ -1195,7 +1199,7 @@ export function PurchaseOrderBuilderPage() {
             <div className="po-line-grid-scroll">
             <div className="po-line-grid">
               <div className="po-line-grid-head">
-                <span>Line</span><span>SKU</span><span>Description</span><span>UPC</span><span>Unit</span><span>Qty</span><span>Unit Cost</span><span>Ext Cost</span><span>Unit Retail</span><span>Ext Retail</span><span>Actions</span>
+                <span>Line</span><span>SKU</span><span>Description</span><span>UPC</span><span>Unit</span><span>Qty</span><span>Unit Cost</span><span>Ext Cost</span><span><strong>Suggested</strong> <strong>Retail</strong></span><span>Ext Retail</span><span>Actions</span>
               </div>
               {normalizedLines.map((item, index) => (
                 <div key={item.id ?? item.tempId} className="po-line-grid-row">
@@ -1221,8 +1225,9 @@ export function PurchaseOrderBuilderPage() {
             </div>
             <div className="po-totals-bar">
               <div className="detail-card"><span>Total Units</span><strong>{totalUnits}</strong></div>
+              <div className="detail-card"><span>Total Gross Cost</span><strong>{formatCurrency(totalCost)}</strong></div>
               <div className="detail-card"><span>Total Cost</span><strong>{formatCurrency(totalCost)}</strong></div>
-              <div className="detail-card"><span>Total Retail</span><strong>{formatCurrency(totalRetail)}</strong></div>
+              <div className="detail-card"><span>Total Suggested Retail</span><strong>{formatCurrency(totalRetail)}</strong></div>
             </div>
             <div className="po-builder-search">
               <div className="field field-wide">

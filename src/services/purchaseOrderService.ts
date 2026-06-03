@@ -454,6 +454,7 @@ export const purchaseOrderService = {
         "po_line_items",
         normalizedLineItems.map((item) => ({
           ...omitEmptyId(item),
+          id: item.id || crypto.randomUUID(),
           purchase_order_id: savedPo.id,
         })),
       )) as PoLineItem[];
