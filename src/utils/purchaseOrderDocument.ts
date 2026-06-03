@@ -30,6 +30,7 @@ export type PurchaseOrderDocumentModel = {
   approverName: string;
   lines: PurchaseOrderDocumentLine[];
   totalUnits: number;
+  totalGrossCost: number;
   totalCost: number;
   totalRetail: number;
   notes: string;
@@ -130,6 +131,7 @@ export function buildPurchaseOrderDocumentModel(
     approverName,
     lines: lineModels,
     totalUnits: Number(purchaseOrder.total_units ?? lineModels.reduce((sum, item) => sum + item.quantity, 0)),
+    totalGrossCost: lineModels.reduce((sum, item) => sum + item.extendedCost, 0),
     totalCost: Number(purchaseOrder.subtotal ?? purchaseOrder.total_cost ?? lineModels.reduce((sum, item) => sum + item.extendedCost, 0)),
     totalRetail: Number(purchaseOrder.total_retail ?? lineModels.reduce((sum, item) => sum + item.extendedRetail, 0)),
     notes: String(purchaseOrder.buyer_notes ?? purchaseOrder.notes ?? "No notes / special instructions provided."),
@@ -307,7 +309,7 @@ export function buildPurchaseOrderDocumentHtml(
                 <th class="r">Qty</th>
                 <th class="r">Unit Cost</th>
                 <th class="r">Ext. Cost</th>
-                <th class="r">Unit Retail</th>
+                <th class="r"><strong>Suggested</strong> <strong>Retail</strong></th>
                 <th class="r">Ext. Retail</th>
               </tr>
             </thead>
@@ -318,8 +320,9 @@ export function buildPurchaseOrderDocumentHtml(
         </div>
         <div class="po-totals">
           <div><div class="lab">Total Units</div><div class="val">${model.totalUnits}</div></div>
+          <div><div class="lab">Total Gross Cost</div><div class="val">${escapeHtml(formatPoCurrency(model.totalGrossCost))}</div></div>
           <div><div class="lab">Total Cost</div><div class="val">${escapeHtml(formatPoCurrency(model.totalCost))}</div></div>
-          <div><div class="lab">Total Retail</div><div class="val accent">${escapeHtml(formatPoCurrency(model.totalRetail))}</div></div>
+          <div><div class="lab">Total Suggested Retail</div><div class="val accent">${escapeHtml(formatPoCurrency(model.totalRetail))}</div></div>
         </div>
         <div class="po-notes">
           <div class="lab">Notes / Special Instructions</div>
