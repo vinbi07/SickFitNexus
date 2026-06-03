@@ -374,6 +374,26 @@ export const purchaseOrderService = {
       extended_cost: Number(item.extended_cost ?? Number(item.quantity_ordered ?? 0) * Number(item.unit_cost ?? 0)),
       extended_retail: Number(item.extended_retail ?? 0),
       sort_order: Number(item.sort_order ?? 0),
+      // Manufacturer PO fields — preserved when present, otherwise left as-is
+      design_id: item.design_id || null,
+      spec_snapshot: item.spec_snapshot ?? {},
+      sock_card_id: item.sock_card_id || null,
+      pack_pairs: item.pack_pairs != null ? Number(item.pack_pairs) : 1,
+      sock_size: item.sock_size || null,
+      construction: item.construction || null,
+      cards_used: item.cards_used != null ? Number(item.cards_used) : 0,
+      box_no: item.box_no || null,
+      pantone: item.pantone || null,
+      barcode_required: item.barcode_required != null ? Boolean(item.barcode_required) : false,
+      art_status: item.art_status || null,
+      art_note: item.art_note || null,
+      mockup_file_ref: item.mockup_file_ref || null,
+      artwork_file_ref: item.artwork_file_ref || null,
+      rib_lr: item.rib_lr ?? true,
+      toe: item.toe ?? true,
+      pattern: item.pattern ?? false,
+      signature: item.signature ?? false,
+      foot_text: item.foot_text || null,
     }));
     const totalCost = normalizedLineItems.reduce((sum, item) => sum + Number(item.extended_cost ?? item.line_total ?? 0), 0);
     const totalUnits = normalizedLineItems.reduce((sum, item) => sum + Number(item.unit_quantity ?? item.quantity_ordered ?? 0), 0);

@@ -5,15 +5,26 @@ import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
+import { ManufacturerOrderGrid } from "@/components/orders/ManufacturerOrderGrid";
+import { ManufacturerOrderCheckPanel } from "@/components/orders/ManufacturerOrderCheckPanel";
+import { SockCardDrawPanel } from "@/components/orders/SockCardDrawPanel";
+import { SendToTinaPreview } from "@/components/orders/SendToTinaPreview";
+import { NewDesignModal } from "@/components/orders/NewDesignModal";
+import type { ManufacturerBuilderLine } from "@/components/orders/ManufacturerOrderLineRow";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { buyerService } from "@/services/buyerService";
+import { orderDesignService } from "@/services/orderDesignService";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
 import { retailerService } from "@/services/retailerService";
+import { sockCardService, calculateCardsUsed } from "@/services/sockCardService";
 import { supportService } from "@/services/supportService";
 import { vendorService } from "@/services/vendorService";
-import type { PoLineItem, Product, ProductBarcode, PurchaseOrder } from "@/types/domain";
+import type { OrderDesign, PoLineItem, Product, ProductBarcode, PurchaseOrder, SockCard } from "@/types/domain";
 import { getUiErrorLog, type UiErrorLog } from "@/utils/errors";
 import { formatCurrency } from "@/utils/format";
+import { assertSupabase } from "@/lib/supabase";
+import { buildManufacturerOrderHtml } from "@/utils/manufacturerOrderDocument";
+import { hasStopIssues, validateManufacturerOrder } from "@/utils/manufacturerOrderValidation";
 
 type BuilderLineItem = Partial<PoLineItem> & { tempId: string };
 
@@ -80,6 +91,82 @@ function buildEmptyLineItem(index: number): BuilderLineItem {
     case_pack_quantity: 1,
     case_quantity: 1,
     variant_label: "",
+  };
+}
+
+function buildEmptyMfrLine(index: number): ManufacturerBuilderLine {
+  return {
+    tempId: `mfr-${Date.now()}-${index}`,
+    product_name: "",
+    sku: "",
+    upc: "",
+    unit: "pairs",
+    quantity_ordered: 0,
+    quantity_received: 0,
+    unit_cost: 1.89,
+    unit_retail: 0,
+    extended_cost: 0,
+    extended_retail: 0,
+    unit_quantity: 0,
+    sort_order: index,
+    case_pack_quantity: 1,
+    case_quantity: 1,
+    pack_pairs: 1,
+    art_status: "NEEDED",
+    rib_lr: true,
+    toe: true,
+    pattern: false,
+    signature: false,
+    barcode_required: false,
+    box_no: "1",
+    colorway: "",
+  };
+}
+
+function buildLineFromDesign(design: Partial<OrderDesign>, sockCards: SockCard[], index: number): ManufacturerBuilderLine {
+  const card = sockCards.find((c) => c.id === design.default_sock_card_id) ?? null;
+  const quantity = 0;
+  const unitCost = Number(design.exw_cost ?? 1.89);
+  return {
+    tempId: `design-${design.id ?? Date.now()}-${index}`,
+    design_id: design.id ?? null,
+    product_id: design.product_id ?? null,
+    sku: "",
+    upc: design.barcode ?? "",
+    product_name: design.name ?? "",
+    description: design.name ?? "",
+    variant_label: design.colorway ?? "",
+    colorway: design.colorway ?? "",
+    hex: design.hex ?? "",
+    unit: "pairs",
+    quantity_ordered: quantity,
+    quantity_received: 0,
+    unit_cost: unitCost,
+    unit_retail: Number(design.retail_price ?? 0),
+    extended_cost: 0,
+    extended_retail: 0,
+    unit_quantity: quantity,
+    case_pack_quantity: 1,
+    case_quantity: 1,
+    sort_order: index,
+    spec_snapshot: design as Record<string, unknown>,
+    sock_card_id: design.default_sock_card_id ?? null,
+    pack_pairs: card?.pack_pairs ?? 1,
+    sock_size: card?.size ?? null,
+    construction: design.construction ?? card?.style ?? "Crew",
+    cards_used: 0,
+    box_no: "1",
+    pantone: design.pantone ?? null,
+    barcode_required: Boolean(design.barcode_required),
+    art_status: design.art_status ?? "NEEDED",
+    art_note: null,
+    mockup_file_ref: design.mockup_file_ref ?? null,
+    artwork_file_ref: design.art_file_ref ?? null,
+    rib_lr: design.rib_lr ?? true,
+    toe: design.toe ?? true,
+    pattern: design.pattern ?? false,
+    signature: design.signature ?? false,
+    foot_text: design.foot_text ?? null,
   };
 }
 
@@ -211,6 +298,8 @@ export function PurchaseOrderBuilderPage() {
   const autosaveKey = `${AUTOSAVE_PREFIX}:${isEditMode ? editId : duplicateFromId || "new"}`;
   const [purchaseOrder, setPurchaseOrder] = useState<BuilderState | null>(null);
   const [lineItems, setLineItems] = useState<BuilderLineItem[]>([]);
+  const [mfrLines, setMfrLines] = useState<ManufacturerBuilderLine[]>([]);
+  const [showNewDesignModal, setShowNewDesignModal] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [activeProductIndex, setActiveProductIndex] = useState(0);
@@ -221,12 +310,14 @@ export function PurchaseOrderBuilderPage() {
   const autosaveNoticeRef = useRef(false);
 
   const { data, loading, error: loadError } = useAsyncData(async () => {
-    const [retailers, buyers, locations, products, vendors] = await Promise.all([
+    const [retailers, buyers, locations, products, vendors, catalogOptions, sockCards] = await Promise.all([
       retailerService.list(),
       buyerService.list(),
       supportService.listLocations(),
       supportService.listBarcodes(),
       vendorService.list(),
+      orderDesignService.listCatalog(),
+      sockCardService.listCards(),
     ]);
     const sourceDetail = editId
       ? await purchaseOrderService.getById(editId)
@@ -234,7 +325,7 @@ export function PurchaseOrderBuilderPage() {
         ? await purchaseOrderService.getById(duplicateFromId)
         : null;
     const poNumber = editId ? sourceDetail?.purchaseOrder.po_number ?? "" : await purchaseOrderService.generatePoNumber();
-    return { retailers, buyers, locations, barcodes: products, vendors, sourceDetail, poNumber };
+    return { retailers, buyers, locations, barcodes: products, vendors, sourceDetail, poNumber, catalogOptions, sockCards };
   }, [editId, duplicateFromId]);
 
   useEffect(() => {
@@ -289,16 +380,29 @@ export function PurchaseOrderBuilderPage() {
         approver_name_snapshot: source.approver_name_snapshot ?? "",
         notes: source.notes ?? "",
       });
-      setLineItems(
-        normalizeBuilderLineItems(
-          data.sourceDetail.lineItems.length
-            ? data.sourceDetail.lineItems.map((item, index) => ({
+      const sourceLines = data.sourceDetail.lineItems;
+      if (source.po_type === "Manufacturer PO") {
+        setMfrLines(
+          sourceLines.length
+            ? sourceLines.map((item, index) => ({
                 ...item,
-                tempId: item.id || `line-${index}`,
+                tempId: item.id || `mfr-${index}`,
+                colorway: String(item.variant_label ?? ""),
               }))
-            : [buildEmptyLineItem(0)],
-        ),
-      );
+            : [buildEmptyMfrLine(0)],
+        );
+      } else {
+        setLineItems(
+          normalizeBuilderLineItems(
+            sourceLines.length
+              ? sourceLines.map((item, index) => ({
+                  ...item,
+                  tempId: item.id || `line-${index}`,
+                }))
+              : [buildEmptyLineItem(0)],
+          ),
+        );
+      }
     } else {
       setPurchaseOrder(buildEmptyBuilderState(data.poNumber));
       setLineItems([buildEmptyLineItem(0)]);
@@ -656,6 +760,277 @@ export function PurchaseOrderBuilderPage() {
     }
   }
 
+  // ── Manufacturer PO helpers ──────────────────────────────────────────────
+  function updateMfrLine(index: number, patch: Partial<ManufacturerBuilderLine>) {
+    setMfrLines((current) =>
+      current.map((line, i) => {
+        if (i !== index) return line;
+        const updated = { ...line, ...patch };
+        const qty = Number(updated.quantity_ordered ?? 0);
+        const pack = Number(updated.pack_pairs ?? 1);
+        const unitCost = Number(updated.unit_cost ?? 1.89);
+        const unitRetail = Number(updated.unit_retail ?? 0);
+        return {
+          ...updated,
+          cards_used: calculateCardsUsed(qty, pack),
+          extended_cost: qty * unitCost,
+          extended_retail: qty * unitRetail,
+          unit_quantity: qty,
+        };
+      }),
+    );
+  }
+
+  function removeMfrLine(index: number) {
+    setMfrLines((current) => current.filter((_, i) => i !== index));
+  }
+
+  function addBlankMfrLine() {
+    setMfrLines((current) => [...current, buildEmptyMfrLine(current.length)]);
+  }
+
+  function handleNewDesignSaved(design: OrderDesign) {
+    setShowNewDesignModal(false);
+    const newLine = buildLineFromDesign(design, builderData.sockCards, mfrLines.length);
+    setMfrLines((current) => [...current, newLine]);
+  }
+
+  async function saveManufacturerOrder(isDraft: boolean) {
+    try {
+      setSaving(true);
+      setError(null);
+      if (!builderPo.po_number.trim()) throw new Error("PO number is required.");
+
+      const validLines = mfrLines.filter((line) => String(line.product_name ?? "").trim());
+      if (!validLines.length) throw new Error("Add at least one design line before saving.");
+
+      const nextStatus: PurchaseOrder["status"] = isDraft ? "Draft" : "Ordered";
+
+      if (!isDraft) {
+        const issues = validateManufacturerOrder(validLines, builderData.sockCards);
+        if (hasStopIssues(issues)) {
+          throw new Error(
+            `Order has ${issues.filter((i) => i.severity === "stop").length} STOP issue(s). Fix them before sending.`,
+          );
+        }
+      }
+
+      const poPayload: Parameters<typeof purchaseOrderService.savePurchaseOrder>[0] = {
+        purchaseOrder: {
+          id: builderPo.id,
+          po_number: builderPo.po_number,
+          vendor_id: builderPo.vendor_id || null,
+          retailer_id: null,
+          buyer_id: null,
+          location_id: null,
+          po_type: "Manufacturer PO",
+          status: nextStatus,
+          order_date: builderPo.order_date || null,
+          start_ship_date: builderPo.start_ship_date || null,
+          ship_complete_date: builderPo.ship_complete_date || null,
+          currency_code: builderPo.currency_code || "USD",
+          bill_to_company_name: "Foshan Lion King Clothing Co., Ltd.",
+          bill_to_contact_name: "Tina",
+          bill_to_street: builderPo.bill_to_street || null,
+          bill_to_city: builderPo.bill_to_city || null,
+          bill_to_state: builderPo.bill_to_state || null,
+          bill_to_zip: builderPo.bill_to_zip || null,
+          bill_to_phone: builderPo.bill_to_phone || null,
+          bill_to_email: builderPo.bill_to_email || null,
+          ship_to_company_name: builderPo.ship_to_company_name || "Foshan Lion King",
+          ship_to_attention: "Tina",
+          ship_to_street: null,
+          ship_to_city: null,
+          ship_to_state: null,
+          ship_to_zip: null,
+          ship_to_phone: null,
+          payment_terms_snapshot: null,
+          buyer_name_snapshot: null,
+          approver_name_snapshot: null,
+          notes: builderPo.notes || null,
+        },
+        lineItems: validLines.map((item, index) => {
+          const qty = Number(item.quantity_ordered ?? 0);
+          const pack = Number(item.pack_pairs ?? 1);
+          const unitCost = Number(item.unit_cost ?? 1.89);
+          const unitRetail = Number(item.unit_retail ?? 0);
+          return {
+            id: item.id,
+            product_id: item.product_id || null,
+            design_id: item.design_id || null,
+            sku: String(item.sku ?? ""),
+            upc: String(item.upc ?? ""),
+            product_name: String(item.product_name ?? ""),
+            description: String(item.product_name ?? ""),
+            variant_label: String(item.colorway ?? item.variant_label ?? ""),
+            unit: "pairs",
+            quantity_ordered: qty,
+            quantity_received: 0,
+            unit_cost: unitCost,
+            unit_retail: unitRetail,
+            unit_quantity: qty,
+            case_pack_quantity: 1,
+            case_quantity: 1,
+            extended_cost: qty * unitCost,
+            extended_retail: qty * unitRetail,
+            sort_order: index,
+            spec_snapshot: item.spec_snapshot ?? {},
+            sock_card_id: item.sock_card_id || null,
+            pack_pairs: pack,
+            sock_size: item.sock_size || null,
+            construction: item.construction || null,
+            cards_used: calculateCardsUsed(qty, pack),
+            box_no: item.box_no || null,
+            pantone: item.pantone || null,
+            barcode_required: Boolean(item.barcode_required),
+            art_status: item.art_status || "NEEDED",
+            art_note: item.art_note || null,
+            mockup_file_ref: item.mockup_file_ref || null,
+            artwork_file_ref: item.artwork_file_ref || null,
+            rib_lr: item.rib_lr ?? true,
+            toe: item.toe ?? true,
+            pattern: item.pattern ?? false,
+            signature: item.signature ?? false,
+            foot_text: item.foot_text || null,
+          };
+        }),
+      };
+
+      const savedPo = await purchaseOrderService.savePurchaseOrder(poPayload);
+
+      if (!isDraft) {
+        // Generate Tina document using the manufacturer-specific formatter
+        const supabase = assertSupabase();
+        const { data: savedLines } = await supabase
+          .from("po_line_items")
+          .select("*")
+          .eq("purchase_order_id", savedPo.id);
+
+        const tinaHtml = buildManufacturerOrderHtml(savedPo, (savedLines ?? []) as PoLineItem[], builderData.sockCards);
+
+        // Check if a generated doc already exists
+        const { data: existingDoc } = await supabase
+          .from("generated_purchase_order_documents")
+          .select("id")
+          .eq("purchase_order_id", savedPo.id)
+          .maybeSingle();
+
+        await supabase.from("generated_purchase_order_documents").upsert({
+          id: existingDoc?.id,
+          purchase_order_id: savedPo.id,
+          document_format: "html",
+          title: `Manufacturer Order ${savedPo.po_number} — Tina`,
+          body_html: tinaHtml,
+        });
+
+        // Confirm sock card draw (decrement inventory + ledger)
+        await sockCardService.confirmDraw(savedPo.id, (savedLines ?? []) as PoLineItem[]);
+      }
+
+      window.localStorage.removeItem(autosaveKey);
+      navigate(`/purchase-orders/${savedPo.id}`);
+    } catch (err) {
+      setError(getUiErrorLog(err, "We couldn't save this manufacturer order"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Manufacturer PO render branch ─────────────────────────────────────────
+  if (builderPo.po_type === "Manufacturer PO") {
+    const mfrPreviewPo: PurchaseOrder = {
+      ...previewPurchaseOrder,
+      bill_to_company_name: "Foshan Lion King Clothing Co., Ltd.",
+      bill_to_contact_name: "Tina",
+    };
+    return (
+      <div className="section-stack po-builder-shell manufacturer-order-shell">
+        {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+        {showNewDesignModal ? (
+          <NewDesignModal
+            sockCards={builderData.sockCards}
+            onSaved={handleNewDesignSaved}
+            onClose={() => setShowNewDesignModal(false)}
+          />
+        ) : null}
+        <PageHeader
+          title={isEditMode ? `Edit ${builderPo.po_number}` : "Manufacturer Order Builder"}
+          description="Build the production order for Tina. Auto-fills specs, tracks sock card draw, and generates the send-ready document."
+          actions={(
+            <div className="btn-row">
+              <Link className="btn btn-ghost" to={builderPo.id ? `/purchase-orders/${builderPo.id}` : "/purchase-orders"}>
+                Cancel
+              </Link>
+              <div className="field field-half" style={{ margin: 0 }}>
+                <select
+                  value={builderPo.po_type}
+                  onChange={(e) => updatePurchaseOrder("po_type", e.target.value as PurchaseOrder["po_type"])}
+                  style={{ fontSize: 13 }}
+                >
+                  <option value="Manufacturer PO">Manufacturer PO</option>
+                  <option value="Retailer PO">Retailer PO</option>
+                  <option value="Customer Reorder">Customer Reorder</option>
+                  <option value="Work Order">Work Order</option>
+                </select>
+              </div>
+              <button className="btn btn-secondary" disabled={saving} onClick={() => void saveManufacturerOrder(true)}>
+                {saving ? "Saving..." : "Save Draft"}
+              </button>
+              <button className="btn btn-primary" disabled={saving} onClick={() => void saveManufacturerOrder(false)}>
+                {saving ? "Saving..." : "Create & Send to Tina"}
+              </button>
+            </div>
+          )}
+        />
+        {error ? <InlineErrorLog error={error} /> : null}
+
+        <div className="panel">
+          <div className="panel-header">
+            <div><p className="lookbook-kicker">Header</p><h3>Order Header</h3></div>
+          </div>
+          <div className="form-grid">
+            <div className="field"><label>PO Number</label><input value={builderPo.po_number} onChange={(e) => updatePurchaseOrder("po_number", e.target.value)} /></div>
+            <div className="field"><label>Order Date</label><input type="date" value={builderPo.order_date} onChange={(e) => updatePurchaseOrder("order_date", e.target.value)} /></div>
+            <div className="field"><label>Req. Ship Date</label><input type="date" value={builderPo.start_ship_date} onChange={(e) => updatePurchaseOrder("start_ship_date", e.target.value)} /></div>
+            <div className="field">
+              <label>Vendor / Manufacturer</label>
+              <select value={builderPo.vendor_id} onChange={(e) => updatePurchaseOrder("vendor_id", e.target.value)}>
+                <option value="">No vendor selected</option>
+                {builderData.vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+            <div className="field field-wide">
+              <label>Internal Notes</label>
+              <textarea rows={3} value={builderPo.notes} onChange={(e) => updatePurchaseOrder("notes", e.target.value)} placeholder="Internal production notes" />
+            </div>
+          </div>
+        </div>
+
+        <ManufacturerOrderGrid
+          lines={mfrLines}
+          sockCards={builderData.sockCards}
+          catalogOptions={builderData.catalogOptions}
+          onUpdate={updateMfrLine}
+          onRemove={removeMfrLine}
+          onAddBlank={addBlankMfrLine}
+          onOpenNewDesign={() => setShowNewDesignModal(true)}
+        />
+
+        <div className="manufacturer-order-rail">
+          <SockCardDrawPanel lines={mfrLines} sockCards={builderData.sockCards} />
+          <ManufacturerOrderCheckPanel lines={mfrLines} sockCards={builderData.sockCards} />
+        </div>
+
+        <SendToTinaPreview
+          purchaseOrder={mfrPreviewPo}
+          lines={mfrLines as PoLineItem[]}
+          sockCards={builderData.sockCards}
+        />
+      </div>
+    );
+  }
+
+  // ── Existing retailer / standard PO builder ────────────────────────────────
   return (
     <div className="section-stack po-builder-shell">
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
@@ -667,6 +1042,18 @@ export function PurchaseOrderBuilderPage() {
             <Link className="btn btn-ghost" to={builderPo.id ? `/purchase-orders/${builderPo.id}` : "/purchase-orders"}>
               Cancel
             </Link>
+            <div className="field field-half" style={{ margin: 0 }}>
+              <select
+                value={builderPo.po_type}
+                onChange={(e) => updatePurchaseOrder("po_type", e.target.value as PurchaseOrder["po_type"])}
+                style={{ fontSize: 13 }}
+              >
+                <option value="Manufacturer PO">Manufacturer PO</option>
+                <option value="Retailer PO">Retailer PO</option>
+                <option value="Customer Reorder">Customer Reorder</option>
+                <option value="Work Order">Work Order</option>
+              </select>
+            </div>
             <button className="btn btn-secondary" disabled={saving} onClick={() => void savePurchaseOrder("Draft")}>
               {saving ? "Saving..." : "Save Draft"}
             </button>

@@ -292,6 +292,82 @@ export interface PoLineItem {
   created_at: string;
   updated_at: string;
   products?: Product | null;
+  // Manufacturer PO fields (nullable — only populated for Manufacturer POs)
+  design_id?: string | null;
+  spec_snapshot?: Record<string, unknown> | null;
+  sock_card_id?: string | null;
+  pack_pairs?: number | null;
+  sock_size?: string | null;
+  construction?: string | null;
+  cards_used?: number | null;
+  box_no?: string | null;
+  pantone?: string | null;
+  barcode_required?: boolean | null;
+  art_status?: string | null;
+  art_note?: string | null;
+  mockup_file_ref?: string | null;
+  artwork_file_ref?: string | null;
+  rib_lr?: boolean | null;
+  toe?: boolean | null;
+  pattern?: boolean | null;
+  signature?: boolean | null;
+  foot_text?: string | null;
+}
+
+export interface OrderDesign {
+  id: string;
+  name: string;
+  type: "standard" | "custom";
+  partner: string | null;
+  colorway: string | null;
+  hex: string | null;
+  pantone: string | null;
+  construction: string | null;
+  default_sock_card_id: string | null;
+  barcode: string | null;
+  barcode_required: boolean;
+  retail_price: number;
+  exw_cost: number;
+  foot_text: string | null;
+  rib_lr: boolean;
+  toe: boolean;
+  pattern: boolean;
+  signature: boolean;
+  art_file_ref: string | null;
+  mockup_file_ref: string | null;
+  art_status: "ON FILE" | "NEEDED" | "NA";
+  in_shopify: boolean;
+  shopify_product_id: string | null;
+  product_id: string | null;
+  barcode_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SockCard {
+  id: string;
+  name: string;
+  pack_pairs: number;
+  size: string | null;
+  style: string | null;
+  on_hand: number;
+  reorder_point: number;
+  supplier: string | null;
+  unit_cost: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SockCardTxn {
+  id: string;
+  sock_card_id: string;
+  purchase_order_id: string;
+  po_line_item_id: string | null;
+  quantity_change: number;
+  cards_used: number;
+  txn_type: string;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface PurchaseOrderMessage {
@@ -560,6 +636,7 @@ export interface MappingPreset {
 export type AlertType =
   | "PO Overdue"
   | "Low Stock"
+  | "Low Card Stock"
   | "Projected Stockout"
   | "Vendor Delay Trend"
   | "Unusually Large Order"
