@@ -14,45 +14,27 @@ type Props = {
 
 const COLUMNS = [
   "#", "Design / SKU", "Colorway", "Sock Card", "Pack", "Size", "Constr.",
-  "Pairs", "Cards", "EXW", "Cost", "Pantone", "Barcode / UPC", "Art", "Foot Text", "Specs", "Box", "",
+  "Pairs", "Cards", "EXW", "Cost", "Pantone", "Barcode / UPC", "Art", "Foot Text", "Specs", "Box",
+  "Mockup", "Artwork", "",
 ];
 
-export function ManufacturerOrderGrid({
-  lines,
-  sockCards,
-  catalogOptions,
-  onUpdate,
-  onRemove,
-  onAddBlank,
-  onOpenNewDesign,
-}: Props) {
-  const totalPairs = lines.reduce((sum, l) => sum + Number(l.quantity_ordered ?? 0), 0);
-  const totalCost = lines.reduce((sum, l) => sum + Number(l.quantity_ordered ?? 0) * Number(l.unit_cost ?? 1.89), 0);
-
+export function ManufacturerOrderGrid({ lines, sockCards, catalogOptions, onUpdate, onRemove, onAddBlank, onOpenNewDesign }: Props) {
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <div>
-          <p className="lookbook-kicker">Production Order</p>
-          <h3>Manufacturer Order Lines</h3>
-        </div>
-        <div className="btn-row">
-          <button type="button" className="btn btn-ghost btn-small" onClick={onOpenNewDesign}>
-            + New Design
-          </button>
-          <button type="button" className="btn btn-secondary btn-small" onClick={onAddBlank}>
-            + Blank Line
-          </button>
-        </div>
+    <div>
+      <div className="mfr-grid-toolbar">
+        <span style={{ fontSize: 11, color: "var(--brand-muted)", letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 600 }}>
+          Order Lines
+        </span>
+        <div className="mfr-grid-toolbar-spacer" />
+        <button type="button" className="btn btn-ghost btn-small" onClick={onOpenNewDesign}>+ New Design</button>
+        <button type="button" className="btn btn-ghost btn-small" onClick={onAddBlank}>+ Blank Line</button>
       </div>
 
-      <div className="mfr-grid-scroll">
+      <div className="mfr-gridwrap" style={{ borderRadius: "0 0 var(--brand-radius) var(--brand-radius)", borderTop: "none" }}>
         <table className="mfr-grid-table">
           <thead>
             <tr>
-              {COLUMNS.map((col) => (
-                <th key={col}>{col}</th>
-              ))}
+              {COLUMNS.map((col) => <th key={col}>{col}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -70,19 +52,13 @@ export function ManufacturerOrderGrid({
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} style={{ textAlign: "center", padding: "24px 0", color: "var(--color-muted, #888)" }}>
-                  No lines yet — pick a design above or add a blank line.
+                <td colSpan={COLUMNS.length} style={{ textAlign: "center", padding: "32px 0", color: "var(--brand-muted)", fontSize: 13 }}>
+                  No lines yet — search a design above or add a blank line.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="po-totals-bar">
-        <div className="detail-card"><span>SKUs</span><strong>{lines.length}</strong></div>
-        <div className="detail-card"><span>Total Pairs</span><strong>{totalPairs}</strong></div>
-        <div className="detail-card"><span>Goods (EXW)</span><strong>${totalCost.toFixed(2)}</strong></div>
       </div>
     </div>
   );

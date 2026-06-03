@@ -1,6 +1,9 @@
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PoLineItem, SockCard } from "@/types/domain";
 import type { CatalogDesignOption } from "@/services/orderDesignService";
 import { calculateCardsUsed } from "@/services/sockCardService";
+import { FileUploadCell } from "./FileUploadCell";
 
 export type ManufacturerBuilderLine = Partial<PoLineItem> & {
   tempId: string;
@@ -21,47 +24,100 @@ type Props = {
   onOpenNewDesign: () => void;
 };
 
-function Flag({
-  active,
-  label,
-  title,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  title: string;
-  onClick: () => void;
-}) {
+function Flag({ active, label, title, onClick }: { active: boolean; label: string; title: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={`mfr-flag-chip${active ? " mfr-flag-chip-on" : ""}`}
-    >
+    <button type="button" title={title} onClick={onClick} className={`mfr-flag-chip${active ? " mfr-flag-chip-on" : ""}`}>
       {label}
     </button>
   );
 }
 
-export function ManufacturerOrderLineRow({
+function DesignSearchPicker({
   line,
-  index,
-  sockCards,
   catalogOptions,
-  onUpdate,
-  onRemove,
+  onSetDesign,
   onOpenNewDesign,
-}: Props) {
+}: {
+  line: ManufacturerBuilderLine;
+  catalogOptions: CatalogDesignOption[];
+  onSetDesign: (id: string) => void;
+  onOpenNewDesign: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 260 });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selectedLabel = catalogOptions.find((o) => o.id === line.design_id)?.label ?? (line.product_name ?? "");
+
+  const filtered = catalogOptions.filter((o) =>
+    !search.trim() || o.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  function openDropdown() {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      // Flip up if less than 240px below viewport bottom
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const dropHeight = Math.min(filtered.length * 34 + 40, 240);
+      const top = spaceBelow < dropHeight ? rect.top - dropHeight - 3 : rect.bottom + 3;
+      setDropPos({ top, left: rect.left, width: Math.max(rect.width, 280) });
+    }
+    setSearch("");
+    setOpen(true);
+  }
+
+  const dropdown = open ? (
+    <div
+      className="mfr-design-dropdown"
+      style={{ position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+    >
+      {filtered.length === 0 ? (
+        <div className="mfr-design-option mfr-design-empty">No matches</div>
+      ) : (
+        filtered.map((opt) => (
+          <div
+            key={opt.id}
+            className="mfr-design-option"
+            onMouseDown={() => { onSetDesign(opt.id); setOpen(false); setSearch(""); }}
+          >
+            {opt.label}
+          </div>
+        ))
+      )}
+      <div
+        className="mfr-design-option mfr-design-new"
+        onMouseDown={() => { onOpenNewDesign(); setOpen(false); setSearch(""); }}
+      >
+        + New custom design…
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="mfr-design-wrap">
+      <input
+        ref={inputRef}
+        value={open ? search : selectedLabel}
+        placeholder="Search designs & products…"
+        onFocus={openDropdown}
+        onBlur={() => window.setTimeout(() => setOpen(false), 160)}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ width: "100%" }}
+      />
+      {dropdown && createPortal(dropdown, document.body)}
+    </div>
+  );
+}
+
+export function ManufacturerOrderLineRow({ line, index, sockCards, catalogOptions, onUpdate, onRemove, onOpenNewDesign }: Props) {
   const qty = Number(line.quantity_ordered ?? 0);
   const pack = Number(line.pack_pairs ?? 1);
   const cards = calculateCardsUsed(qty, pack);
   const exw = Number(line.unit_cost ?? 1.89);
   const cost = qty * exw;
 
-  function set(patch: Partial<ManufacturerBuilderLine>) {
-    onUpdate(index, patch);
-  }
+  function set(patch: Partial<ManufacturerBuilderLine>) { onUpdate(index, patch); }
 
   function setCard(cardId: string) {
     const card = sockCards.find((c) => c.id === cardId) ?? null;
@@ -74,10 +130,6 @@ export function ManufacturerOrderLineRow({
   }
 
   function setDesign(optionId: string) {
-    if (optionId === "__new__") {
-      onOpenNewDesign();
-      return;
-    }
     const option = catalogOptions.find((o) => o.id === optionId);
     if (!option) return;
     const d = option.design;
@@ -113,51 +165,33 @@ export function ManufacturerOrderLineRow({
     });
   }
 
-  const artClass =
-    line.art_status === "ON FILE" ? "mfr-art-on" : line.art_status === "NEEDED" ? "mfr-art-need" : "mfr-art-na";
+  const artClass = line.art_status === "ON FILE" ? "mfr-art-on" : line.art_status === "NEEDED" ? "mfr-art-need" : "mfr-art-na";
 
   return (
     <tr className={line.art_status === "NEEDED" ? "mfr-row-flagged" : ""}>
       <td className="mfr-col-num">{index + 1}</td>
 
-      {/* Design picker */}
+      {/* Design search */}
       <td style={{ minWidth: 200 }}>
-        <select
-          value={catalogOptions.find((o) => o.id === (line.design_id ?? ""))?.id ?? ""}
-          onChange={(e) => setDesign(e.target.value)}
-          style={{ marginBottom: 4, width: "100%" }}
-        >
-          <option value="">— pick design —</option>
-          {catalogOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-          <option value="__new__">+ New custom design…</option>
-        </select>
+        <DesignSearchPicker
+          line={line}
+          catalogOptions={catalogOptions}
+          onSetDesign={setDesign}
+          onOpenNewDesign={onOpenNewDesign}
+        />
         <input
           value={String(line.product_name ?? "")}
-          placeholder="Design / SKU name"
+          placeholder="SKU name override"
           onChange={(e) => set({ product_name: e.target.value, description: e.target.value })}
-          style={{ width: "100%" }}
+          style={{ width: "100%", marginTop: 3, fontSize: 11 }}
         />
       </td>
 
-      {/* Colorway + swatch */}
-      <td style={{ minWidth: 120 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {/* Colorway + hex swatch */}
+      <td style={{ minWidth: 110 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           {line.hex ? (
-            <span
-              style={{
-                display: "inline-block",
-                width: 12,
-                height: 12,
-                borderRadius: 3,
-                background: line.hex,
-                border: "1px solid #444",
-                flexShrink: 0,
-              }}
-            />
+            <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 3, background: line.hex, border: "1px solid #ccc", flexShrink: 0 }} />
           ) : null}
           <input
             value={String(line.colorway ?? line.variant_label ?? "")}
@@ -169,90 +203,55 @@ export function ManufacturerOrderLineRow({
       </td>
 
       {/* Sock card */}
-      <td style={{ minWidth: 160 }}>
+      <td style={{ minWidth: 150 }}>
         <select value={line.sock_card_id ?? ""} onChange={(e) => setCard(e.target.value)} style={{ width: "100%" }}>
           <option value="">— card —</option>
           {sockCards.map((card) => (
-            <option key={card.id} value={card.id}>
-              {card.name}
-            </option>
+            <option key={card.id} value={card.id}>{card.name}</option>
           ))}
         </select>
       </td>
 
-      {/* Pack pairs (readonly from card) */}
-      <td style={{ width: 54, textAlign: "center" }}>
-        <input
-          className="mfr-mono"
-          type="number"
-          value={line.pack_pairs ?? 1}
-          onChange={(e) => set({ pack_pairs: Number(e.target.value) })}
-          style={{ width: 52 }}
-        />
+      {/* Pack */}
+      <td style={{ width: 52, textAlign: "center" }}>
+        <input className="mfr-mono" type="number" value={line.pack_pairs ?? 1} onChange={(e) => set({ pack_pairs: Number(e.target.value) })} style={{ width: 50 }} />
       </td>
 
       {/* Size */}
-      <td style={{ minWidth: 110 }}>
-        <input
-          value={String(line.sock_size ?? "")}
-          placeholder="Size"
-          onChange={(e) => set({ sock_size: e.target.value })}
-          style={{ width: "100%" }}
-        />
+      <td style={{ minWidth: 100 }}>
+        <input value={String(line.sock_size ?? "")} placeholder="Size" onChange={(e) => set({ sock_size: e.target.value })} style={{ width: "100%" }} />
       </td>
 
       {/* Construction */}
-      <td style={{ minWidth: 100 }}>
+      <td style={{ minWidth: 96 }}>
         <select value={line.construction ?? "Crew"} onChange={(e) => set({ construction: e.target.value })} style={{ width: "100%" }}>
-          {CONSTRUCTION_OPTIONS.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
+          {CONSTRUCTION_OPTIONS.map((c) => <option key={c}>{c}</option>)}
         </select>
       </td>
 
-      {/* Pairs ordered */}
-      <td style={{ width: 70 }}>
-        <input
-          className="mfr-mono"
-          type="number"
-          min={0}
-          value={line.quantity_ordered ?? 0}
-          onChange={(e) => set({ quantity_ordered: Number(e.target.value) })}
-          style={{ width: 68 }}
-        />
+      {/* Pairs */}
+      <td style={{ width: 68 }}>
+        <input className="mfr-mono" type="number" min={0} value={line.quantity_ordered ?? 0} onChange={(e) => set({ quantity_ordered: Number(e.target.value) })} style={{ width: 66 }} />
       </td>
 
-      {/* Cards used (computed) */}
-      <td style={{ width: 60, textAlign: "center" }}>
-        <input className="mfr-mono mfr-readonly" value={cards} readOnly style={{ width: 56, textAlign: "center" }} />
+      {/* Cards (computed) */}
+      <td className="mfr-cards-cell" style={{ width: 58, textAlign: "center" }}>
+        <input className="mfr-mono" value={cards} readOnly style={{ width: 54, textAlign: "center" }} />
       </td>
 
       {/* EXW */}
-      <td style={{ width: 70 }}>
-        <input
-          className="mfr-mono"
-          type="number"
-          min={0}
-          step={0.01}
-          value={exw}
-          onChange={(e) => set({ unit_cost: Number(e.target.value) })}
-          style={{ width: 68 }}
-        />
+      <td style={{ width: 68 }}>
+        <input className="mfr-mono" type="number" min={0} step={0.01} value={exw} onChange={(e) => set({ unit_cost: Number(e.target.value) })} style={{ width: 66 }} />
       </td>
 
       {/* Cost */}
       <td style={{ width: 80, textAlign: "right" }}>
-        <span className="mfr-mono">${cost.toFixed(2)}</span>
+        <span className="mfr-mono" style={{ fontSize: 12 }}>${cost.toFixed(2)}</span>
       </td>
 
       {/* Pantone */}
-      <td style={{ minWidth: 100 }}>
-        <input
-          value={String(line.pantone ?? "")}
-          placeholder="Pantone"
-          onChange={(e) => set({ pantone: e.target.value })}
-          style={{ width: "100%" }}
-        />
+      <td style={{ minWidth: 96 }}>
+        <input value={String(line.pantone ?? "")} placeholder="Pantone" onChange={(e) => set({ pantone: e.target.value })} style={{ width: "100%" }} />
       </td>
 
       {/* Barcode / UPC */}
@@ -262,44 +261,27 @@ export function ManufacturerOrderLineRow({
           value={String(line.upc ?? "")}
           placeholder={line.barcode_required ? "UPC required" : "UPC"}
           onChange={(e) => set({ upc: e.target.value })}
-          style={{ width: "100%", borderColor: line.barcode_required && !String(line.upc ?? "").trim() ? "var(--color-danger, #c0392b)" : undefined }}
+          style={{ width: "100%", borderColor: line.barcode_required && !String(line.upc ?? "").trim() ? "var(--brand-primary)" : undefined }}
         />
         <div style={{ marginTop: 2 }}>
-          <label style={{ fontSize: 11, color: "var(--color-muted, #888)", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={Boolean(line.barcode_required)}
-              onChange={(e) => set({ barcode_required: e.target.checked })}
-              style={{ marginRight: 4 }}
-            />
+          <label style={{ fontSize: 10, color: "var(--brand-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+            <input type="checkbox" checked={Boolean(line.barcode_required)} onChange={(e) => set({ barcode_required: e.target.checked })} style={{ width: "auto" }} />
             Required
           </label>
         </div>
       </td>
 
       {/* Art status */}
-      <td style={{ minWidth: 100 }}>
+      <td style={{ minWidth: 96 }}>
         <select className={artClass} value={line.art_status ?? "NEEDED"} onChange={(e) => set({ art_status: e.target.value })} style={{ width: "100%" }}>
-          {ART_STATUS_OPTIONS.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
+          {ART_STATUS_OPTIONS.map((s) => <option key={s}>{s}</option>)}
         </select>
-        <input
-          value={String(line.art_note ?? "")}
-          placeholder="note"
-          onChange={(e) => set({ art_note: e.target.value })}
-          style={{ width: "100%", fontSize: 11, marginTop: 2 }}
-        />
+        <input value={String(line.art_note ?? "")} placeholder="note" onChange={(e) => set({ art_note: e.target.value })} style={{ width: "100%", fontSize: 10, marginTop: 3 }} />
       </td>
 
       {/* Foot text */}
-      <td style={{ minWidth: 140 }}>
-        <input
-          value={String(line.foot_text ?? "")}
-          placeholder="Foot text (optional)"
-          onChange={(e) => set({ foot_text: e.target.value })}
-          style={{ width: "100%" }}
-        />
+      <td style={{ minWidth: 130 }}>
+        <input value={String(line.foot_text ?? "")} placeholder="Foot text (optional)" onChange={(e) => set({ foot_text: e.target.value })} style={{ width: "100%" }} />
       </td>
 
       {/* Spec flags */}
@@ -311,19 +293,35 @@ export function ManufacturerOrderLineRow({
       </td>
 
       {/* Box */}
-      <td style={{ width: 50 }}>
-        <input
-          value={String(line.box_no ?? "1")}
-          onChange={(e) => set({ box_no: e.target.value })}
-          style={{ width: 48 }}
+      <td style={{ width: 46 }}>
+        <input value={String(line.box_no ?? "1")} onChange={(e) => set({ box_no: e.target.value })} style={{ width: 44 }} />
+      </td>
+
+      {/* Mockup */}
+      <td style={{ width: 62, textAlign: "center" }}>
+        <FileUploadCell
+          value={line.mockup_file_ref}
+          folder="mockups"
+          accept="image/*"
+          label="Mock"
+          onChange={(url) => set({ mockup_file_ref: url })}
+        />
+      </td>
+
+      {/* Artwork */}
+      <td style={{ width: 62, textAlign: "center" }}>
+        <FileUploadCell
+          value={line.artwork_file_ref}
+          folder="artwork"
+          accept="image/*,application/pdf,.ai,.eps,.svg"
+          label="Art"
+          onChange={(url) => set({ artwork_file_ref: url })}
         />
       </td>
 
       {/* Remove */}
       <td>
-        <button type="button" className="btn btn-ghost btn-small mfr-del-btn" onClick={() => onRemove(index)} title="Remove">
-          ×
-        </button>
+        <button type="button" className="btn btn-ghost btn-small mfr-del-btn" onClick={() => onRemove(index)} title="Remove">×</button>
       </td>
     </tr>
   );

@@ -947,8 +947,16 @@ export function PurchaseOrderBuilderPage() {
       bill_to_company_name: "Foshan Lion King Clothing Co., Ltd.",
       bill_to_contact_name: "Tina",
     };
+
+    const mfrTotalPairs = mfrLines.reduce((s, l) => s + Number(l.quantity_ordered ?? 0), 0);
+    const mfrTotalCards = mfrLines.reduce((s, l) => {
+      const p = Number(l.pack_pairs ?? 1);
+      return s + (p > 0 ? Math.ceil(Number(l.quantity_ordered ?? 0) / p) : 0);
+    }, 0);
+    const mfrTotalGoods = mfrLines.reduce((s, l) => s + Number(l.quantity_ordered ?? 0) * Number(l.unit_cost ?? 1.89), 0);
+
     return (
-      <div className="section-stack po-builder-shell manufacturer-order-shell">
+      <div className="section-stack po-builder-shell">
         {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
         {showNewDesignModal ? (
           <NewDesignModal
@@ -959,7 +967,7 @@ export function PurchaseOrderBuilderPage() {
         ) : null}
         <PageHeader
           title={isEditMode ? `Edit ${builderPo.po_number}` : "Manufacturer Order Builder"}
-          description="Build the production order for Tina. Auto-fills specs, tracks sock card draw, and generates the send-ready document."
+          description="Production order for Foshan Lion King — auto-fills specs, tracks sock card draw, generates the Tina document."
           actions={(
             <div className="btn-row">
               <Link className="btn btn-ghost" to={builderPo.id ? `/purchase-orders/${builderPo.id}` : "/purchase-orders"}>
@@ -981,16 +989,17 @@ export function PurchaseOrderBuilderPage() {
                 {saving ? "Saving..." : "Save Draft"}
               </button>
               <button className="btn btn-primary" disabled={saving} onClick={() => void saveManufacturerOrder(false)}>
-                {saving ? "Saving..." : "Create & Send to Tina"}
+                {saving ? "Saving..." : "Confirm & Send to Tina"}
               </button>
             </div>
           )}
         />
         {error ? <InlineErrorLog error={error} /> : null}
 
+        {/* PO header fields */}
         <div className="panel">
           <div className="panel-header">
-            <div><p className="lookbook-kicker">Header</p><h3>Order Header</h3></div>
+            <div><p className="lookbook-kicker">Order Header</p><h3>Production Order Details</h3></div>
           </div>
           <div className="form-grid">
             <div className="field"><label>PO Number</label><input value={builderPo.po_number} onChange={(e) => updatePurchaseOrder("po_number", e.target.value)} /></div>
@@ -1005,24 +1014,44 @@ export function PurchaseOrderBuilderPage() {
             </div>
             <div className="field field-wide">
               <label>Internal Notes</label>
-              <textarea rows={3} value={builderPo.notes} onChange={(e) => updatePurchaseOrder("notes", e.target.value)} placeholder="Internal production notes" />
+              <textarea rows={2} value={builderPo.notes} onChange={(e) => updatePurchaseOrder("notes", e.target.value)} placeholder="Internal production notes" />
             </div>
           </div>
         </div>
 
-        <ManufacturerOrderGrid
-          lines={mfrLines}
-          sockCards={builderData.sockCards}
-          catalogOptions={builderData.catalogOptions}
-          onUpdate={updateMfrLine}
-          onRemove={removeMfrLine}
-          onAddBlank={addBlankMfrLine}
-          onOpenNewDesign={() => setShowNewDesignModal(true)}
-        />
+        {/* Two-column: scrollable grid left, sticky rail right */}
+        <div className="mfr-layout">
+          <div>
+            <ManufacturerOrderGrid
+              lines={mfrLines}
+              sockCards={builderData.sockCards}
+              catalogOptions={builderData.catalogOptions}
+              onUpdate={updateMfrLine}
+              onRemove={removeMfrLine}
+              onAddBlank={addBlankMfrLine}
+              onOpenNewDesign={() => setShowNewDesignModal(true)}
+            />
+          </div>
 
-        <div className="manufacturer-order-rail">
-          <SockCardDrawPanel lines={mfrLines} sockCards={builderData.sockCards} />
-          <ManufacturerOrderCheckPanel lines={mfrLines} sockCards={builderData.sockCards} />
+          <div className="mfr-rail">
+            {/* Totals */}
+            <div className="panel">
+              <div className="panel-header">
+                <div><p className="lookbook-kicker">Summary</p><h3>Totals</h3></div>
+              </div>
+              <div className="mfr-tline"><span className="mfr-tline-label">SKUs</span><span>{mfrLines.length}</span></div>
+              <div className="mfr-tline"><span className="mfr-tline-label">Total pairs</span><span>{mfrTotalPairs}</span></div>
+              <div className="mfr-tline"><span className="mfr-tline-label">Sock cards used</span><span>{mfrTotalCards}</span></div>
+              <div className="mfr-tline"><span className="mfr-tline-label">Goods (EXW)</span><span>${mfrTotalGoods.toFixed(2)}</span></div>
+              <div className="mfr-tline mfr-tline-grand">
+                <span className="mfr-tline-label">Grand total (EXW)</span>
+                <strong className="mfr-tline-val">${mfrTotalGoods.toFixed(2)}</strong>
+              </div>
+            </div>
+
+            <SockCardDrawPanel lines={mfrLines} sockCards={builderData.sockCards} />
+            <ManufacturerOrderCheckPanel lines={mfrLines} sockCards={builderData.sockCards} />
+          </div>
         </div>
 
         <SendToTinaPreview
