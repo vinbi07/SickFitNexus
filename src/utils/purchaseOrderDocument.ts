@@ -1,4 +1,4 @@
-import type { Buyer, PoLineItem, PurchaseOrder, Retailer } from "@/types/domain";
+import type { Buyer, Invoice, InvoiceLineItem, PoLineItem, PurchaseOrder, Retailer } from "@/types/domain";
 
 export type PurchaseOrderDocumentLine = {
   index: number;
@@ -16,6 +16,8 @@ export type PurchaseOrderDocumentLine = {
 export type PurchaseOrderDocumentModel = {
   logoSrc: string;
   banner: string;
+  documentTitle: string;
+  numberLabel: string;
   poNumber: string;
   orderDate: string;
   startShipDate: string;
@@ -76,6 +78,7 @@ export function buildPurchaseOrderDocumentModel(
   lineItems: Array<Partial<PoLineItem>>,
   buyer?: Buyer | null,
   retailer?: Retailer | null,
+  overrides?: { documentTitle?: string; numberLabel?: string; poNumber?: string },
 ): PurchaseOrderDocumentModel {
   const submittedDate = purchaseOrder.submitted_at ?? purchaseOrder.order_date ?? purchaseOrder.created_at ?? null;
   const submittedDateLabel = formatPoDate(submittedDate);
@@ -101,7 +104,9 @@ export function buildPurchaseOrderDocumentModel(
     banner: submittedDateLabel
       ? `Auto-generated · ${buyerName} submitted via Look Book on ${submittedDateLabel}`
       : `Auto-generated · ${buyerName} submitted via Look Book`,
-    poNumber: String(purchaseOrder.po_number ?? "Pending"),
+    documentTitle: overrides?.documentTitle ?? "Purchase Order",
+    numberLabel: overrides?.numberLabel ?? "PO Number",
+    poNumber: overrides?.poNumber ?? String(purchaseOrder.po_number ?? "Pending"),
     orderDate: formatPoDate(purchaseOrder.order_date),
     startShipDate: formatPoDate(purchaseOrder.start_ship_date ?? purchaseOrder.ship_date),
     shipCompleteDate: formatPoDate(purchaseOrder.ship_complete_date ?? purchaseOrder.expected_delivery_date),
@@ -225,8 +230,9 @@ export function buildPurchaseOrderDocumentHtml(
   lineItems: Array<Partial<PoLineItem>>,
   buyer?: Buyer | null,
   retailer?: Retailer | null,
+  overrides?: { documentTitle?: string; numberLabel?: string; poNumber?: string },
 ) {
-  const model = buildPurchaseOrderDocumentModel(purchaseOrder, lineItems, buyer, retailer);
+  const model = buildPurchaseOrderDocumentModel(purchaseOrder, lineItems, buyer, retailer, overrides);
   const linesMarkup = model.lines.map((line) => `
     <tr>
       <td class="n">${line.index}</td>
@@ -252,7 +258,7 @@ export function buildPurchaseOrderDocumentHtml(
             </div>
             <div>
               <div class="title">SICKFIT</div>
-              <div class="titlesub">Purchase Order</div>
+              <div class="titlesub">${escapeHtml(model.documentTitle)}</div>
             </div>
           </div>
           <div class="r">
@@ -262,7 +268,7 @@ export function buildPurchaseOrderDocumentHtml(
           </div>
         </div>
         <div class="po-meta">
-          <div><div class="lab">PO Number</div><div class="val">${escapeHtml(model.poNumber)}</div></div>
+          <div><div class="lab">${escapeHtml(model.numberLabel)}</div><div class="val">${escapeHtml(model.poNumber)}</div></div>
           <div><div class="lab">Order Date</div><div class="val">${escapeHtml(model.orderDate)}</div></div>
           <div><div class="lab">Start Ship</div><div class="val">${escapeHtml(model.startShipDate)}</div></div>
           <div><div class="lab">Ship Complete</div><div class="val">${escapeHtml(model.shipCompleteDate)}</div></div>
@@ -335,4 +341,107 @@ export function buildPurchaseOrderDocumentHtml(
       </div>
     </div>
   `.trim();
+}
+
+// ─── Invoice document helpers ─────────────────────────────────────────────────
+// Maps an Invoice to the shared PurchaseOrderDocumentModel using invoice-specific
+// labels, then reuses all existing rendering logic.
+
+function mapInvoiceToPo(invoice: Partial<Invoice>): Partial<PurchaseOrder> {
+  return {
+    po_number: invoice.invoice_number,
+    vendor_id: invoice.vendor_id ?? null,
+    retailer_id: invoice.retailer_id ?? null,
+    buyer_id: invoice.buyer_id ?? null,
+    location_id: invoice.location_id ?? null,
+    order_date: invoice.order_date ?? null,
+    ship_date: invoice.ship_date ?? null,
+    start_ship_date: invoice.start_ship_date ?? null,
+    ship_complete_date: invoice.ship_complete_date ?? null,
+    eta_date: invoice.eta_date ?? null,
+    expected_delivery_date: invoice.expected_delivery_date ?? null,
+    actual_delivery_date: invoice.actual_delivery_date ?? null,
+    submitted_at: invoice.submitted_at ?? null,
+    bill_to_company_name: invoice.bill_to_company_name ?? null,
+    bill_to_contact_name: invoice.bill_to_contact_name ?? null,
+    bill_to_street: invoice.bill_to_street ?? null,
+    bill_to_city: invoice.bill_to_city ?? null,
+    bill_to_state: invoice.bill_to_state ?? null,
+    bill_to_zip: invoice.bill_to_zip ?? null,
+    bill_to_phone: invoice.bill_to_phone ?? null,
+    bill_to_email: invoice.bill_to_email ?? null,
+    ship_to_company_name: invoice.ship_to_company_name ?? null,
+    ship_to_attention: invoice.ship_to_attention ?? null,
+    ship_to_street: invoice.ship_to_street ?? null,
+    ship_to_city: invoice.ship_to_city ?? null,
+    ship_to_state: invoice.ship_to_state ?? null,
+    ship_to_zip: invoice.ship_to_zip ?? null,
+    ship_to_phone: invoice.ship_to_phone ?? null,
+    payment_terms_snapshot: invoice.payment_terms_snapshot ?? null,
+    buyer_name_snapshot: invoice.buyer_name_snapshot ?? null,
+    approver_name_snapshot: invoice.approver_name_snapshot ?? null,
+    subtotal: invoice.subtotal ?? 0,
+    total_cost: invoice.total_cost ?? 0,
+    total_units: invoice.total_units ?? 0,
+    total_retail: invoice.total_retail ?? 0,
+    currency_code: invoice.currency_code ?? "USD",
+    notes: invoice.notes ?? null,
+    buyer_notes: invoice.buyer_notes ?? null,
+    vendors: invoice.vendors,
+    retailers: invoice.retailers,
+    buyers: invoice.buyers,
+    locations: invoice.locations,
+  };
+}
+
+function mapInvoiceLineItemsToPo(lineItems: Array<Partial<InvoiceLineItem>>): Array<Partial<PoLineItem>> {
+  return lineItems.map((item) => ({
+    id: item.id,
+    sku: item.sku,
+    upc: item.upc ?? null,
+    product_name: item.product_name,
+    variant_label: item.variant_label ?? null,
+    description: item.description ?? null,
+    unit: item.unit,
+    case_pack_quantity: item.case_pack_quantity,
+    case_quantity: item.case_quantity,
+    unit_quantity: item.unit_quantity,
+    quantity_ordered: item.quantity_ordered,
+    unit_cost: item.unit_cost,
+    unit_retail: item.unit_retail,
+    line_total: item.line_total,
+    extended_cost: item.extended_cost,
+    extended_retail: item.extended_retail,
+    sort_order: item.sort_order,
+  }));
+}
+
+export function buildInvoiceDocumentModel(
+  invoice: Partial<Invoice>,
+  lineItems: Array<Partial<InvoiceLineItem>>,
+  buyer?: Buyer | null,
+  retailer?: Retailer | null,
+): PurchaseOrderDocumentModel {
+  return buildPurchaseOrderDocumentModel(
+    mapInvoiceToPo(invoice),
+    mapInvoiceLineItemsToPo(lineItems),
+    buyer,
+    retailer,
+    { documentTitle: "Invoice", numberLabel: "Invoice Number" },
+  );
+}
+
+export function buildInvoiceDocumentHtml(
+  invoice: Partial<Invoice>,
+  lineItems: Array<Partial<InvoiceLineItem>>,
+  buyer?: Buyer | null,
+  retailer?: Retailer | null,
+): string {
+  return buildPurchaseOrderDocumentHtml(
+    mapInvoiceToPo(invoice),
+    mapInvoiceLineItemsToPo(lineItems),
+    buyer,
+    retailer,
+    { documentTitle: "Invoice", numberLabel: "Invoice Number" },
+  );
 }

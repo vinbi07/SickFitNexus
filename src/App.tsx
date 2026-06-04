@@ -8,6 +8,9 @@ import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage";
 import { PurchaseOrderDetailPage } from "@/pages/PurchaseOrderDetailPage";
 import { PurchaseOrderBuilderPage } from "@/pages/PurchaseOrderBuilderPage";
 import { PurchaseOrderPreviewPage } from "@/pages/PurchaseOrderPreviewPage";
+import { InvoicesPage } from "@/pages/InvoicesPage";
+import { InvoiceDetailPage } from "@/pages/InvoiceDetailPage";
+import { InvoicePreviewPage } from "@/pages/InvoicePreviewPage";
 import { InventoryPage } from "@/pages/InventoryPage";
 import { VendorsPage } from "@/pages/VendorsPage";
 import { AlertsPage } from "@/pages/AlertsPage";
@@ -47,6 +50,7 @@ const navGroups = [
     items: [
       { to: "/imports", label: "CSV Imports", icon: "IM" },
       { to: "/purchase-orders", label: "Purchase Orders", icon: "PO" },
+      { to: "/invoices", label: "Invoices", icon: "IN" },
       { to: "/pending-queue", label: "Pending Queue", icon: "PQ" },
       { to: "/inventory", label: "Inventory", icon: "IV" },
       { to: "/vendors", label: "Vendors", icon: "VN" },
@@ -154,6 +158,9 @@ export default function App() {
               <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
               <Route path="/purchase-orders/:id/edit" element={<PurchaseOrderBuilderPage />} />
               <Route path="/purchase-orders/:id/preview" element={<PurchaseOrderPreviewPage />} />
+              <Route path="/invoices" element={<InvoicesPage />} />
+              <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+              <Route path="/invoices/:id/preview" element={<InvoicePreviewPage />} />
               <Route path="/pending-queue" element={<PendingQueuePage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/vendors" element={<VendorsPage />} />

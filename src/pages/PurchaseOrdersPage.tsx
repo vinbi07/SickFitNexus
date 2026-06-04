@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
+import { invoiceService } from "@/services/invoiceService";
 import { retailerService } from "@/services/retailerService";
 import { supportService } from "@/services/supportService";
 import { vendorService } from "@/services/vendorService";
@@ -188,6 +189,20 @@ export function PurchaseOrdersPage() {
                 <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${row.id}/edit`}>Edit</Link>
                 <button className="btn btn-secondary btn-small" onClick={() => navigate(`/purchase-orders/new?copyFrom=${row.id}`)}>Duplicate</button>
                 <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${row.id}/preview`}>Preview</Link>
+                <button
+                  className="btn btn-secondary btn-small"
+                  onClick={async () => {
+                    try {
+                      const invoice = await invoiceService.convertFromPo(row.id);
+                      setNotice({ tone: "success", message: `Invoice ${invoice.invoice_number} created from PO ${row.po_number}.` });
+                      navigate(`/invoices/${invoice.id}`);
+                    } catch (err) {
+                      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to convert PO to invoice." });
+                    }
+                  }}
+                >
+                  To Invoice
+                </button>
                 <button className="btn btn-danger btn-small" onClick={() => setDeleting(row)}>Delete</button>
               </div>
             ),

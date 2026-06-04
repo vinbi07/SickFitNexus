@@ -314,6 +314,86 @@ export interface PoLineItem {
   foot_text?: string | null;
 }
 
+export type InvoiceStatus = "Draft" | "Sent" | "Paid" | "Void";
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  source_po_id: string | null;
+  vendor_id: string | null;
+  retailer_id: string | null;
+  buyer_id: string | null;
+  location_id: string | null;
+  status: InvoiceStatus;
+  order_date: string | null;
+  ship_date: string | null;
+  start_ship_date: string | null;
+  ship_complete_date: string | null;
+  eta_date: string | null;
+  expected_delivery_date: string | null;
+  actual_delivery_date: string | null;
+  submitted_at: string | null;
+  bill_to_company_name: string | null;
+  bill_to_contact_name: string | null;
+  bill_to_street: string | null;
+  bill_to_city: string | null;
+  bill_to_state: string | null;
+  bill_to_zip: string | null;
+  bill_to_phone: string | null;
+  bill_to_email: string | null;
+  ship_to_company_name: string | null;
+  ship_to_attention: string | null;
+  ship_to_street: string | null;
+  ship_to_city: string | null;
+  ship_to_state: string | null;
+  ship_to_zip: string | null;
+  ship_to_phone: string | null;
+  payment_terms_snapshot: string | null;
+  buyer_name_snapshot: string | null;
+  approver_name_snapshot: string | null;
+  subtotal: number;
+  total_cost: number;
+  total_units: number;
+  total_retail: number;
+  currency_code: string;
+  notes: string | null;
+  buyer_notes: string | null;
+  internal_notes: string | null;
+  source_channel: string | null;
+  created_at: string;
+  updated_at: string;
+  vendors?: Vendor | null;
+  retailers?: Retailer | null;
+  buyers?: Buyer | null;
+  locations?: Location | null;
+}
+
+export interface InvoiceLineItem {
+  id: string;
+  invoice_id: string;
+  product_id: string | null;
+  sku: string;
+  upc: string | null;
+  product_name: string;
+  variant_label: string | null;
+  description: string | null;
+  unit: string;
+  case_pack_quantity: number;
+  case_quantity: number;
+  unit_quantity: number;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit_cost: number;
+  unit_retail: number;
+  line_total: number;
+  extended_cost: number;
+  extended_retail: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  products?: Product | null;
+}
+
 export interface OrderDesign {
   id: string;
   name: string;

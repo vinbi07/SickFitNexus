@@ -1,24 +1,13 @@
-import type { PoLineItem, PurchaseOrder } from "@/types/domain";
+import type { Invoice, InvoiceLineItem, PoLineItem, PurchaseOrder } from "@/types/domain";
 import {
+  buildInvoiceDocumentModel,
   buildPurchaseOrderDocumentModel,
   formatPoCurrency,
   getPurchaseOrderDocumentStyles,
+  type PurchaseOrderDocumentModel,
 } from "@/utils/purchaseOrderDocument";
 
-export function PurchaseOrderDocumentView({
-  purchaseOrder,
-  lineItems,
-}: {
-  purchaseOrder: PurchaseOrder;
-  lineItems: PoLineItem[];
-}) {
-  const documentModel = buildPurchaseOrderDocumentModel(
-    purchaseOrder,
-    lineItems,
-    purchaseOrder.buyers ?? null,
-    purchaseOrder.retailers ?? null,
-  );
-
+function DocumentModelRenderer({ documentModel }: { documentModel: PurchaseOrderDocumentModel }) {
   return (
     <div className="po-wrap">
       <style>{getPurchaseOrderDocumentStyles()}</style>
@@ -30,7 +19,7 @@ export function PurchaseOrderDocumentView({
             </div>
             <div>
               <div className="title">SICKFIT</div>
-              <div className="titlesub">Purchase Order</div>
+              <div className="titlesub">{documentModel.documentTitle}</div>
             </div>
           </div>
           <div className="r">
@@ -40,7 +29,7 @@ export function PurchaseOrderDocumentView({
           </div>
         </div>
         <div className="po-meta">
-          <div><div className="lab">PO Number</div><div className="val">{documentModel.poNumber}</div></div>
+          <div><div className="lab">{documentModel.numberLabel}</div><div className="val">{documentModel.poNumber}</div></div>
           <div><div className="lab">Order Date</div><div className="val">{documentModel.orderDate}</div></div>
           <div><div className="lab">Start Ship</div><div className="val">{documentModel.startShipDate}</div></div>
           <div><div className="lab">Ship Complete</div><div className="val">{documentModel.shipCompleteDate}</div></div>
@@ -126,4 +115,36 @@ export function PurchaseOrderDocumentView({
       </div>
     </div>
   );
+}
+
+export function PurchaseOrderDocumentView({
+  purchaseOrder,
+  lineItems,
+}: {
+  purchaseOrder: PurchaseOrder;
+  lineItems: PoLineItem[];
+}) {
+  const documentModel = buildPurchaseOrderDocumentModel(
+    purchaseOrder,
+    lineItems,
+    purchaseOrder.buyers ?? null,
+    purchaseOrder.retailers ?? null,
+  );
+  return <DocumentModelRenderer documentModel={documentModel} />;
+}
+
+export function InvoiceDocumentView({
+  invoice,
+  lineItems,
+}: {
+  invoice: Invoice;
+  lineItems: InvoiceLineItem[];
+}) {
+  const documentModel = buildInvoiceDocumentModel(
+    invoice,
+    lineItems,
+    invoice.buyers ?? null,
+    invoice.retailers ?? null,
+  );
+  return <DocumentModelRenderer documentModel={documentModel} />;
 }

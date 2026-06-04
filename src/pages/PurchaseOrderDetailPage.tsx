@@ -15,6 +15,7 @@ import { daysBetween } from "@/utils/date";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
 import { buildPurchaseOrderDocumentHtml } from "@/utils/purchaseOrderDocument";
+import { invoiceService } from "@/services/invoiceService";
 
 function formatCounterEventTitle(event: PurchaseOrderCounterEvent) {
   switch (event.event_type) {
@@ -86,6 +87,20 @@ export function PurchaseOrderDetailPage() {
             <StatusBadge label={data.purchaseOrder.status} />
             <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${poId}/edit`}>Edit PO</Link>
             <button className="btn btn-secondary btn-small" onClick={() => navigate(`/purchase-orders/new?copyFrom=${poId}`)}>Duplicate PO</button>
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={async () => {
+                try {
+                  const invoice = await invoiceService.convertFromPo(poId);
+                  setNotice({ tone: "success", message: `Invoice ${invoice.invoice_number} created. Click View Invoice to open it.` });
+                  navigate(`/invoices/${invoice.id}`);
+                } catch (err) {
+                  setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to convert PO to invoice." });
+                }
+              }}
+            >
+              Convert to Invoice
+            </button>
             <button
               className="btn btn-ghost btn-small"
               onClick={() => {
