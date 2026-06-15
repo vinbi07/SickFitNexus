@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PoLineItem, PurchaseOrder, SockCard } from "@/types/domain";
 import { buildManufacturerOrderText, STANDING_INSTRUCTIONS } from "@/utils/manufacturerOrderDocument";
+import { downloadManufacturerFilesZip } from "@/utils/downloadManufacturerFiles";
 
 type Props = {
   purchaseOrder: PurchaseOrder;
@@ -10,14 +11,26 @@ type Props = {
 
 export function SendToTinaPreview({ purchaseOrder, lines, sockCards }: Props) {
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const text = buildManufacturerOrderText(purchaseOrder, lines, sockCards);
+
+  const hasFiles = lines.some((l) => l.mockup_file_ref || l.artwork_file_ref);
 
   function handleCopy() {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     });
+  }
+
+  async function handleDownloadFiles() {
+    setDownloading(true);
+    try {
+      await downloadManufacturerFilesZip(lines, purchaseOrder.po_number ?? "PO");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -27,9 +40,16 @@ export function SendToTinaPreview({ purchaseOrder, lines, sockCards }: Props) {
           <p className="lookbook-kicker">Output</p>
           <h3>Send to Tina</h3>
         </div>
-        <button type="button" className="btn btn-ghost btn-small" onClick={handleCopy}>
-          {copied ? "Copied ✓" : "Copy Text"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {hasFiles && (
+            <button type="button" className="btn btn-ghost btn-small" disabled={downloading} onClick={() => void handleDownloadFiles()}>
+              {downloading ? "Zipping…" : "Download Files"}
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost btn-small" onClick={handleCopy}>
+            {copied ? "Copied ✓" : "Copy Text"}
+          </button>
+        </div>
       </div>
 
       <pre className="mfr-send-pre">{text}</pre>

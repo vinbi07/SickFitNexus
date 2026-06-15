@@ -27,6 +27,15 @@ export const sockCardService = {
     return (data ?? []) as SockCard[];
   },
 
+  async updateCard(id: string, patch: Partial<Pick<SockCard, "on_hand" | "reorder_point" | "unit_cost">>): Promise<void> {
+    const supabase = assertSupabase();
+    const { error } = await supabase
+      .from("sock_cards")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+  },
+
   calculateCardDraw(
     lineItems: Array<Partial<PoLineItem>>,
     sockCards: SockCard[],

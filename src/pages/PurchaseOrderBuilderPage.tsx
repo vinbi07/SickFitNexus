@@ -25,6 +25,7 @@ import { formatCurrency } from "@/utils/format";
 import { assertSupabase } from "@/lib/supabase";
 import { buildManufacturerOrderHtml } from "@/utils/manufacturerOrderDocument";
 import { hasStopIssues, validateManufacturerOrder } from "@/utils/manufacturerOrderValidation";
+import { downloadManufacturerFilesZip } from "@/utils/downloadManufacturerFiles";
 
 type BuilderLineItem = Partial<PoLineItem> & { tempId: string };
 
@@ -303,6 +304,7 @@ export function PurchaseOrderBuilderPage() {
   const [purchaseOrder, setPurchaseOrder] = useState<BuilderState | null>(null);
   const [lineItems, setLineItems] = useState<BuilderLineItem[]>([]);
   const [mfrLines, setMfrLines] = useState<ManufacturerBuilderLine[]>([]);
+  const [localSockCards, setLocalSockCards] = useState<SockCard[]>([]);
   const [showNewDesignModal, setShowNewDesignModal] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -334,6 +336,8 @@ export function PurchaseOrderBuilderPage() {
 
   useEffect(() => {
     if (loading || !data || initializedRef.current) return;
+
+    setLocalSockCards(data.sockCards);
 
     const draft = !editId ? window.localStorage.getItem(autosaveKey) : null;
     if (draft) {
@@ -795,7 +799,7 @@ export function PurchaseOrderBuilderPage() {
 
   function handleNewDesignSaved(design: OrderDesign) {
     setShowNewDesignModal(false);
-    const newLine = buildLineFromDesign(design, builderData.sockCards, mfrLines.length);
+    const newLine = buildLineFromDesign(design, localSockCards, mfrLines.length);
     setMfrLines((current) => [...current, newLine]);
   }
 
@@ -811,7 +815,7 @@ export function PurchaseOrderBuilderPage() {
       const nextStatus: PurchaseOrder["status"] = isDraft ? "Draft" : "Ordered";
 
       if (!isDraft) {
-        const issues = validateManufacturerOrder(validLines, builderData.sockCards);
+        const issues = validateManufacturerOrder(validLines, localSockCards);
         if (hasStopIssues(issues)) {
           throw new Error(
             `Order has ${issues.filter((i) => i.severity === "stop").length} STOP issue(s). Fix them before sending.`,
@@ -910,7 +914,7 @@ export function PurchaseOrderBuilderPage() {
           .select("*")
           .eq("purchase_order_id", savedPo.id);
 
-        const tinaHtml = buildManufacturerOrderHtml(savedPo, (savedLines ?? []) as PoLineItem[], builderData.sockCards);
+        const tinaHtml = buildManufacturerOrderHtml(savedPo, (savedLines ?? []) as PoLineItem[], localSockCards);
 
         // Check if a generated doc already exists
         const { data: existingDoc } = await supabase
@@ -929,6 +933,9 @@ export function PurchaseOrderBuilderPage() {
 
         // Confirm sock card draw (decrement inventory + ledger)
         await sockCardService.confirmDraw(savedPo.id, (savedLines ?? []) as PoLineItem[]);
+
+        // Download all attached mockup/artwork files as a ZIP
+        await downloadManufacturerFilesZip((savedLines ?? []) as PoLineItem[], savedPo.po_number);
       }
 
       window.localStorage.removeItem(autosaveKey);
@@ -938,6 +945,10 @@ export function PurchaseOrderBuilderPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleUpdateSockCard(id: string, onHand: number) {
+    setLocalSockCards((prev) => prev.map((c) => (c.id === id ? { ...c, on_hand: onHand } : c)));
   }
 
   // ── Manufacturer PO render branch ─────────────────────────────────────────
@@ -960,7 +971,7 @@ export function PurchaseOrderBuilderPage() {
         {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
         {showNewDesignModal ? (
           <NewDesignModal
-            sockCards={builderData.sockCards}
+            sockCards={localSockCards}
             onSaved={handleNewDesignSaved}
             onClose={() => setShowNewDesignModal(false)}
           />
@@ -1024,7 +1035,7 @@ export function PurchaseOrderBuilderPage() {
           <div>
             <ManufacturerOrderGrid
               lines={mfrLines}
-              sockCards={builderData.sockCards}
+              sockCards={localSockCards}
               catalogOptions={builderData.catalogOptions}
               onUpdate={updateMfrLine}
               onRemove={removeMfrLine}
@@ -1049,15 +1060,15 @@ export function PurchaseOrderBuilderPage() {
               </div>
             </div>
 
-            <SockCardDrawPanel lines={mfrLines} sockCards={builderData.sockCards} />
-            <ManufacturerOrderCheckPanel lines={mfrLines} sockCards={builderData.sockCards} />
+            <SockCardDrawPanel lines={mfrLines} sockCards={localSockCards} onUpdateCard={handleUpdateSockCard} />
+            <ManufacturerOrderCheckPanel lines={mfrLines} sockCards={localSockCards} />
           </div>
         </div>
 
         <SendToTinaPreview
           purchaseOrder={mfrPreviewPo}
           lines={mfrLines as PoLineItem[]}
-          sockCards={builderData.sockCards}
+          sockCards={localSockCards}
         />
       </div>
     );
