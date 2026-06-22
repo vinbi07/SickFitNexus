@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { PoLineItem, PurchaseOrder, SockCard } from "@/types/domain";
 import { buildManufacturerOrderText, STANDING_INSTRUCTIONS } from "@/utils/manufacturerOrderDocument";
 import { downloadManufacturerFilesZip } from "@/utils/downloadManufacturerFiles";
+import { exportPoLineItemsExcel } from "@/utils/exportPoLineItemsExcel";
 
 type Props = {
   purchaseOrder: PurchaseOrder;
@@ -12,6 +13,7 @@ type Props = {
 export function SendToTinaPreview({ purchaseOrder, lines, sockCards }: Props) {
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const text = buildManufacturerOrderText(purchaseOrder, lines, sockCards);
 
@@ -22,6 +24,15 @@ export function SendToTinaPreview({ purchaseOrder, lines, sockCards }: Props) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     });
+  }
+
+  function handleExportExcel() {
+    setExporting(true);
+    try {
+      exportPoLineItemsExcel(lines, purchaseOrder);
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleDownloadFiles() {
@@ -46,6 +57,9 @@ export function SendToTinaPreview({ purchaseOrder, lines, sockCards }: Props) {
               {downloading ? "Zipping…" : "Download Files"}
             </button>
           )}
+          <button type="button" className="btn btn-ghost btn-small" disabled={exporting} onClick={handleExportExcel}>
+            {exporting ? "Exporting…" : "Export Excel"}
+          </button>
           <button type="button" className="btn btn-ghost btn-small" onClick={handleCopy}>
             {copied ? "Copied ✓" : "Copy Text"}
           </button>
