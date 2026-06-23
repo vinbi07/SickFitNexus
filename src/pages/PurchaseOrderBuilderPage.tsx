@@ -972,6 +972,7 @@ export function PurchaseOrderBuilderPage() {
         {showNewDesignModal ? (
           <NewDesignModal
             sockCards={localSockCards}
+            catalogOptions={builderData.catalogOptions}
             onSaved={handleNewDesignSaved}
             onClose={() => setShowNewDesignModal(false)}
           />
