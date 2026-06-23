@@ -7,14 +7,19 @@ import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
+import { ManufacturerPoDocumentView } from "@/components/orders/ManufacturerPoDocumentView";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
+import { sockCardService } from "@/services/sockCardService";
 import type { PurchaseOrderCounterEvent } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
 import { buildPurchaseOrderDocumentHtml } from "@/utils/purchaseOrderDocument";
+import { buildManufacturerOrderText } from "@/utils/manufacturerOrderDocument";
+import { exportPoLineItemsExcel } from "@/utils/exportPoLineItemsExcel";
+import { downloadManufacturerFilesZip } from "@/utils/downloadManufacturerFiles";
 import { invoiceService } from "@/services/invoiceService";
 
 function formatCounterEventTitle(event: PurchaseOrderCounterEvent) {
@@ -60,6 +65,10 @@ export function PurchaseOrderDetailPage() {
     file_url: "",
   });
   const { data, loading, error, reload } = useAsyncData(() => purchaseOrderService.getById(poId), [poId]);
+  const { data: sockCards } = useAsyncData(() => sockCardService.listCards(), []);
+  const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load purchase order detail"} />;
@@ -69,6 +78,7 @@ export function PurchaseOrderDetailPage() {
       ? daysBetween(data.purchaseOrder.invoice_paid_at, data.purchaseOrder.actual_delivery_date)
       : null;
   const generated = data.generatedDocuments[0];
+  const isManufacturerPo = data.purchaseOrder.po_type === "Manufacturer PO";
   const currentDocumentHtml = buildPurchaseOrderDocumentHtml(
     data.purchaseOrder,
     data.lineItems,
@@ -196,17 +206,68 @@ export function PurchaseOrderDetailPage() {
         <div className="panel-header">
           <h3>PO Preview</h3>
           <div className="btn-row">
-            <button
-              className="btn btn-secondary btn-small"
-              onClick={() => {
-                printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, currentDocumentHtml);
-              }}
-            >
-              Print / Save PDF
-            </button>
+            {isManufacturerPo ? (
+              <>
+                {data.lineItems.some((l) => l.mockup_file_ref || l.artwork_file_ref) ? (
+                  <button
+                    className="btn btn-ghost btn-small"
+                    disabled={downloading}
+                    onClick={async () => {
+                      setDownloading(true);
+                      try {
+                        await downloadManufacturerFilesZip(data.lineItems, data.purchaseOrder.po_number ?? "PO");
+                      } finally {
+                        setDownloading(false);
+                      }
+                    }}
+                  >
+                    {downloading ? "Zipping…" : "Download Files"}
+                  </button>
+                ) : null}
+                <button
+                  className="btn btn-ghost btn-small"
+                  disabled={exporting}
+                  onClick={() => {
+                    setExporting(true);
+                    try {
+                      exportPoLineItemsExcel(data.lineItems, data.purchaseOrder);
+                    } finally {
+                      setExporting(false);
+                    }
+                  }}
+                >
+                  {exporting ? "Exporting…" : "Export Excel"}
+                </button>
+                <button
+                  className="btn btn-ghost btn-small"
+                  onClick={() => {
+                    const text = buildManufacturerOrderText(data.purchaseOrder, data.lineItems, sockCards ?? []);
+                    void navigator.clipboard.writeText(text).then(() => {
+                      setCopied(true);
+                      window.setTimeout(() => setCopied(false), 1400);
+                    });
+                  }}
+                >
+                  {copied ? "Copied ✓" : "Copy Text"}
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn btn-secondary btn-small"
+                onClick={() => {
+                  printPurchaseOrderDocument(`PO ${data.purchaseOrder.po_number}`, currentDocumentHtml);
+                }}
+              >
+                Print / Save PDF
+              </button>
+            )}
           </div>
         </div>
-        <PurchaseOrderDocumentView purchaseOrder={data.purchaseOrder} lineItems={data.lineItems} />
+        {isManufacturerPo ? (
+          <ManufacturerPoDocumentView purchaseOrder={data.purchaseOrder} lineItems={data.lineItems} />
+        ) : (
+          <PurchaseOrderDocumentView purchaseOrder={data.purchaseOrder} lineItems={data.lineItems} />
+        )}
       </div>
       <div className="split-grid">
         <div className="panel section-stack">

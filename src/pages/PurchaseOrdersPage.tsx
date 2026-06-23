@@ -188,7 +188,9 @@ export function PurchaseOrdersPage() {
                 <Link className="btn btn-ghost btn-small" to={`/purchase-orders/${row.id}`}>View</Link>
                 <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${row.id}/edit`}>Edit</Link>
                 <button className="btn btn-secondary btn-small" onClick={() => navigate(`/purchase-orders/new?copyFrom=${row.id}`)}>Duplicate</button>
-                <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${row.id}/preview`}>Preview</Link>
+                {row.po_type !== "Manufacturer PO" ? (
+                  <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${row.id}/preview`}>Preview</Link>
+                ) : null}
                 <button
                   className="btn btn-secondary btn-small"
                   onClick={async () => {

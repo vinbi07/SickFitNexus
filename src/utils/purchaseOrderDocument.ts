@@ -144,6 +144,111 @@ export function buildPurchaseOrderDocumentModel(
   };
 }
 
+// ─── Manufacturer PO document (mirrors exportPoLineItemsExcel column layout) ──
+
+export type ManufacturerPoDocumentLine = {
+  index: number;
+  productName: string;
+  variant: string;
+  colorway: string;
+  construction: string;
+  sku: string;
+  upc: string;
+  boxNo: string;
+  sockSize: string;
+  packPairs: number | string;
+  qtyOrdered: number | string;
+  unitCost: number | string;
+  extendedCost: number | string;
+  unitRetail: number | string;
+  extendedRetail: number | string;
+  barcodeRequired: string;
+  artStatus: string;
+  artNote: string;
+  ribLr: string;
+  toe: string;
+  pattern: string;
+  signature: string;
+  footText: string;
+};
+
+export type ManufacturerPoDocumentModel = {
+  logoSrc: string;
+  documentTitle: string;
+  numberLabel: string;
+  poNumber: string;
+  orderDate: string;
+  startShipDate: string;
+  shipCompleteDate: string;
+  currency: string;
+  lines: ManufacturerPoDocumentLine[];
+  totalPairs: number;
+  totalGoodsCost: number;
+  notes: string;
+  footerLabel: string;
+};
+
+function mfrYn(val: boolean | null | undefined): string {
+  if (val === true) return "Yes";
+  if (val === false) return "No";
+  return "";
+}
+
+function mfrStr(val: string | null | undefined): string {
+  return val ?? "";
+}
+
+function mfrNum(val: number | null | undefined): number | string {
+  return val ?? "";
+}
+
+export function buildManufacturerPoDocumentModel(
+  purchaseOrder: Partial<PurchaseOrder>,
+  lineItems: Array<Partial<PoLineItem>>,
+): ManufacturerPoDocumentModel {
+  const lines: ManufacturerPoDocumentLine[] = lineItems.map((line, index) => ({
+    index: (line.sort_order ?? index) + 1,
+    productName: mfrStr(line.product_name),
+    variant: mfrStr(line.variant_label),
+    colorway: mfrStr(line.pantone),
+    construction: mfrStr(line.construction),
+    sku: mfrStr(line.sku),
+    upc: mfrStr(line.upc),
+    boxNo: mfrStr(line.box_no),
+    sockSize: mfrStr(line.sock_size),
+    packPairs: mfrNum(line.pack_pairs),
+    qtyOrdered: mfrNum(line.quantity_ordered),
+    unitCost: mfrNum(line.unit_cost),
+    extendedCost: mfrNum(line.extended_cost),
+    unitRetail: mfrNum(line.unit_retail),
+    extendedRetail: mfrNum(line.extended_retail),
+    barcodeRequired: mfrYn(line.barcode_required),
+    artStatus: mfrStr(line.art_status),
+    artNote: mfrStr(line.art_note),
+    ribLr: mfrYn(line.rib_lr),
+    toe: mfrYn(line.toe),
+    pattern: mfrYn(line.pattern),
+    signature: mfrYn(line.signature),
+    footText: mfrStr(line.foot_text),
+  }));
+
+  return {
+    logoSrc: "/assets/SickFit Logo.png",
+    documentTitle: "Manufacturer Production Order",
+    numberLabel: "PO Number",
+    poNumber: String(purchaseOrder.po_number ?? "Pending"),
+    orderDate: formatPoDate(purchaseOrder.order_date),
+    startShipDate: formatPoDate(purchaseOrder.start_ship_date ?? purchaseOrder.ship_date),
+    shipCompleteDate: formatPoDate(purchaseOrder.ship_complete_date ?? purchaseOrder.expected_delivery_date),
+    currency: String(purchaseOrder.currency_code ?? "USD"),
+    lines,
+    totalPairs: lineItems.reduce((sum, item) => sum + Number(item.quantity_ordered ?? 0), 0),
+    totalGoodsCost: lineItems.reduce((sum, item) => sum + Number(item.quantity_ordered ?? 0) * Number(item.unit_cost ?? 0), 0),
+    notes: String(purchaseOrder.internal_notes ?? purchaseOrder.notes ?? "No notes / special instructions provided."),
+    footerLabel: "SICKFIT × FOSHAN LION KING · CONFIDENTIAL",
+  };
+}
+
 export function getPurchaseOrderDocumentStyles() {
   return `
     .po-wrap{display:block;font-family:Copernicus,Georgia,serif;color:#111;padding:1px;box-sizing:border-box;}
@@ -196,6 +301,10 @@ export function getPurchaseOrderDocumentStyles() {
     .po-notes{padding:14px 22px;background:#fafaf7;border-top:0.5px solid #e6e3da;}
     .po-notes .note{font-size:11px;color:#444;line-height:1.5;}
     .po-foot{background:#fff;color:#888;padding:10px 22px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.1em;border-top:0.5px solid #e6e3da;}
+    .mfr-doc-scroll{overflow-x:auto;}
+    .mfr-doc-table{table-layout:auto;min-width:1400px;}
+    .mfr-doc-table th,.mfr-doc-table td{white-space:nowrap;}
+    .mfr-doc-table td.r,.mfr-doc-table th.r{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
   `.trim();
 }
 
