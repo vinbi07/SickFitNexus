@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { uploadManufacturerFile, type UploadFolder } from "@/services/storageService";
 import { getErrorMessage } from "@/utils/errors";
 
+const LARGE_FILE_BYTES = 3 * 1024 * 1024;
+
 type Props = {
   value: string | null | undefined;
   folder: UploadFolder;
@@ -13,6 +15,7 @@ type Props = {
 export function FileUploadCell({ value, folder, accept, label, onChange }: Props) {
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [largeFileMb, setLargeFileMb] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isImage = value && /\.(jpe?g|png|webp|gif|svg)(\?|$)/i.test(value);
@@ -21,6 +24,7 @@ export function FileUploadCell({ value, folder, accept, label, onChange }: Props
     try {
       setUploading(true);
       setErr(null);
+      setLargeFileMb(file.size > LARGE_FILE_BYTES ? file.size / (1024 * 1024) : null);
       const url = await uploadManufacturerFile(file, folder);
       onChange(url);
     } catch (e) {
@@ -59,7 +63,12 @@ export function FileUploadCell({ value, folder, accept, label, onChange }: Props
       />
 
       {uploading ? (
-        <span className="mfr-upload-spinner" title="Uploading…">⟳</span>
+        <span
+          className="mfr-upload-spinner"
+          title={largeFileMb ? `Uploading ${largeFileMb.toFixed(1)}MB — this may take a while on a slow connection…` : "Uploading…"}
+        >
+          ⟳
+        </span>
       ) : isImage ? (
         <img src={value!} className="mfr-upload-thumb" alt={label} />
       ) : value ? (
