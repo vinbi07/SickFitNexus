@@ -90,8 +90,10 @@ export function PurchaseOrderDetailPage() {
     <div className="section-stack">
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <PageHeader
-        title={`PO ${data.purchaseOrder.po_number}`}
-        description={`${data.purchaseOrder.po_type} | ${data.purchaseOrder.retailers?.name ?? data.purchaseOrder.vendors?.name ?? "Unassigned"} | ${data.purchaseOrder.buyers?.buyer_name ?? "No buyer linked"}`}
+        title={isManufacturerPo
+          ? (data.purchaseOrder.vendors?.name ?? "Manufacturing Order")
+          : (data.purchaseOrder.retailers?.name ?? data.purchaseOrder.bill_to_company_name ?? "Purchase Order")}
+        description={`PO ${data.purchaseOrder.po_number} · ${data.purchaseOrder.po_type}${data.purchaseOrder.buyers?.buyer_name ? ` | ${data.purchaseOrder.buyers.buyer_name}` : ""}`}
         actions={(
           <div className="btn-row">
             <StatusBadge label={data.purchaseOrder.status} />

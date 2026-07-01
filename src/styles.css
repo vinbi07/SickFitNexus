@@ -4571,6 +4571,14 @@ body {
   font-size: 0.72rem;
 }
 
+.po-edit-btn {
+  padding: 5px 7px !important;
+  max-height: 20px;
+  margin: auto 0;
+  margin-top: 5px;
+  box-sizing: border-box;
+}
+
 .table-link,
 .product-sku-cell,
 .product-compact-cell {
@@ -5394,6 +5402,59 @@ textarea {
 }
 
 .lane-row-healthy {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.lane-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--command-line);
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.lane-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lane-card-head strong {
+  color: var(--command-ink);
+  font-size: 0.82rem;
+}
+
+.lane-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.72rem;
+  color: var(--command-muted);
+}
+
+.lane-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.lane-card-danger {
+  border-color: #fecdd3;
+  background: #fff5f5;
+}
+
+.lane-card-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.lane-card-healthy {
   border-color: #bbf7d0;
   background: #f0fdf4;
 }

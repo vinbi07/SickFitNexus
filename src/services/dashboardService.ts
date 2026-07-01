@@ -20,6 +20,7 @@ import { calculateForecastMetric, calculateVendorReliability } from "@/utils/for
 import { getAverageTimelineDays, getProductionTimelineExceptionCount, getProductionTimelineRows, getProductionTimelineTrend } from "@/utils/productionTimeline";
 import {
   buildSkuReorderWindow,
+  getDaysLate,
   getIncomingQuantityForProduct,
   getInventoryHealthTone,
   getInvoiceStatus,
@@ -62,6 +63,16 @@ function toDateOnly(value: string) {
 
 function dateOnlyDaysAgo(daysAgo: number) {
   return new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
+}
+
+function getManufacturingStatus(po: PurchaseOrder): "Draft" | "Ordered" | "In Production" | "Shipped" | "Received" | "Delayed" {
+  if (po.status === "Delayed") return "Delayed";
+  if (po.status === "Draft") return "Draft";
+  if (["Received", "Partially Received", "Closed", "Fulfilled"].includes(po.status)) return "Received";
+  if (po.status === "In Transit" || po.ship_date || po.tracking_number) return "Shipped";
+  // TODO: "In Production" is inferred from paid-but-unshipped; add a dedicated production_status field for accuracy.
+  if (po.invoice_paid_at) return "In Production";
+  return "Ordered";
 }
 
 function getInitials(value: string) {
@@ -268,13 +279,19 @@ export const dashboardService = {
         const dueDate = po.eta_date ?? po.expected_delivery_date;
         return po.status === "Delayed" || (!!dueDate && dueDate < today);
       })
-      .map((po) => ({
-        poId: po.id,
-        poNumber: po.po_number,
-        partner: retailerById.get(po.retailer_id ?? "")?.name ?? vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned",
-        etaDate: po.eta_date ?? po.expected_delivery_date,
-        status: po.status === "Delayed" ? po.status : getShipmentStatus(po),
-      }))
+      .map((po) => {
+        const etaDate = po.eta_date ?? po.expected_delivery_date;
+        return {
+          poId: po.id,
+          poNumber: po.po_number,
+          partner: retailerById.get(po.retailer_id ?? "")?.name ?? vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned",
+          etaDate,
+          status: po.status === "Delayed" ? po.status : getShipmentStatus(po),
+          // TODO: replace with a dedicated delay_reason field once available
+          reason: po.notes?.trim() || "No delay reason logged yet",
+          daysLate: getDaysLate(etaDate),
+        };
+      })
       .sort((left, right) => (left.etaDate ?? "9999-12-31").localeCompare(right.etaDate ?? "9999-12-31"))
       .slice(0, 8);
 
@@ -326,26 +343,67 @@ export const dashboardService = {
           events: eventsByProductId.get(product.id) ?? [],
           incomingQuantity,
         });
+        const currentQuantity = product.current_inventory;
+        const isOversold = currentQuantity < 0;
+        const oversoldQuantity = Math.max(-currentQuantity, 0);
+        const shortageQuantity = isOversold ? 0 : Math.max(Number(product.safety_stock ?? 0) - currentQuantity, 0);
+        const statusLabel = isOversold
+          ? `Oversold by ${oversoldQuantity} pairs`
+          : reorderWindow.recommendation === "Reorder now"
+            ? "Reorder Now"
+            : reorderWindow.recommendation.startsWith("Reorder within")
+              ? "Reorder Soon"
+              : reorderWindow.recommendation;
         return {
           sku: product.sku,
           productName: product.name,
           recommendation: reorderWindow.recommendation,
           reorderByDate: reorderWindow.reorderByDate,
-          currentQuantity: product.current_inventory,
+          currentQuantity,
           incomingQuantity,
           projectedDaysRemaining: forecast.projectedDaysRemaining,
+          variantTitle: product.variant_title,
+          shortageQuantity,
+          oversoldQuantity,
+          isOversold,
+          statusLabel,
         };
       })
       .sort((left, right) => left.currentQuantity - right.currentQuantity);
 
+    const reorderNowItems = skuReorderWindows
+      .filter((item) => item.recommendation.toLowerCase().includes("reorder") || item.currentQuantity <= 25)
+      .slice()
+      .sort((left, right) => {
+        if (left.isOversold !== right.isOversold) return left.isOversold ? -1 : 1;
+        return left.currentQuantity - right.currentQuantity;
+      });
+
     const inventoryAlerts = products
-      .map((product) => ({
-        sku: product.sku,
-        productName: product.name,
-        currentQuantity: product.current_inventory,
-        incomingQuantity: incomingByProduct.get(product.id) ?? 0,
-        status: getInventoryHealthTone(product.current_inventory, product.safety_stock),
-      }))
+      .map((product) => {
+        const currentQuantity = product.current_inventory;
+        const incomingQuantity = incomingByProduct.get(product.id) ?? 0;
+        const status = getInventoryHealthTone(currentQuantity, product.safety_stock);
+        const riskStatus =
+          currentQuantity < 0
+            ? ("Oversold" as const)
+            : status === "danger"
+              ? ("Low Stock" as const)
+              : status === "warning"
+                ? ("Reorder Soon" as const)
+                : incomingQuantity > 0
+                  ? ("Incoming Shipment" as const)
+                  : ("Safe" as const);
+        return {
+          sku: product.sku,
+          productName: product.name,
+          currentQuantity,
+          incomingQuantity,
+          status,
+          committedQuantity: product.inventory_allocated,
+          riskStatus,
+        };
+      })
       .filter((item) => item.status !== "healthy" || item.incomingQuantity > 0)
       .sort((left, right) => left.currentQuantity - right.currentQuantity)
       .slice(0, 8);
@@ -388,6 +446,33 @@ export const dashboardService = {
         };
       })
       .sort((left, right) => (left.etaDate ?? "9999-12-31").localeCompare(right.etaDate ?? "9999-12-31"));
+
+    const manufacturingIncoming = activeManufacturerOrders
+      .flatMap((po) => {
+        const manufacturer = vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned";
+        const orderedDate = po.order_date ?? po.submitted_at;
+        const paymentStatus: "Paid" | "Unpaid" = po.invoice_paid_at ? "Paid" : "Unpaid";
+        const shipDate = po.ship_date;
+        const arrivalDate = po.eta_date ?? po.expected_delivery_date ?? po.actual_delivery_date;
+        const manufacturingStatus = getManufacturingStatus(po);
+        return (lineItemsByPo.get(po.id) ?? [])
+          .filter((item) => Number(item.quantity_ordered ?? 0) - Number(item.quantity_received ?? 0) > 0)
+          .map((item) => ({
+            id: `${po.id}-${item.id}`,
+            poId: po.id,
+            poNumber: po.po_number,
+            manufacturer,
+            productName: item.product_name || item.sku,
+            sku: item.sku,
+            quantityOrdered: Number(item.quantity_ordered ?? 0) - Number(item.quantity_received ?? 0),
+            orderedDate,
+            paymentStatus,
+            shipDate,
+            arrivalDate,
+            manufacturingStatus,
+          }));
+      })
+      .sort((left, right) => (left.arrivalDate ?? "9999-12-31").localeCompare(right.arrivalDate ?? "9999-12-31"));
 
     const activeSkusInRoute = new Set(
       inventoryInRoute.flatMap((po) => (lineItemsByPo.get(po.id) ?? []).map((item) => item.sku)),
@@ -827,9 +912,12 @@ export const dashboardService = {
       inventoryInRouteCount: inventoryInRoute.length,
       activeSkusInRoute,
       manufacturingSnapshotRows,
+      manufacturingIncoming,
       wholesaleAccounts,
       inventoryAlerts,
       skuReorderWindows,
+      reorderNowItems,
+      oversoldProductCount: products.filter((product) => product.current_inventory < 0).length,
     };
   },
 };

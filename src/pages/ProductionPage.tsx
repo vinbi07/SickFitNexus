@@ -53,11 +53,11 @@ export function ProductionPage() {
             columns={[
               {
                 key: "poNumber",
-                title: "PO / Manufacturer",
+                title: "Manufacturer / PO",
                 render: (row) => (
                   <div className="cell-stack">
-                    <strong>{row.poNumber}</strong>
-                    <span className="helper-text">{row.manufacturer}</span>
+                    <strong>{row.manufacturer}</strong>
+                    <span className="helper-text">{row.poNumber}</span>
                   </div>
                 ),
               },

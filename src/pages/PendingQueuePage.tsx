@@ -23,7 +23,7 @@ export function PendingQueuePage() {
       <PageHeader
         title="Pending Queue"
         description="Internal review queue for inbound retailer/order requests before conversion into live records."
-        actions={<button className="btn btn-primary" onClick={() => setCreating(true)}>Add Pending Request</button>}
+        actions={<button className="btn btn-primary" onClick={() => setCreating(true)}>Add to Queue</button>}
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <DataTable
@@ -32,7 +32,7 @@ export function PendingQueuePage() {
           { key: "status", title: "Status", render: (row) => <StatusBadge label={row.status} /> },
           {
             key: "request",
-            title: "Request",
+            title: "Item",
             render: (row) => (
               <div className="cell-stack">
                 <strong>{row.subject}</strong>
@@ -104,8 +104,8 @@ export function PendingQueuePage() {
       />
       {creating ? (
         <EntityFormModal<Record<string, string>>
-          title="Add Pending Request"
-          saveLabel="Create Request"
+          title="Add to Queue"
+          saveLabel="Add to Queue"
           initialValues={{
             request_type: "order",
             source_channel: "Manual",
@@ -125,7 +125,7 @@ export function PendingQueuePage() {
             { key: "buyer_name", label: "Buyer" },
             { key: "buyer_email", label: "Buyer Email" },
             { key: "subject", label: "Subject", required: true },
-            { key: "requested_action", label: "Requested Action" },
+            { key: "requested_action", label: "Next Action" },
             { key: "attachment_title", label: "Attachment Title" },
             { key: "attachment_url", label: "Attachment URL" },
             { key: "notes", label: "Notes", type: "textarea" },

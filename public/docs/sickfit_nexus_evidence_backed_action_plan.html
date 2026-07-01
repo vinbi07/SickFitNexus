@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SickFit Nexus Evidence-Backed Action Plan</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #151515;
+      --muted: #5f6875;
+      --line: #dde2ea;
+      --red: #e72027;
+      --red-dark: #be161c;
+      --soft-red: #fff0f1;
+      --blue: #1f4f7a;
+      --soft-blue: #eef7ff;
+      --green: #1d6b45;
+      --soft-green: #effaf4;
+      --yellow: #7a5200;
+      --soft-yellow: #fff7df;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(231,32,39,0.12), transparent 35%),
+        linear-gradient(180deg, #ffffff 0%, var(--bg) 38%, var(--bg) 100%);
+      line-height: 1.55;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 22px 80px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #111 0%, #2a1113 62%, var(--red-dark) 120%);
+      color: white;
+      border-radius: 28px;
+      padding: 44px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -120px;
+      top: -130px;
+      width: 360px;
+      height: 360px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.10);
+    }
+
+    .eyebrow {
+      font-size: 13px;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: #ffcdd0;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 66px);
+      line-height: .96;
+      letter-spacing: -0.055em;
+      max-width: 900px;
+    }
+
+    .hero p {
+      margin: 20px 0 0;
+      color: rgba(255,255,255,0.84);
+      font-size: 18px;
+      max-width: 800px;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .pill, .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .pill {
+      padding: 9px 12px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.20);
+    }
+
+    .chip {
+      padding: 6px 9px;
+      background: var(--soft-blue);
+      border: 1px solid #cfe8ff;
+      color: var(--blue);
+      margin: 2px;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      margin: 22px 0;
+      padding: 10px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+      overflow-x: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: #2f3741;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 10px 14px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .nav a:hover {
+      background: #f1f3f6;
+    }
+
+    section {
+      margin-top: 28px;
+    }
+
+    .section-card {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: clamp(25px, 4vw, 38px);
+      letter-spacing: -0.035em;
+      line-height: 1.08;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    h4 {
+      margin: 20px 0 8px;
+      font-size: 15px;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .callout {
+      border: 1px solid #ffc5c8;
+      background: var(--soft-red);
+      border-radius: 16px;
+      padding: 18px;
+      margin: 18px 0;
+    }
+
+    .callout strong {
+      color: var(--red-dark);
+    }
+
+    .interpretation {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .mini-card.direct {
+      border-color: #ccebd9;
+      background: var(--soft-green);
+    }
+
+    .mini-card.inference {
+      border-color: #fde3a0;
+      background: var(--soft-yellow);
+    }
+
+    .mini-card.correction {
+      border-color: #cfe8ff;
+      background: var(--soft-blue);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 900;
+      margin-right: 4px;
+      margin-bottom: 4px;
+    }
+
+    .status.red { background: var(--soft-red); color: var(--red-dark); border: 1px solid #ffc5c8; }
+    .status.green { background: var(--soft-green); color: var(--green); border: 1px solid #ccebd9; }
+    .status.yellow { background: var(--soft-yellow); color: var(--yellow); border: 1px solid #fde3a0; }
+    .status.blue { background: var(--soft-blue); color: var(--blue); border: 1px solid #cfe8ff; }
+    .status.gray { background: #f0f2f4; color: #4e5966; border: 1px solid var(--line); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .task-list {
+      margin: 12px 0 0;
+      padding-left: 20px;
+    }
+
+    .task-list li {
+      margin: 8px 0;
+    }
+
+    .evidence-strip {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: white;
+    }
+
+    th, td {
+      padding: 13px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      background: #f3f5f8;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #4e5966;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .timeline {
+      position: relative;
+      margin-top: 18px;
+    }
+
+    .week {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 16px;
+      margin: 0 0 16px;
+      align-items: stretch;
+    }
+
+    .week-label {
+      background: #111;
+      color: white;
+      border-radius: 16px;
+      padding: 16px;
+      font-weight: 900;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .week-body {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .evidence-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .evidence-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: white;
+    }
+
+    .evidence-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .evidence-id {
+      background: #111;
+      color: white;
+      border-color: #111;
+      padding: 6px 8px;
+    }
+
+    .evidence-time {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    blockquote {
+      margin: 10px 0 12px;
+      border-left: 4px solid var(--red);
+      padding: 8px 0 8px 14px;
+      color: #2b3138;
+      background: #fafbfc;
+      border-radius: 0 12px 12px 0;
+      font-style: italic;
+    }
+
+    .appendix {
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      background: #111;
+      color: #f2f2f2;
+      padding: 18px;
+      border-radius: 16px;
+      overflow-x: auto;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: white;
+      margin-top: 14px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 36px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        padding: 32px 24px;
+      }
+      .interpretation,
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .evidence-grid {
+        grid-template-columns: 1fr;
+      }
+      .week {
+        grid-template-columns: 1fr;
+      }
+      .nav {
+        border-radius: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="eyebrow">SickFit Nexus Improvement Plan</div>
+      <h1>Evidence-Backed Action Plan</h1>
+      <p>
+        This version separates what Paden directly said from recommendations inferred from the transcripts.
+        The plan keeps the core PO concept where appropriate, while cleaning up confusing internal labels, dashboard clutter,
+        inventory visibility, manufacturing flow, and lookbook readiness.
+      </p>
+      <div class="hero-meta">
+        <span class="pill">Built from boss transcript feedback</span>
+        <span class="pill">Updated PO recommendation</span>
+        <span class="pill">Dashboard + inventory first</span>
+        <span class="pill">Airport account readiness</span>
+      </div>
+    </header>
+
+    <nav class="nav">
+      <a href="#summary">Summary</a>
+      <a href="#interpretation">Interpretation Rules</a>
+      <a href="#week1">Week 1</a>
+      <a href="#inventory">Inventory</a>
+      <a href="#po">PO Pages</a>
+      <a href="#manufacturing">Manufacturing</a>
+      <a href="#lookbooks">Lookbooks</a>
+      <a href="#timeline">Timeline</a>
+      <a href="#mvp">MVP</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#transcripts">Transcripts</a>
+    </nav>
+
+    <section id="summary" class="section-card">
+      <h2>Main Problem From Feedback</h2>
+      <p>
+        The current issue is not that SickFit Nexus lacks data. The issue is that the data is presented like a database instead of an operations tool.
+        Paden repeatedly says he does not know where to look, does not know what he is looking at, and cannot quickly understand what action to take.
+      </p>
+
+      <div class="callout">
+        <strong>Core direction:</strong>
+        Rebuild SickFit Nexus around clear operations decisions, not raw data.
+        Every page should show the account or product name first, explain the current status in plain English,
+        and make the next action obvious.
+      </div>
+
+      <h3>The app needs to quickly answer:</h3>
+      <ol class="task-list">
+        <li>What needs my attention right now?</li>
+        <li>What products are low, oversold, or at risk?</li>
+        <li>What orders are active, delayed, draft, paid, fulfilled, or shipped?</li>
+        <li>What manufacturing/restock orders are coming in and when?</li>
+        <li>What can SickFit send to airport/store accounts as a lookbook or order tool?</li>
+      </ol>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E1">E1</a> <a class="chip" href="#E2">E2</a> <a class="chip" href="#E7">E7</a> <a class="chip" href="#E14">E14</a> <a class="chip" href="#E15">E15</a> <a class="chip" href="#E16">E16</a>
+      </div>
+    </section>
+
+    <section id="interpretation" class="section-card">
+      <h2>Important Interpretation Rules</h2>
+      <p class="muted">
+        These rules prevent the plan from overreaching beyond what the transcript actually says.
+      </p>
+
+      <div class="interpretation">
+        <div class="mini-card direct">
+          <h3>Direct Transcript Instruction</h3>
+          <p>
+            Use these when Paden clearly asked for something. Example:
+            replace <strong>Request</strong> with <strong>Draft</strong>, make status clickable,
+            show the actual product instead of Shopify ID, and put LawsuitHoustonCentral at the top as the title.
+          </p>
+        </div>
+
+        <div class="mini-card inference">
+          <h3>Reasonable Inference</h3>
+          <p>
+            Use these when Paden described confusion but did not prescribe the exact UI solution.
+            Example: using status badges, summary cards, and simplified tables is an inferred design solution
+            to his repeated feedback that the app is too much and hard to digest.
+          </p>
+        </div>
+
+        <div class="mini-card correction">
+          <h3>Corrected PO Recommendation</h3>
+          <p>
+            Do <strong>not</strong> globally remove the term PO. Paden seemed okay with POs in some contexts,
+            but he disliked confusing labels like <strong>RetailerPO</strong>, <strong>ManufacturerPO</strong>, and
+            <strong>PO20000</strong> as the main title. The better recommendation is to keep PO where useful,
+            clean up the wording, and improve title hierarchy.
+          </p>
+        </div>
+      </div>
+
+      <h3>Corrected Label Direction</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Current UI</th>
+            <th>Recommended UI</th>
+            <th>Backing</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Request</td>
+            <td>Draft</td>
+            <td>Direct: Paden said “Just put draft, not request.” <a class="chip" href="#E9">E9</a></td>
+          </tr>
+          <tr>
+            <td>PO20000 as main title</td>
+            <td>Account/store name as title; PO number as metadata</td>
+            <td>Direct: Paden asked for LawsuitHoustonCentral at the top. <a class="chip" href="#E10">E10</a></td>
+          </tr>
+          <tr>
+            <td>RetailerPO</td>
+            <td>Retailer PO, Store PO, or clearly defined PO type</td>
+            <td>Direct confusion, inferred wording. Do not assume “Customer Order” is required. <a class="chip" href="#E11">E11</a></td>
+          </tr>
+          <tr>
+            <td>ManufacturerPO</td>
+            <td>Manufacturing Order, Restock Order, or Production/Restock</td>
+            <td>Paden directly said manufacturing should not feel like a PO; exact replacement is inferred. <a class="chip" href="#E12">E12</a></td>
+          </tr>
+          <tr>
+            <td>Shopify 428</td>
+            <td>Product name first; Shopify ID secondary</td>
+            <td>Direct: Paden said Shopify 428 means nothing and asked for the actual product. <a class="chip" href="#E3">E3</a></td>
+          </tr>
+          <tr>
+            <td>Manufacturing Pulse</td>
+            <td>Rename or replace with clear manufacturing snapshot</td>
+            <td>Direct: Paden said he has no idea what Manufacturing Pulse means. <a class="chip" href="#E13">E13</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="week1" class="section-card">
+      <h2>Priority 1: Week 1 Usability Cleanup + Dashboard Fix</h2>
+      <p><strong>Focus:</strong> Make the app understandable immediately.</p>
+      <p>
+        The homepage should become a “Bottom Line Up Front” operations snapshot. It should remove confusing widgets
+        and replace them with sections that clearly answer what needs action.
+      </p>
+
+      <h3>Week 1 Tasks</h3>
+      <ul class="task-list">
+        <li>Replace confusing internal labels in the UI.</li>
+        <li>Clean up PO type labels without unnecessarily removing the term PO everywhere.</li>
+        <li>Remove or simplify unclear dashboard widgets.</li>
+        <li>Replace Shopify IDs/internal IDs as primary labels with actual product names.</li>
+        <li>Add clear dashboard sections: Reorder Now, Inventory Risk, Delayed Orders, and Manufacturing Incoming.</li>
+        <li>Add plain-language status badges and clickable statuses where relevant.</li>
+      </ul>
+
+      <div class="grid-4">
+        <div class="mini-card">
+          <h3>Reorder Now</h3>
+          <p>Show products that are low, oversold, or need restocking.</p>
+          <p><span class="status red">Oversold by 8 pairs</span> <span class="status yellow">Reorder Soon</span></p>
+          <div class="evidence-strip">Evidence: <a class="chip" href="#E2">E2</a> <a class="chip" href="#E3">E3</a> <a class="chip" href="#E4">E4</a></div>
+        </div>
+
+        <div class="mini-card">
+          <h3>Inventory Risk</h3>
+          <p>Show products that are low stock, oversold, or dependent on incoming manufacturing.</p>
+          <p><span class="status green">Safe</span> <span class="status yellow">Low Stock</span> <span class="status red">Oversold</span></p>
+          <div class="evidence-strip">Evidence: <a class="chip" href="#E6">E6</a> <a class="chip" href="#E18">E18</a></div>
+        </div>
+
+        <div class="mini-card">
+          <h3>Delayed Orders</h3>
+          <p>Show the account/order, what is late, why it is late, and how many days late.</p>
+          <p><span class="status red">6 Days Late</span> <span class="status blue">View Order</span></p>
+          <div class="evidence-strip">Evidence: <a class="chip" href="#E5">E5</a></div>
+        </div>
+
+        <div class="mini-card">
+          <h3>Manufacturing Incoming</h3>
+          <p>Show active restock/manufacturing orders, payment status, and expected arrival.</p>
+          <p><span class="status blue">In Production</span> <span class="status green">Paid</span></p>
+          <div class="evidence-strip">Evidence: <a class="chip" href="#E12">E12</a> <a class="chip" href="#E20">E20</a></div>
+        </div>
+      </div>
+
+      <h3>Recommended Dashboard Layout</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Show</th>
+            <th>Why</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Reorder Now</td>
+            <td>Product name, variant/SKU, current stock, shortage, status, action.</td>
+            <td>Paden said Reorder Now gives no information and asked for the actual product.</td>
+            <td><a class="chip" href="#E2">E2</a> <a class="chip" href="#E3">E3</a> <a class="chip" href="#E4">E4</a></td>
+          </tr>
+          <tr>
+            <td>Inventory Risk</td>
+            <td>Product, current stock, committed quantity, incoming quantity, risk status.</td>
+            <td>Inventory risk is currently unclear, and inventory management is crucial before peak season.</td>
+            <td><a class="chip" href="#E6">E6</a> <a class="chip" href="#E18">E18</a></td>
+          </tr>
+          <tr>
+            <td>Delayed Orders</td>
+            <td>Account/store/manufacturer, order metadata, issue, days late, status.</td>
+            <td>Paden said late/delayed is just a bunch of numbers and he does not know what it means.</td>
+            <td><a class="chip" href="#E5">E5</a></td>
+          </tr>
+          <tr>
+            <td>Manufacturing Incoming</td>
+            <td>Product, quantity ordered, ordered date, payment status, expected shipment/arrival, current status.</td>
+            <td>Paden needs manufacturing orders to tell him what was paid, ordered, expected, and forecasted.</td>
+            <td><a class="chip" href="#E12">E12</a> <a class="chip" href="#E19">E19</a> <a class="chip" href="#E20">E20</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Week 1 Deliverable</h3>
+      <p>
+        A simplified SickFit Nexus homepage that shows the most important operational information first:
+        what needs reorder, what inventory is at risk, what is delayed, and what manufacturing/restock orders are incoming.
+      </p>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E1">E1</a> <a class="chip" href="#E2">E2</a> <a class="chip" href="#E3">E3</a> <a class="chip" href="#E5">E5</a> <a class="chip" href="#E7">E7</a> <a class="chip" href="#E14">E14</a> <a class="chip" href="#E16">E16</a>
+      </div>
+    </section>
+
+    <section id="inventory" class="section-card">
+      <h2>Priority 2: Clean Up Inventory Management</h2>
+      <p>
+        Inventory is one of the most urgent sections because Paden directly said Inventory Management is crucial before peak season
+        and airport deals. The current inventory view is not clear enough for forecasting or operations.
+      </p>
+
+      <h3>Recommended Inventory Table</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>SKU</th>
+            <th>Current Stock</th>
+            <th>Committed</th>
+            <th>Incoming</th>
+            <th>Available After Incoming</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Crew Compression Socks - Black L/XL</td>
+            <td>CREW-BLK-LXL</td>
+            <td>-8</td>
+            <td>40</td>
+            <td>100</td>
+            <td>52</td>
+            <td><span class="status red">Oversold by 8 pairs</span></td>
+          </tr>
+          <tr>
+            <td>Red Slouch Socks</td>
+            <td>SLOUCH-RED</td>
+            <td>5</td>
+            <td>0</td>
+            <td>60</td>
+            <td>65</td>
+            <td><span class="status yellow">Low Stock</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Inventory Definitions</h3>
+      <ul class="task-list">
+        <li><strong>Current Stock:</strong> what SickFit physically has right now.</li>
+        <li><strong>Committed:</strong> units already promised to open orders.</li>
+        <li><strong>Incoming:</strong> units expected from manufacturing/restock orders.</li>
+        <li><strong>Available After Incoming:</strong> current stock + incoming - committed.</li>
+        <li><strong>Status:</strong> plain-language inventory health.</li>
+      </ul>
+
+      <h3>Action Items</h3>
+      <ul class="task-list">
+        <li>Add CSV/import support or clarify existing import flow.</li>
+        <li>Show manufacturing/restock orders inside inventory forecasting.</li>
+        <li>Use clear product names before Shopify IDs or SKUs.</li>
+        <li>Explain negative inventory as oversold, not just a raw negative number.</li>
+        <li>Reduce long text explanations and use scannable inventory fields.</li>
+      </ul>
+
+      <h3>Timeline</h3>
+      <p><strong>Week 1–2:</strong> Redesign the inventory table, add readable product names, add status badges, and start connecting incoming manufacturing quantities to inventory.</p>
+
+      <h3>Done When</h3>
+      <p>
+        Paden can answer how many socks are physically available, what is oversold, what needs reorder,
+        what is coming from manufacturing, and whether incoming manufacturing covers open orders.
+      </p>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E3">E3</a> <a class="chip" href="#E4">E4</a> <a class="chip" href="#E6">E6</a> <a class="chip" href="#E18">E18</a> <a class="chip" href="#E19">E19</a> <a class="chip" href="#E20">E20</a> <a class="chip" href="#E21">E21</a>
+      </div>
+    </section>
+
+    <section id="po" class="section-card">
+      <h2>Priority 3: Redesign PO Pages Without Over-Correcting PO Language</h2>
+      <p>
+        The transcript does not prove that all POs should be renamed to Customer Orders. It does show that the PO pages are visually overwhelming,
+        that <strong>Request</strong> should be changed to <strong>Draft</strong>, that account/store names should be the main title, and that raw terms like
+        <strong>RetailerPO</strong> and <strong>No Buy</strong> are confusing.
+      </p>
+
+      <div class="callout">
+        <strong>Corrected recommendation:</strong>
+        Keep PO where it makes sense, but clean up technical labels. Use <strong>Retailer PO</strong> or <strong>Store PO</strong> if the order is from a retailer.
+        For manufacturing, consider <strong>Manufacturing Order</strong> or <strong>Restock Order</strong> because Paden directly said he does not want manufacturing to be called a PO.
+      </div>
+
+      <h3>Recommended PO Card / Detail Header</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Primary Title</th>
+            <th>Secondary Metadata</th>
+            <th>Status</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Lawsuit Houston Central</td>
+            <td>PO #20000 · Retailer PO</td>
+            <td><span class="status gray">Draft</span></td>
+            <td>120 pairs · $960 · Needed by July 10</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Action Items</h3>
+      <ul class="task-list">
+        <li>Make the account/store name the main title.</li>
+        <li>Move PO number into smaller metadata.</li>
+        <li>Replace Request with Draft.</li>
+        <li>Make statuses clickable where the workflow allows it.</li>
+        <li>Collapse secondary details like scattered dates and N/A fields.</li>
+        <li>Define or remove confusing labels like No Buy from the main view.</li>
+        <li>Change raw camel-case labels like RetailerPO into readable labels like Retailer PO.</li>
+      </ul>
+
+      <h3>Status Options</h3>
+      <p>
+        Suggested PO statuses are a design recommendation based on the direct request for clickable statuses:
+      </p>
+      <p>
+        <span class="status gray">Draft</span>
+        <span class="status blue">Sent</span>
+        <span class="status blue">Approved</span>
+        <span class="status green">Paid</span>
+        <span class="status green">Fulfilled</span>
+        <span class="status green">Shipped</span>
+        <span class="status red">Cancelled</span>
+      </p>
+
+      <h3>Timeline</h3>
+      <p><strong>Week 2:</strong> Redesign PO list cards and detail pages after the Week 1 dashboard cleanup.</p>
+
+      <h3>Done When</h3>
+      <p>
+        Paden can open a PO and immediately know who it is for, what status it is in, what products are included,
+        whether it has been paid or fulfilled, and what action should happen next.
+      </p>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E8">E8</a> <a class="chip" href="#E9">E9</a> <a class="chip" href="#E10">E10</a> <a class="chip" href="#E11">E11</a> <a class="chip" href="#E14">E14</a>
+      </div>
+    </section>
+
+    <section id="manufacturing" class="section-card">
+      <h2>Priority 4: Fix Manufacturing Flow</h2>
+      <p>
+        Manufacturing is currently confusing because it feels like another PO area and does not show the details needed for forecasting.
+        Paden specifically mentioned payment, ordered date, expected shipment, and the need to forecast.
+      </p>
+
+      <h3>Recommended Naming</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Current</th>
+            <th>Recommended</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ManufacturerPO</td>
+            <td>Manufacturing Order</td>
+            <td>Cleaner than raw camel-case and less confusing than a generic PO.</td>
+          </tr>
+          <tr>
+            <td>Manufacturing Pulse</td>
+            <td>Manufacturing Incoming or Production & Restock</td>
+            <td>Paden directly said he has no idea what Manufacturing Pulse means.</td>
+          </tr>
+          <tr>
+            <td>Create New PO inside Manufacturing</td>
+            <td>Create Manufacturing Order / Create Restock Order</td>
+            <td>Paden said he does not want this to be called a PO in the manufacturing context.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Manufacturing Order Fields</h3>
+      <ul class="task-list">
+        <li>Manufacturer name</li>
+        <li>Products ordered</li>
+        <li>Quantity ordered</li>
+        <li>Ordered date</li>
+        <li>Payment status: Unpaid, Deposit Paid, Paid</li>
+        <li>Expected shipment date</li>
+        <li>Expected arrival date</li>
+        <li>Current status: Draft, Ordered, Paid, In Production, Shipped, Received, Delayed</li>
+        <li>Inventory impact / forecast impact</li>
+      </ul>
+
+      <h3>Inventory Connection</h3>
+      <p>
+        When a manufacturing/restock order is marked as received, the system should either update inventory automatically
+        or prompt the user to confirm the inventory increase.
+      </p>
+
+      <h3>Timeline</h3>
+      <p><strong>Week 2–3:</strong> Rename manufacturing UI, redesign the manufacturing order form, add payment/order/shipping/arrival fields, and connect manufacturing to inventory forecast.</p>
+
+      <h3>Done When</h3>
+      <p>
+        Paden can open manufacturing and clearly see what has been ordered, what has been paid,
+        what is in production, what is delayed, what inventory is coming, and when it should arrive.
+      </p>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E12">E12</a> <a class="chip" href="#E13">E13</a> <a class="chip" href="#E19">E19</a> <a class="chip" href="#E20">E20</a> <a class="chip" href="#E21">E21</a>
+      </div>
+    </section>
+
+    <section id="lookbooks" class="section-card">
+      <h2>Priority 5: Finish Lookbook Flow for Airport Accounts</h2>
+      <p>
+        Lookbooks are critical because Paden directly connected them to upcoming airport accounts.
+        The app needs to clarify whether a lookbook is a link, a preview, a PDF, or an ordering tool.
+      </p>
+
+      <h3>Recommended Lookbook Flow</h3>
+      <ol class="task-list">
+        <li>SickFit creates a lookbook for a specific account.</li>
+        <li>The lookbook includes selected products/packs.</li>
+        <li>SickFit can preview the lookbook.</li>
+        <li>SickFit can export it as a PDF.</li>
+        <li>SickFit can copy or share a public/private link.</li>
+        <li>The customer selects products.</li>
+        <li>The selected products generate a Retailer PO / Store PO / order record.</li>
+      </ol>
+
+      <h3>Required Lookbook Buttons</h3>
+      <p>
+        <span class="status blue">Preview</span>
+        <span class="status blue">Export PDF</span>
+        <span class="status blue">Copy Share Link</span>
+        <span class="status green">Create PO from Lookbook</span>
+        <span class="status gray">Edit Products</span>
+      </p>
+
+      <h3>Timeline</h3>
+      <p><strong>Week 3–4:</strong> Add PDF export, clarify the preview/share flow, and connect selected lookbook products to the PO/order system.</p>
+
+      <h3>Done When</h3>
+      <p>
+        SickFit can confidently send a lookbook to an airport/store account and use it to generate an order.
+      </p>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E15">E15</a> <a class="chip" href="#E17">E17</a></div>
+    </section>
+
+    <section id="ui" class="section-card">
+      <h2>Priority 6: Reduce Visual Overload Across the App</h2>
+      <p>
+        This is a cross-page requirement. Paden’s repeated feedback is that the app has too much going on,
+        relies on unclear titles, and gives him text or numbers that he does not digest.
+      </p>
+
+      <h3>UI Rules</h3>
+      <ul class="task-list">
+        <li>Use plain-language headings.</li>
+        <li>Show product names before IDs.</li>
+        <li>Show account/store/manufacturer names before PO numbers.</li>
+        <li>Hide advanced metadata until expanded.</li>
+        <li>Use badges for statuses.</li>
+        <li>Use action-focused buttons.</li>
+        <li>Reduce long tables where possible.</li>
+        <li>Use summaries before details.</li>
+        <li>Avoid internal database language.</li>
+        <li>Every page should answer: “What am I supposed to do here?”</li>
+      </ul>
+
+      <h3>Recommended Page Structure</h3>
+      <ol class="task-list">
+        <li>Page title</li>
+        <li>Short explanation</li>
+        <li>Key summary cards</li>
+        <li>Main table/cards</li>
+        <li>Actions</li>
+        <li>Advanced details only when expanded</li>
+      </ol>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E1">E1</a> <a class="chip" href="#E7">E7</a> <a class="chip" href="#E14">E14</a> <a class="chip" href="#E21">E21</a>
+      </div>
+    </section>
+
+    <section id="timeline" class="section-card">
+      <h2>Suggested 4-Week Timeline</h2>
+
+      <div class="timeline">
+        <div class="week">
+          <div class="week-label">Week 1</div>
+          <div class="week-body">
+            <h3>Usability Cleanup + Dashboard Fix</h3>
+            <p><strong>Focus:</strong> Make the app understandable immediately.</p>
+            <ul class="task-list">
+              <li>Replace confusing internal labels in the UI.</li>
+              <li>Clean up PO type labels without over-removing PO language.</li>
+              <li>Remove or simplify unclear dashboard widgets.</li>
+              <li>Replace Shopify IDs with product names.</li>
+              <li>Add Reorder Now, Inventory Risk, Delayed Orders, and Manufacturing Incoming.</li>
+              <li>Add plain-language status badges and clickable statuses.</li>
+            </ul>
+            <p><strong>Deliverable:</strong> Simplified SickFit Nexus homepage showing the most important operations information first.</p>
+            <div class="evidence-strip">Evidence: <a class="chip" href="#E1">E1</a> <a class="chip" href="#E2">E2</a> <a class="chip" href="#E3">E3</a> <a class="chip" href="#E5">E5</a> <a class="chip" href="#E9">E9</a> <a class="chip" href="#E13">E13</a> <a class="chip" href="#E16">E16</a></div>
+          </div>
+        </div>
+
+        <div class="week">
+          <div class="week-label">Week 2</div>
+          <div class="week-body">
+            <h3>Inventory + PO Page Redesign</h3>
+            <p><strong>Focus:</strong> Make inventory and PO pages usable for operations.</p>
+            <ul class="task-list">
+              <li>Redesign inventory table.</li>
+              <li>Add current stock, committed, incoming, and available-after-incoming.</li>
+              <li>Redesign PO cards so account/store name is primary.</li>
+              <li>Move PO number to secondary metadata.</li>
+              <li>Use Draft instead of Request.</li>
+              <li>Hide unnecessary details behind expandable sections.</li>
+            </ul>
+            <p><strong>Deliverable:</strong> Clear inventory health and PO understanding without scattered raw data.</p>
+            <div class="evidence-strip">Evidence: <a class="chip" href="#E4">E4</a> <a class="chip" href="#E8">E8</a> <a class="chip" href="#E9">E9</a> <a class="chip" href="#E10">E10</a> <a class="chip" href="#E11">E11</a> <a class="chip" href="#E18">E18</a> <a class="chip" href="#E19">E19</a></div>
+          </div>
+        </div>
+
+        <div class="week">
+          <div class="week-label">Week 3</div>
+          <div class="week-body">
+            <h3>Manufacturing / Restock Flow</h3>
+            <p><strong>Focus:</strong> Connect manufacturing to inventory forecasting.</p>
+            <ul class="task-list">
+              <li>Rename confusing manufacturing labels.</li>
+              <li>Add ordered date, payment status, expected shipment, expected arrival, and received date.</li>
+              <li>Show manufacturing status clearly.</li>
+              <li>Show inventory/forecast impact.</li>
+              <li>Add “Receive Inventory” action.</li>
+            </ul>
+            <p><strong>Deliverable:</strong> Manufacturing becomes a production/restock tracker instead of another confusing PO page.</p>
+            <div class="evidence-strip">Evidence: <a class="chip" href="#E12">E12</a> <a class="chip" href="#E13">E13</a> <a class="chip" href="#E19">E19</a> <a class="chip" href="#E20">E20</a></div>
+          </div>
+        </div>
+
+        <div class="week">
+          <div class="week-label">Week 4</div>
+          <div class="week-body">
+            <h3>Lookbook + Airport Account Readiness</h3>
+            <p><strong>Focus:</strong> Make SickFit Nexus usable for airport accounts.</p>
+            <ul class="task-list">
+              <li>Clarify whether a lookbook is a link, preview, PDF, or order tool.</li>
+              <li>Add lookbook preview.</li>
+              <li>Add export PDF.</li>
+              <li>Add copy/share link.</li>
+              <li>Add Create PO from Lookbook.</li>
+              <li>Test full flow from lookbook to PO/order to inventory impact.</li>
+            </ul>
+            <p><strong>Deliverable:</strong> SickFit can send a professional lookbook to airport/store accounts and turn it into an order.</p>
+            <div class="evidence-strip">Evidence: <a class="chip" href="#E15">E15</a> <a class="chip" href="#E17">E17</a></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="mvp" class="section-card">
+      <h2>Highest Priority MVP Before Airport Accounts</h2>
+      <p>
+        If time is tight, focus only on what is directly tied to Paden’s transcript concerns and airport readiness.
+      </p>
+
+      <div class="grid-2">
+        <div class="mini-card">
+          <h3>Must Have</h3>
+          <ol class="task-list">
+            <li>Clear dashboard snapshot.</li>
+            <li>Product names instead of Shopify IDs.</li>
+            <li>Inventory page showing current, committed, incoming, and available stock.</li>
+            <li>Cleaner PO views with account/store name first.</li>
+            <li>Manufacturing/restock flow with expected shipment/arrival and payment status.</li>
+            <li>Lookbook export PDF or shareable link.</li>
+          </ol>
+        </div>
+
+        <div class="mini-card">
+          <h3>Nice to Have Later</h3>
+          <ol class="task-list">
+            <li>Advanced forecasting.</li>
+            <li>AI suggestions.</li>
+            <li>Detailed manufacturing analytics.</li>
+            <li>Full reporting dashboard.</li>
+            <li>Advanced account-specific dashboards.</li>
+          </ol>
+        </div>
+      </div>
+
+      <h3>Recommended Development Order</h3>
+      <ol class="task-list">
+        <li>Fix language and labels across the app.</li>
+        <li>Fix dashboard snapshot.</li>
+        <li>Fix inventory management.</li>
+        <li>Fix PO experience.</li>
+        <li>Fix manufacturing/restock flow.</li>
+        <li>Finish lookbook export and airport account flow.</li>
+      </ol>
+
+      <h3>Simple Success Criteria</h3>
+      <ol class="task-list">
+        <li>What products are low or oversold?</li>
+        <li>What needs to be reordered right now?</li>
+        <li>What POs/orders are active?</li>
+        <li>What manufacturing/restock orders are incoming?</li>
+        <li>What has been paid?</li>
+        <li>What is delayed?</li>
+        <li>What inventory will we have after incoming shipments?</li>
+        <li>Can we send a professional lookbook to an airport account?</li>
+        <li>Can a lookbook turn into a PO/order?</li>
+        <li>What action do I need to take today?</li>
+      </ol>
+
+      <div class="evidence-strip">
+        Evidence: <a class="chip" href="#E1">E1</a> <a class="chip" href="#E3">E3</a> <a class="chip" href="#E4">E4</a> <a class="chip" href="#E5">E5</a> <a class="chip" href="#E10">E10</a> <a class="chip" href="#E15">E15</a> <a class="chip" href="#E17">E17</a> <a class="chip" href="#E18">E18</a> <a class="chip" href="#E20">E20</a>
+      </div>
+    </section>
+
+    <section id="evidence" class="section-card">
+      <h2>Evidence Matrix</h2>
+      <p class="muted">
+        Every major recommendation above points back to one or more of these transcript references.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Area</th>
+            <th>Timestamp</th>
+            <th>Supports</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+<tr>
+  <td><a href="#E1">E1</a></td>
+  <td>Dashboard / Snapshot</td>
+  <td>Transcript 1, 0:09</td>
+  <td>Simplify the homepage into a clear operations snapshot.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E2">E2</a></td>
+  <td>Reorder Now</td>
+  <td>Transcript 1, 0:09–0:20</td>
+  <td>Rebuild Reorder Now so it shows actionable product-level information.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E3">E3</a></td>
+  <td>Product names over IDs</td>
+  <td>Transcript 1, 0:20–0:29</td>
+  <td>Replace Shopify/internal IDs as primary labels with actual product names.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E4">E4</a></td>
+  <td>Inventory counts</td>
+  <td>Transcript 1, 0:29–0:38</td>
+  <td>Explain negative stock in plain language, such as “Oversold by 8 pairs.”</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E5">E5</a></td>
+  <td>Delayed orders</td>
+  <td>Transcript 1, 0:38–0:45</td>
+  <td>Replace vague delayed-order widgets with clear account, issue, and days-late info.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E6">E6</a></td>
+  <td>Inventory + Manufacturing</td>
+  <td>Transcript 1, 0:45–0:57</td>
+  <td>Clarify inventory risk and manufacturing sections with plain language and next actions.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E7">E7</a></td>
+  <td>Operations usability</td>
+  <td>Transcript 1, 0:57–1:05</td>
+  <td>Reduce visual overload and organize the app around operations decisions.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E8">E8</a></td>
+  <td>PO page overload</td>
+  <td>Transcript 1, 1:05–1:14</td>
+  <td>Simplify PO pages and hide secondary details.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E9">E9</a></td>
+  <td>Status label</td>
+  <td>Transcript 1, 1:14–1:19</td>
+  <td>Replace Request with Draft and make status clickable.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E10">E10</a></td>
+  <td>PO title hierarchy</td>
+  <td>Transcript 1, 1:30–1:41</td>
+  <td>Make account/store name the primary title and PO number secondary metadata.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E11">E11</a></td>
+  <td>RetailerPO / No Buy confusion</td>
+  <td>Transcript 1, 1:41–1:57</td>
+  <td>Clean up raw technical labels like RetailerPO and No Buy. Note: this does not directly require removing the word PO.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E12">E12</a></td>
+  <td>Manufacturing naming</td>
+  <td>Transcript 1, 1:57–2:08</td>
+  <td>Rework manufacturing terminology and flow so it does not feel like a generic PO.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E13">E13</a></td>
+  <td>Manufacturing Pulse</td>
+  <td>Transcript 1, 2:19–2:28</td>
+  <td>Remove or rename Manufacturing Pulse unless it clearly explains what the user should do.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E14">E14</a></td>
+  <td>Bottom line up front</td>
+  <td>Transcript 1, 2:28–2:35</td>
+  <td>Use summary-first page layouts.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E15">E15</a></td>
+  <td>Airport account readiness</td>
+  <td>Transcript 1, 2:35–2:54</td>
+  <td>Prioritize lookbook/order flow before airport accounts.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E16">E16</a></td>
+  <td>Snapshot</td>
+  <td>Transcript 2, 0:10</td>
+  <td>Add dashboard snapshot sections and summary cards.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E17">E17</a></td>
+  <td>Lookbook export</td>
+  <td>Transcript 2, 0:36–0:41</td>
+  <td>Define lookbook purpose and add export PDF/share link.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E18">E18</a></td>
+  <td>Inventory importance</td>
+  <td>Transcript 2, 0:41–1:04</td>
+  <td>Prioritize inventory clarity early in the timeline.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E19">E19</a></td>
+  <td>Inventory import / Manufacturing PO relationship</td>
+  <td>Transcript 2, 1:12–1:30</td>
+  <td>Support inventory imports and connect manufacturing orders to forecast/inventory information.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E20">E20</a></td>
+  <td>Manufacturing details</td>
+  <td>Transcript 2, 1:30–1:48</td>
+  <td>Manufacturing records need paid status, ordered date, expected shipment/arrival, and forecast impact.</td>
+</tr>
+
+
+<tr>
+  <td><a href="#E21">E21</a></td>
+  <td>Reduce text</td>
+  <td>Transcript 2, 1:30–1:48</td>
+  <td>Use scannable cards/tables, badges, and summary fields instead of long text blocks.</td>
+</tr>
+
+        </tbody>
+      </table>
+
+      <h3>Transcript Evidence Cards</h3>
+      <div class="evidence-grid">
+        
+<article class="evidence-card" id="E1">
+  <div class="evidence-top"><span class="pill evidence-id">E1</span><span class="evidence-time">Transcript 1, 0:09</span></div>
+  <h3>Dashboard / Snapshot</h3>
+  <blockquote>“I just don&#x27;t know where to look. I don&#x27;t know what I&#x27;m looking at. It&#x27;s just, it&#x27;s too much.”</blockquote>
+  <p><strong>Supports:</strong> Simplify the homepage into a clear operations snapshot.</p>
+</article>
+
+
+<article class="evidence-card" id="E2">
+  <div class="evidence-top"><span class="pill evidence-id">E2</span><span class="evidence-time">Transcript 1, 0:09–0:20</span></div>
+  <h3>Reorder Now</h3>
+  <blockquote>“Reorder now… this gives me absolutely no information.”</blockquote>
+  <p><strong>Supports:</strong> Rebuild Reorder Now so it shows actionable product-level information.</p>
+</article>
+
+
+<article class="evidence-card" id="E3">
+  <div class="evidence-top"><span class="pill evidence-id">E3</span><span class="evidence-time">Transcript 1, 0:20–0:29</span></div>
+  <h3>Product names over IDs</h3>
+  <blockquote>“Shopify 428. That means absolutely nothing to me. So give me the actual product.”</blockquote>
+  <p><strong>Supports:</strong> Replace Shopify/internal IDs as primary labels with actual product names.</p>
+</article>
+
+
+<article class="evidence-card" id="E4">
+  <div class="evidence-top"><span class="pill evidence-id">E4</span><span class="evidence-time">Transcript 1, 0:29–0:38</span></div>
+  <h3>Inventory counts</h3>
+  <blockquote>“Crew Compression Socks. We have, like, minus eight left. So does that mean eight left? I&#x27;m a little confused on that.”</blockquote>
+  <p><strong>Supports:</strong> Explain negative stock in plain language, such as “Oversold by 8 pairs.”</p>
+</article>
+
+
+<article class="evidence-card" id="E5">
+  <div class="evidence-top"><span class="pill evidence-id">E5</span><span class="evidence-time">Transcript 1, 0:38–0:45</span></div>
+  <h3>Delayed orders</h3>
+  <blockquote>“Then we come over here to late delayed. I don&#x27;t know what any of this means. It&#x27;s just like a bunch of numbers.”</blockquote>
+  <p><strong>Supports:</strong> Replace vague delayed-order widgets with clear account, issue, and days-late info.</p>
+</article>
+
+
+<article class="evidence-card" id="E6">
+  <div class="evidence-top"><span class="pill evidence-id">E6</span><span class="evidence-time">Transcript 1, 0:45–0:57</span></div>
+  <h3>Inventory + Manufacturing</h3>
+  <blockquote>“Inventory risk again and, like, manufacturing. I just, I just don&#x27;t know what&#x27;s going on in this app.”</blockquote>
+  <p><strong>Supports:</strong> Clarify inventory risk and manufacturing sections with plain language and next actions.</p>
+</article>
+
+
+<article class="evidence-card" id="E7">
+  <div class="evidence-top"><span class="pill evidence-id">E7</span><span class="evidence-time">Transcript 1, 0:57–1:05</span></div>
+  <h3>Operations usability</h3>
+  <blockquote>“It&#x27;s not user-friendly for someone who… is trying to run operations because it&#x27;s just so much going on.”</blockquote>
+  <p><strong>Supports:</strong> Reduce visual overload and organize the app around operations decisions.</p>
+</article>
+
+
+<article class="evidence-card" id="E8">
+  <div class="evidence-top"><span class="pill evidence-id">E8</span><span class="evidence-time">Transcript 1, 1:05–1:14</span></div>
+  <h3>PO page overload</h3>
+  <blockquote>“Purchase orders… it&#x27;s just so much… this is a lot.”</blockquote>
+  <p><strong>Supports:</strong> Simplify PO pages and hide secondary details.</p>
+</article>
+
+
+<article class="evidence-card" id="E9">
+  <div class="evidence-top"><span class="pill evidence-id">E9</span><span class="evidence-time">Transcript 1, 1:14–1:19</span></div>
+  <h3>Status label</h3>
+  <blockquote>“You have a status bar here. Just put draft, not request. Just make it clickable so I can do it that way.”</blockquote>
+  <p><strong>Supports:</strong> Replace Request with Draft and make status clickable.</p>
+</article>
+
+
+<article class="evidence-card" id="E10">
+  <div class="evidence-top"><span class="pill evidence-id">E10</span><span class="evidence-time">Transcript 1, 1:30–1:41</span></div>
+  <h3>PO title hierarchy</h3>
+  <blockquote>“PO20000. I don&#x27;t care about this big. Give me bottom line up front. LawsuitHoustonCentral, give me this at the top as a title.”</blockquote>
+  <p><strong>Supports:</strong> Make account/store name the primary title and PO number secondary metadata.</p>
+</article>
+
+
+<article class="evidence-card" id="E11">
+  <div class="evidence-top"><span class="pill evidence-id">E11</span><span class="evidence-time">Transcript 1, 1:41–1:57</span></div>
+  <h3>RetailerPO / No Buy confusion</h3>
+  <blockquote>“RetailerPO versus no buy. I don&#x27;t even know what this stuff means.”</blockquote>
+  <p><strong>Supports:</strong> Clean up raw technical labels like RetailerPO and No Buy. Note: this does not directly require removing the word PO.</p>
+</article>
+
+
+<article class="evidence-card" id="E12">
+  <div class="evidence-top"><span class="pill evidence-id">E12</span><span class="evidence-time">Transcript 1, 1:57–2:08</span></div>
+  <h3>Manufacturing naming</h3>
+  <blockquote>“We come to manufacturing… I create a new PO, but I don&#x27;t want this to be called a PO… you have it as a ManufacturerPO, but it&#x27;s just super confusing.”</blockquote>
+  <p><strong>Supports:</strong> Rework manufacturing terminology and flow so it does not feel like a generic PO.</p>
+</article>
+
+
+<article class="evidence-card" id="E13">
+  <div class="evidence-top"><span class="pill evidence-id">E13</span><span class="evidence-time">Transcript 1, 2:19–2:28</span></div>
+  <h3>Manufacturing Pulse</h3>
+  <blockquote>“Manufacturing Pulse, I have no idea what this means.”</blockquote>
+  <p><strong>Supports:</strong> Remove or rename Manufacturing Pulse unless it clearly explains what the user should do.</p>
+</article>
+
+
+<article class="evidence-card" id="E14">
+  <div class="evidence-top"><span class="pill evidence-id">E14</span><span class="evidence-time">Transcript 1, 2:28–2:35</span></div>
+  <h3>Bottom line up front</h3>
+  <blockquote>“Big picture, bottom line up front is what I want… you&#x27;re giving me nitty gritty titles and I don&#x27;t want any of that.”</blockquote>
+  <p><strong>Supports:</strong> Use summary-first page layouts.</p>
+</article>
+
+
+<article class="evidence-card" id="E15">
+  <div class="evidence-top"><span class="pill evidence-id">E15</span><span class="evidence-time">Transcript 1, 2:35–2:54</span></div>
+  <h3>Airport account readiness</h3>
+  <blockquote>“We need to get this right before our airport accounts because we&#x27;re going to have to get to use this as a lookbook and for our airport accounts to order.”</blockquote>
+  <p><strong>Supports:</strong> Prioritize lookbook/order flow before airport accounts.</p>
+</article>
+
+
+<article class="evidence-card" id="E16">
+  <div class="evidence-top"><span class="pill evidence-id">E16</span><span class="evidence-time">Transcript 2, 0:10</span></div>
+  <h3>Snapshot</h3>
+  <blockquote>“I&#x27;m not seeing what I&#x27;m asking for in a snapshot.”</blockquote>
+  <p><strong>Supports:</strong> Add dashboard snapshot sections and summary cards.</p>
+</article>
+
+
+<article class="evidence-card" id="E17">
+  <div class="evidence-top"><span class="pill evidence-id">E17</span><span class="evidence-time">Transcript 2, 0:36–0:41</span></div>
+  <h3>Lookbook export</h3>
+  <blockquote>“Is this, like, a link we&#x27;re sending out to people? Like, we have a preview here, but there&#x27;s no export PDF.”</blockquote>
+  <p><strong>Supports:</strong> Define lookbook purpose and add export PDF/share link.</p>
+</article>
+
+
+<article class="evidence-card" id="E18">
+  <div class="evidence-top"><span class="pill evidence-id">E18</span><span class="evidence-time">Transcript 2, 0:41–1:04</span></div>
+  <h3>Inventory importance</h3>
+  <blockquote>“Inventory Management is so important right now, and it&#x27;s so crucial before peak season… before we get these airport deals.”</blockquote>
+  <p><strong>Supports:</strong> Prioritize inventory clarity early in the timeline.</p>
+</article>
+
+
+<article class="evidence-card" id="E19">
+  <div class="evidence-top"><span class="pill evidence-id">E19</span><span class="evidence-time">Transcript 2, 1:12–1:30</span></div>
+  <h3>Inventory import / Manufacturing PO relationship</h3>
+  <blockquote>“I should be able to import… or… if we put in… a Manufacturing Purchase Order… I should take the Manufacturing PO, and it should tell me everything about it.”</blockquote>
+  <p><strong>Supports:</strong> Support inventory imports and connect manufacturing orders to forecast/inventory information.</p>
+</article>
+
+
+<article class="evidence-card" id="E20">
+  <div class="evidence-top"><span class="pill evidence-id">E20</span><span class="evidence-time">Transcript 2, 1:30–1:48</span></div>
+  <h3>Manufacturing details</h3>
+  <blockquote>“We&#x27;ve paid this, we ordered date on this… should expect shipment here… it&#x27;s not giving me anything to forecast.”</blockquote>
+  <p><strong>Supports:</strong> Manufacturing records need paid status, ordered date, expected shipment/arrival, and forecast impact.</p>
+</article>
+
+
+<article class="evidence-card" id="E21">
+  <div class="evidence-top"><span class="pill evidence-id">E21</span><span class="evidence-time">Transcript 2, 1:30–1:48</span></div>
+  <h3>Reduce text</h3>
+  <blockquote>“It&#x27;s just a bunch of text that I&#x27;m having to read, and I don&#x27;t understand any of it, and I don&#x27;t digest it.”</blockquote>
+  <p><strong>Supports:</strong> Use scannable cards/tables, badges, and summary fields instead of long text blocks.</p>
+</article>
+
+      </div>
+    </section>
+
+    <section id="transcripts" class="section-card">
+      <h2>Raw Transcript Appendix</h2>
+      <p class="muted">
+        Included so the plan can be checked against the original feedback without guessing.
+      </p>
+
+      <details open>
+        <summary>Transcript 1</summary>
+        <div class="appendix">0:01 Okay, so I&#x27;m inside of SickFitNexus and I&#x27;m playing around in it and like I don&#x27;t, same thing I&#x27;ve been saying.
+0:09 I just don&#x27;t know where to look. I don&#x27;t know what I&#x27;m looking at. It&#x27;s just, it&#x27;s too much. Like, we come down here to reorder now and this gives me absolutely no information.
+0:20 Like, give me the product. Like, why, like I don&#x27;t, I don&#x27;t even know what this means. Shopify 428. That means absolutely nothing to me.
+0:29 So give me the actual product. Like, like Crew Compression Socks. We have, like, minus eight left. So does that mean eight left?
+0:38 Like, I&#x27;m a little confused on that. Then we come over here to late delayed. I don&#x27;t know what any of this means.
+0:45 It&#x27;s just like a bunch of numbers. And then we have, like, inventory risk again and, like, manufacturing. I just, I just don&#x27;t know what&#x27;s going on in this app.
+0:57 And it&#x27;s just, it&#x27;s not user-friendly for someone who, you know, is trying to run operations because it&#x27;s just so much going on.
+1:05 And then I come over here to, like, purchase orders. And then it&#x27;s just so much, like, like, this is a lot.
+1:14 Just drop all this down. You have a status bar here. Just put draft, not request. Just make it clickable so I can do it that way.
+1:19 And then we have dates, NA, ordered, like, all this stuff. What is all this? And then this is kind of, like, here, a little, like, scattered.
+1:30 I just, I don&#x27;t know, like, PO20000. I don&#x27;t care about this big. Give me bottom line up front. LawsuitHoustonCentral, give me this at the top as a title.
+1:41 I don&#x27;t, like, RetailerPO versus no buy. I don&#x27;t even know what this stuff means, so it&#x27;s just kind of, I don&#x27;t know, like, I&#x27;m trying to use this and get familiar with it, but it&#x27;s just overwhelming and doesn&#x27;t tell me what I&#x27;m looking for, really.
+1:57 Same thing for here, like, we come to manufacturing. And it&#x27;s like, what am I supposed to be doing? Like, I create a new PO, but I don&#x27;t want this to be called a PO.
+2:08 It&#x27;s not a PO at the end of the day. It&#x27;s a, well, you have it as a ManufacturerPO, but it&#x27;s just super confusing and I&#x27;m not understanding the flow of things here.
+2:19 Um, yeah. Manufacturing Pulse, I have no idea what this means, like. It&#x27;s just not giving me the information I&#x27;m asking for.
+2:28 So, like, big picture, bottom line up front is what I want. You know, it&#x27;s, you&#x27;re giving me nitty gritty titles and I don&#x27;t want any of that.
+2:35 Like, Shopify 428, this means absolutely nothing. Um, I don&#x27;t know, hopefully this helps, maybe it doesn&#x27;t, but it&#x27;s just, we need to get this right before our airport accounts because we&#x27;re going to have to get to use this as a lookbook and for our airport accounts to order.
+2:54 And right now, like, this is super confusing and it&#x27;s not helpful. So, yeah.</div>
+      </details>
+
+      <details>
+        <summary>Transcript 2</summary>
+        <div class="appendix">0:00 Okay, so, also, just kind of talking through the point of the app that we&#x27;ve kind of put into, like, five different documents to kind of lay all this out.
+0:10 I&#x27;m not seeing what I&#x27;m asking for in a snapshot, I think. So, like, socks per purchaser, we come down here, and it&#x27;s like, I, like, I don&#x27;t really know.
+0:23 Okay. Error&#x27;s weak. Uhm. Yeah, I don&#x27;t know what, I don&#x27;t know. But then we come down, like, to Lookbooks, right?
+0:36 Is this, like, a link we&#x27;re sending out to people? Like, we have a preview here, but there&#x27;s no export PDF.
+0:41 There&#x27;s no, like, what does this look like when it&#x27;s exported? So, we have this, it&#x27;s not complete. Uhm, eh, like, here&#x27;s this, and then, same thing I keep saying, like, for Inventory and, that, the, Inventory Management is so important right now, and it&#x27;s so crucial before peak season, and especially
+1:04 before we get these airport deals. And I&#x27;m not seeing it clearly, so, like, prime example, we come down here to Inventory.
+1:12 I should be able to import, or, or, if we put in, I guess it&#x27;s a Purchase Order in here, technically, a Manufacturing Purchase Order, I don&#x27;t really know the difference between what you have in here, but I should take the Manufacturing PO, and it should tell me everything about it, so, like, hey, you
+1:30 know, we have, we, we&#x27;ve paid this, we ordered date on this, you know, we, you know, should expect shipment here, it&#x27;s just, it&#x27;s not giving me anything to forecast, and this is just, it&#x27;s just a bunch of text that I&#x27;m having to read, and I don&#x27;t understand any of it, and I don&#x27;t digest it, so, uhm, 
+1:48 lots and lots of work needed here, uh.</div>
+      </details>
+    </section>
+
+    <p class="footer-note">
+      SickFit Nexus Evidence-Backed Action Plan · Built from supplied transcript feedback · Updated to avoid unsupported PO renaming assumptions
+    </p>
+  </main>
+</body>
+</html>

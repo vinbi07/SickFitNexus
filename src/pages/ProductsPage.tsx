@@ -146,8 +146,8 @@ export function ProductsPage() {
                   {row.image_url ? <img className="product-thumb" src={row.image_url} alt={row.name} /> : <span className="product-thumb-fallback">{row.sku.slice(0, 2)}</span>}
                 </div>
                 <div className="cell-stack">
-                  <Link className="table-link product-sku-cell" to={`/products/${row.id}`}>{row.sku}</Link>
-                  <strong>{getProductFamilyName(row)}</strong>
+                  <Link className="table-link product-sku-cell" to={`/products/${row.id}`}><strong>{getProductFamilyName(row)}</strong></Link>
+                  <span>{row.sku}</span>
                   <span className="helper-text">
                     {getProductVariantLabel(row)}{row.category ? ` | ${row.category}` : ""}
                   </span>

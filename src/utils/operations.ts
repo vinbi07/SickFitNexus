@@ -41,6 +41,13 @@ export function getShipmentStatus(po: PurchaseOrder) {
   return po.shipment_status ?? po.tracking_status ?? po.status;
 }
 
+export function getDaysLate(dueDate: string | null, referenceDate = new Date()) {
+  if (!dueDate) return null;
+  const due = new Date(`${dueDate}T00:00:00`);
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  return Math.floor((today.getTime() - due.getTime()) / 86400000);
+}
+
 export function getIncomingQuantityForProduct(
   productId: string,
   purchaseOrders: PurchaseOrder[],

@@ -4,6 +4,7 @@ import { geoAlbersUsa, geoPath } from "d3-geo";
 import { Link, useNavigate } from "react-router-dom";
 import { feature } from "topojson-client";
 import usStatesTopology from "us-atlas/states-10m.json";
+import { DashboardCard } from "@/components/DashboardCard";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -614,94 +615,103 @@ export function DashboardPage() {
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load dashboard"} />;
 
-  const reorderRows = data.skuReorderWindows
-    .filter((item) => item.recommendation.toLowerCase().includes("reorder") || item.currentQuantity <= 25)
-    .slice(0, 5);
-  const lateRows = data.latePurchaseOrders.slice(0, 5);
-  const behindRows = data.behindPaceAccounts.slice(0, 5);
+  const reorderNowRows = data.reorderNowItems.slice(0, 6);
+  const inventoryRiskRows = data.inventoryAlerts.slice(0, 6);
+  const delayedOrderRows = data.latePurchaseOrders.slice(0, 6);
+  const manufacturingIncomingRows = data.manufacturingIncoming.slice(0, 6);
 
   return (
     <div className="dashboard-command dashboard-v2">
       <CommandMetricStrip data={data} />
+
+      <div className="card-grid">
+        <DashboardCard label="Products Need Reorder" value={formatNumber(data.reorderNowItems.length)} to="/inventory" />
+        <DashboardCard label="Oversold Products" value={formatNumber(data.oversoldProductCount)} to="/inventory" />
+        <DashboardCard label="Delayed Orders" value={formatNumber(data.latePurchaseOrders.length)} to="/purchase-orders" />
+        <DashboardCard label="Incoming Units" value={formatNumber(data.incomingInventoryUnits)} to="/production" />
+      </div>
+
       <PoCommandMap data={data} />
       <PurchaserVelocityPanel data={data} />
 
       <div className="dashboard-action-grid">
         <DashboardActionLane title="Reorder Now" to="/inventory">
-          {reorderRows.length ? reorderRows.map((item) => (
-            <Link key={item.sku} className="lane-row lane-row-danger" to="/inventory">
-              <div>
-                <strong>{item.sku || item.productName}</strong>
-                <span>{item.productName}</span>
+          {reorderNowRows.length ? reorderNowRows.map((item) => (
+            <div key={item.sku} className={`lane-card${item.isOversold ? " lane-card-danger" : ""}`}>
+              <div className="lane-card-head">
+                <strong>{item.productName || item.sku}</strong>
+                <StatusBadge label={item.statusLabel} />
               </div>
-              <em>{formatNumber(item.currentQuantity)} left | REORDER</em>
-            </Link>
+              <span className="helper-text">{item.sku}{item.variantTitle ? ` · ${item.variantTitle}` : ""}</span>
+              <div className="lane-card-meta">
+                <span>On hand: {formatNumber(item.currentQuantity)}</span>
+                {item.isOversold
+                  ? <span>{item.statusLabel}</span>
+                  : <span>Needed: {formatNumber(item.shortageQuantity)}</span>}
+              </div>
+              <div className="lane-card-actions">
+                {/* TODO: deep-link vendor/product once the PO builder supports prefill query params */}
+                <Link className="btn btn-secondary btn-small" to="/purchase-orders/new">Create Manufacturing PO</Link>
+                <Link className="btn btn-ghost btn-small" to="/inventory">View Inventory</Link>
+              </div>
+            </div>
           )) : <div className="lane-empty">No reorder-now SKUs.</div>}
         </DashboardActionLane>
 
-        <DashboardActionLane title="Late / Delayed" to="/purchase-orders">
-          {lateRows.length ? lateRows.map((po) => (
-            <Link key={po.poId} className="lane-row lane-row-danger" to={`/purchase-orders/${po.poId}`}>
-              <div>
-                <strong>{po.poNumber}</strong>
-                <span>{po.partner}</span>
+        <DashboardSummaryPanel title="Inventory Risk" to="/inventory">
+          {inventoryRiskRows.length ? inventoryRiskRows.map((item) => (
+            <div key={item.sku} className={`lane-card lane-card-${item.status}`}>
+              <div className="lane-card-head">
+                <strong>{item.productName || item.sku}</strong>
+                <StatusBadge label={item.riskStatus} />
               </div>
-              <em>{formatDate(po.etaDate)} | DELAYED</em>
-            </Link>
-          )) : <div className="lane-empty">No late POs.</div>}
-        </DashboardActionLane>
-
-        <DashboardActionLane title="Behind Pace" to="/retailers">
-          {behindRows.length ? behindRows.map((account) => (
-            <Link key={account.retailerId} className={`lane-row lane-row-${account.status}`} to={`/retailers/${account.retailerId}`}>
-              <div>
-                <strong>{account.retailer}</strong>
-                <span>{account.currentPace}</span>
+              <span className="helper-text">{item.sku}</span>
+              <div className="lane-card-meta">
+                <span>On hand {formatNumber(item.currentQuantity)}</span>
+                <span>Committed {formatNumber(item.committedQuantity)}</span>
+                <span>Incoming {formatNumber(item.incomingQuantity)}</span>
               </div>
-              <em>{account.comparison} | REVIEW</em>
-            </Link>
-          )) : <div className="lane-empty">No account pace stops.</div>}
-        </DashboardActionLane>
+            </div>
+          )) : <div className="lane-empty">Inventory risk is clear.</div>}
+        </DashboardSummaryPanel>
       </div>
 
       <div className="dashboard-summary-row">
-        <DashboardSummaryPanel title="Manufacturing Pulse" to="/production">
-          {data.manufacturingSnapshotRows.slice(0, 4).map((row) => (
-            <Link key={row.poId} className="lane-row" to={`/purchase-orders/${row.poId}`}>
-              <div>
-                <strong>{row.poNumber} | {row.manufacturer}</strong>
-                <span>{formatNumber(row.incomingUnits)} units | {row.skuCount} SKUs</span>
+        <DashboardActionLane title="Delayed Orders" to="/purchase-orders">
+          {delayedOrderRows.length ? delayedOrderRows.map((po) => (
+            <div key={po.poId} className="lane-card lane-card-danger">
+              <div className="lane-card-head">
+                <strong>{po.partner}</strong>
+                <StatusBadge label={String(po.status)} />
               </div>
-              <StatusBadge label={row.invoiceStatus || row.shipmentStatus} />
-            </Link>
-          ))}
-          {!data.manufacturingSnapshotRows.length ? <div className="lane-empty">No active inbound manufacturing.</div> : null}
-        </DashboardSummaryPanel>
+              <span className="helper-text">{po.poNumber}</span>
+              <div className="lane-card-meta">
+                <span>{po.reason}</span>
+                <span>{po.daysLate !== null && po.daysLate > 0 ? `${po.daysLate} day${po.daysLate === 1 ? "" : "s"} late` : po.daysLate === 0 ? "Due today" : `ETA ${formatDate(po.etaDate)}`}</span>
+              </div>
+              <div className="lane-card-actions">
+                <Link className="btn btn-secondary btn-small" to={`/purchase-orders/${po.poId}`}>View</Link>
+              </div>
+            </div>
+          )) : <div className="lane-empty">No delayed orders.</div>}
+        </DashboardActionLane>
 
-        <DashboardSummaryPanel title="Inventory Risk" to="/inventory">
-          {data.inventoryAlerts.slice(0, 4).map((item) => (
-            <Link key={item.sku} className={`lane-row lane-row-${item.status}`} to="/inventory">
-              <div>
-                <strong>{item.sku || item.productName}</strong>
-                <span>{item.productName}</span>
+        <DashboardSummaryPanel title="Manufacturing Incoming" to="/production">
+          {manufacturingIncomingRows.length ? manufacturingIncomingRows.map((row) => (
+            <div key={row.id} className="lane-card">
+              <div className="lane-card-head">
+                <strong>{row.productName}</strong>
+                <StatusBadge label={row.manufacturingStatus} />
               </div>
-              <em>{formatNumber(item.currentQuantity)} on hand | {formatNumber(item.incomingQuantity)} incoming</em>
-            </Link>
-          ))}
-          {!data.inventoryAlerts.length ? <div className="lane-empty">Inventory risk is clear.</div> : null}
-        </DashboardSummaryPanel>
-
-        <DashboardSummaryPanel title="Account Activity" to="/retailers">
-          {data.wholesaleAccounts.slice(0, 4).map((account) => (
-            <Link key={account.retailerId} className="lane-row" to={`/retailers/${account.retailerId}`}>
-              <div>
-                <strong>{account.retailer}</strong>
-                <span>{account.recentPoCount} recent POs | {account.nextWindow}</span>
+              <span className="helper-text">{formatNumber(row.quantityOrdered)} units · {row.manufacturer}</span>
+              <div className="lane-card-meta">
+                <span>Ordered {formatDate(row.orderedDate)}</span>
+                <span>{row.paymentStatus}</span>
+                {row.shipDate ? <span>Ship {formatDate(row.shipDate)}</span> : null}
+                {row.arrivalDate ? <span>Arrive {formatDate(row.arrivalDate)}</span> : null}
               </div>
-              <em>{account.openInvoices} open | {account.shippedInvoices} shipped</em>
-            </Link>
-          ))}
-          {!data.wholesaleAccounts.length ? <div className="lane-empty">No wholesale account activity yet.</div> : null}
+            </div>
+          )) : <div className="lane-empty">No active inbound manufacturing.</div>}
         </DashboardSummaryPanel>
       </div>
     </div>

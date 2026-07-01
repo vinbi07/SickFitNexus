@@ -986,6 +986,8 @@ export interface DashboardSnapshot {
     partner: string;
     etaDate: string | null;
     status: PurchaseOrderStatus | string;
+    reason: string;
+    daysLate: number | null;
   }>;
   behindPaceAccounts: Array<{
     retailerId: string;
@@ -1059,6 +1061,8 @@ export interface DashboardSnapshot {
     currentQuantity: number;
     incomingQuantity: number;
     status: "danger" | "warning" | "healthy";
+    committedQuantity: number;
+    riskStatus: "Safe" | "Low Stock" | "Reorder Soon" | "Oversold" | "Incoming Shipment";
   }>;
   skuReorderWindows: Array<{
     sku: string;
@@ -1067,7 +1071,28 @@ export interface DashboardSnapshot {
     reorderByDate: string | null;
     currentQuantity: number;
     incomingQuantity: number;
+    variantTitle: string | null;
+    shortageQuantity: number;
+    oversoldQuantity: number;
+    isOversold: boolean;
+    statusLabel: string;
   }>;
+  reorderNowItems: DashboardSnapshot["skuReorderWindows"];
+  manufacturingIncoming: Array<{
+    id: string;
+    poId: string;
+    poNumber: string;
+    manufacturer: string;
+    productName: string;
+    sku: string;
+    quantityOrdered: number;
+    orderedDate: string | null;
+    paymentStatus: "Paid" | "Unpaid";
+    shipDate: string | null;
+    arrivalDate: string | null;
+    manufacturingStatus: "Draft" | "Ordered" | "In Production" | "Shipped" | "Received" | "Delayed";
+  }>;
+  oversoldProductCount: number;
 }
 
 export interface ForecastMetric {

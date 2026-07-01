@@ -20,7 +20,10 @@ export function InvoicesPage() {
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<Invoice | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
 
   const { data, loading, error, reload } = useAsyncData(
     () => invoiceService.list({ status, search }),
@@ -28,7 +31,8 @@ export function InvoicesPage() {
   );
 
   if (loading) return <LoadingState />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load invoices"} />;
+  if (error || !data)
+    return <ErrorState message={error ?? "Unable to load invoices"} />;
 
   const draftCount = data.filter((inv) => inv.status === "Draft").length;
   const sentCount = data.filter((inv) => inv.status === "Sent").length;
@@ -40,23 +44,44 @@ export function InvoicesPage() {
       <PageHeader
         title="Invoices"
         description="Invoices generated from Purchase Orders. Each invoice preserves the original PO line items, pricing, and account information."
-        actions={(
+        actions={
           <div className="btn-row">
-            <button className="btn btn-secondary" onClick={() => void reload()}>Refresh</button>
+            <button className="btn btn-secondary" onClick={() => void reload()}>
+              Refresh
+            </button>
           </div>
-        )}
+        }
       />
-      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+      {notice ? (
+        <NotificationBanner
+          tone={notice.tone}
+          message={notice.message}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
       <div className="card-grid">
         <DashboardCard label="Total Invoices" value={data.length} />
-        <DashboardCard label="Draft" value={draftCount} footnote="Not yet sent" />
-        <DashboardCard label="Sent" value={sentCount} footnote="Awaiting payment" />
+        <DashboardCard
+          label="Draft"
+          value={draftCount}
+          footnote="Not yet sent"
+        />
+        <DashboardCard
+          label="Sent"
+          value={sentCount}
+          footnote="Awaiting payment"
+        />
         <DashboardCard label="Paid" value={paidCount} />
         <DashboardCard label="Void" value={voidCount} />
       </div>
       <div className="panel">
         <div className="pill-row">
-          <button className={`btn ${status === "" ? "btn-primary" : "btn-secondary"}`} onClick={() => setStatus("")}>All</button>
+          <button
+            className={`btn ${status === "" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setStatus("")}
+          >
+            All
+          </button>
           {invoiceStatuses.map((s) => (
             <button
               key={s}
@@ -85,9 +110,17 @@ export function InvoicesPage() {
             title: "Invoice / Account",
             render: (row) => (
               <div className="cell-stack">
-                <Link className="table-link" to={`/invoices/${row.id}`}>{row.invoice_number}</Link>
-                <span className="helper-text">{row.retailers?.name ?? "No account"}</span>
-                <span className="helper-text">{row.buyers?.buyer_name ?? row.buyer_name_snapshot ?? "No buyer"}</span>
+                <Link className="table-link" to={`/invoices/${row.id}`}>
+                  {row.retailers?.name ?? "No account"}
+                </Link>
+                <Link className="helper-text" to={`/invoices/${row.id}`}>
+                  {row.invoice_number}
+                </Link>
+                <span className="helper-text">
+                  {row.buyers?.buyer_name ??
+                    row.buyer_name_snapshot ??
+                    "No buyer"}
+                </span>
               </div>
             ),
           },
@@ -102,8 +135,12 @@ export function InvoicesPage() {
             render: (row) => (
               <div className="cell-stack">
                 <strong>{formatDate(row.order_date)}</strong>
-                {row.source_po_id ? <span className="helper-text">From PO</span> : null}
-                <span className="helper-text">{row.source_channel ?? "Manual"}</span>
+                {row.source_po_id ? (
+                  <span className="helper-text">From PO</span>
+                ) : null}
+                <span className="helper-text">
+                  {row.source_channel ?? "Manual"}
+                </span>
               </div>
             ),
           },
@@ -117,9 +154,24 @@ export function InvoicesPage() {
             title: "Actions",
             render: (row) => (
               <div className="btn-row">
-                <Link className="btn btn-ghost btn-small" to={`/invoices/${row.id}`}>View</Link>
-                <Link className="btn btn-secondary btn-small" to={`/invoices/${row.id}/preview`}>Preview</Link>
-                <button className="btn btn-danger btn-small" onClick={() => setDeleting(row)}>Delete</button>
+                <Link
+                  className="btn btn-ghost btn-small"
+                  to={`/invoices/${row.id}`}
+                >
+                  View
+                </Link>
+                <Link
+                  className="btn btn-secondary btn-small"
+                  to={`/invoices/${row.id}/preview`}
+                >
+                  Preview
+                </Link>
+                <button
+                  className="btn btn-danger btn-small"
+                  onClick={() => setDeleting(row)}
+                >
+                  Delete
+                </button>
               </div>
             ),
           },
@@ -140,9 +192,18 @@ export function InvoicesPage() {
               await invoiceService.remove(deleting.id);
               setDeleting(null);
               await reload();
-              setNotice({ tone: "success", message: "Invoice deleted successfully." });
+              setNotice({
+                tone: "success",
+                message: "Invoice deleted successfully.",
+              });
             } catch (err) {
-              setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to delete invoice." });
+              setNotice({
+                tone: "error",
+                message:
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to delete invoice.",
+              });
             } finally {
               setBusyDelete(false);
             }
