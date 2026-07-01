@@ -4768,13 +4768,22 @@ textarea {
 }
 
 .command-hero-metric {
+  position: relative;
   padding: 12px 14px;
   background: #0b1220;
   color: #ffffff;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 8px;
   min-width: 0;
+}
+
+.command-hero-metric-link {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
 }
 
 .command-hero-metric span,
@@ -4797,6 +4806,130 @@ textarea {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.command-hero-label-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.command-hero-period-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.command-hero-period-icon:hover {
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.command-hero-calendar-popover {
+  position: absolute;
+  top: 100%;
+  left: 14px;
+  z-index: 20;
+  margin-top: 6px;
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  color: #0b1220;
+}
+
+.command-hero-period-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.command-hero-period-menu button {
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: #0b1220;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.command-hero-period-menu button:hover {
+  background: rgba(11, 18, 32, 0.08);
+}
+
+.command-hero-period-menu button.is-active {
+  background: #0b1220;
+  color: #ffffff;
+}
+
+.command-hero-detail-toggle {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.command-hero-detail-panel {
+  position: absolute;
+  top: 100%;
+  left: 14px;
+  right: 14px;
+  z-index: 20;
+  margin-top: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #0b1220;
+  border-radius: 4px;
+  padding: 6px 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.command-hero-detail-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.command-hero-detail-panel th {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  padding: 4px 6px;
+}
+
+.command-hero-detail-panel td {
+  padding: 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.command-hero-detail-panel a {
+  color: #ffffff;
+}
+
+.command-hero-detail-panel p {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.72rem;
+  margin: 4px 6px;
+}
+
 .command-support-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4805,12 +4938,84 @@ textarea {
 }
 
 .command-support-metric {
+  position: relative;
   padding: 10px;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.command-support-metric-link {
+  flex: 1;
   display: flex;
   min-width: 0;
   flex-direction: column;
   justify-content: space-between;
   gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.command-support-detail-toggle {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--command-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: -2px;
+}
+
+.command-support-detail-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  min-width: fit-content;
+  background: #0b1220;
+  border-radius: 4px;
+  padding: 6px 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+}
+
+.command-support-detail-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.command-support-detail-panel th {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  padding: 4px 6px;
+}
+
+.command-support-detail-panel td {
+  padding: 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.command-support-detail-panel a {
+  color: #ffffff;
+}
+
+.command-support-detail-panel p {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.72rem;
+  margin: 4px 6px;
 }
 
 .command-support-metric strong {

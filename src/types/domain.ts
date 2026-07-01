@@ -978,6 +978,13 @@ export interface DashboardSnapshot {
     value: number;
     units: number;
   }>;
+  openWholesalePipelineLedger: Array<{
+    poId: string;
+    poNumber: string;
+    partner: string;
+    value: number;
+    status: PurchaseOrderStatus;
+  }>;
   poStatusCounts: Array<{ status: PurchaseOrderStatus | string; count: number }>;
   missingPoLocationCount: number;
   latePurchaseOrders: Array<{
@@ -996,9 +1003,7 @@ export interface DashboardSnapshot {
     comparison: string;
     status: "danger" | "warning" | "healthy";
   }>;
-  unitsShippedThisWeek: number;
-  unitsShippedVsLastWeekPercent: number;
-  unitsShippedFourWeekAverage: number;
+  shippedUnitsLedger: Array<{ poId: string; poNumber: string; partner: string; shipDate: string; source: "shipped" | "ordered"; units: number }>;
   purchaserVelocityAverage: number;
   purchaserVelocityRows: Array<{
     retailerId: string;
@@ -1092,7 +1097,6 @@ export interface DashboardSnapshot {
     arrivalDate: string | null;
     manufacturingStatus: "Draft" | "Ordered" | "In Production" | "Shipped" | "Received" | "Delayed";
   }>;
-  oversoldProductCount: number;
 }
 
 export interface ForecastMetric {

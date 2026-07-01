@@ -212,9 +212,6 @@ export const dashboardService = {
     const activeWholesalePipelineOrders = openRetailerOrders.filter((po) => normalizeChannelName(po.source_channel) !== "DTC + Shopify");
 
     const today = new Date().toISOString().slice(0, 10);
-    const sixDaysAgo = dateOnlyDaysAgo(6);
-    const sevenDaysAgo = dateOnlyDaysAgo(7);
-    const thirteenDaysAgo = dateOnlyDaysAgo(13);
     const twentySevenDaysAgo = dateOnlyDaysAgo(27);
     const currentYear = new Date().getFullYear();
     const currentYearStart = `${currentYear}-01-01`;
@@ -266,6 +263,16 @@ export const dashboardService = {
       .sort((left, right) => right.value - left.value)
       .slice(0, 24);
 
+    const openWholesalePipelineLedger = activeWholesalePipelineOrders
+      .map((po) => ({
+        poId: po.id,
+        poNumber: po.po_number,
+        partner: retailerById.get(po.retailer_id ?? "")?.name ?? vendorById.get(po.vendor_id ?? "")?.name ?? po.ship_to_company_name ?? "Unassigned",
+        value: Number(po.total_cost ?? 0),
+        status: po.status,
+      }))
+      .sort((left, right) => right.value - left.value);
+
     const poStatusCounts = activeWholesalePipelineOrders
       .reduce<Map<string, number>>((acc, po) => {
         acc.set(po.status, (acc.get(po.status) ?? 0) + 1);
@@ -292,24 +299,41 @@ export const dashboardService = {
           daysLate: getDaysLate(etaDate),
         };
       })
-      .sort((left, right) => (left.etaDate ?? "9999-12-31").localeCompare(right.etaDate ?? "9999-12-31"))
-      .slice(0, 8);
+      .sort((left, right) => (left.etaDate ?? "9999-12-31").localeCompare(right.etaDate ?? "9999-12-31"));
 
-    const getShippedUnitsBetween = (startDate: string, endDate: string) =>
-      purchaseOrders.filter((po) => {
+    const getPoUnits = (po: PurchaseOrder) => {
+      const lineUnits = (lineItemsByPo.get(po.id) ?? []).reduce((sum, item) => sum + Number(item.quantity_ordered ?? 0), 0);
+      return lineUnits > 0 ? lineUnits : Number(po.total_units ?? 0);
+    };
+
+    const shippedUnitsLedgerStart = dateOnlyDaysAgo(400);
+    const shippedUnitsLedger = purchaseOrders
+      .filter((po) => po.status !== "Cancelled")
+      .map((po) => {
         const shipDate = po.ship_date ?? po.actual_delivery_date;
-        return !!shipDate && shipDate >= startDate && shipDate <= endDate && po.status !== "Cancelled";
+        if (shipDate) return { po, date: shipDate, source: "shipped" as const };
+        if (po.status !== "Draft") {
+          const orderDate = po.order_date ?? po.submitted_at ?? toDateOnly(po.created_at);
+          return { po, date: orderDate, source: "ordered" as const };
+        }
+        return null;
       })
-      .reduce((sum, po) => sum + Number(po.total_units ?? 0), 0);
-    const unitsShippedThisWeek = getShippedUnitsBetween(sixDaysAgo, today);
-    const unitsShippedLastWeek = getShippedUnitsBetween(thirteenDaysAgo, sevenDaysAgo);
-    const unitsShippedFourWeekAverage = Math.round(getShippedUnitsBetween(twentySevenDaysAgo, today) / 4);
-    const unitsShippedVsLastWeekPercent =
-      unitsShippedLastWeek > 0
-        ? Math.round(((unitsShippedThisWeek - unitsShippedLastWeek) / unitsShippedLastWeek) * 100)
-        : unitsShippedThisWeek > 0
-          ? 100
-          : 0;
+      .filter((entry): entry is { po: PurchaseOrder; date: string; source: "shipped" | "ordered" } =>
+        !!entry && !!entry.date && entry.date >= shippedUnitsLedgerStart && entry.date <= today,
+      )
+      .map(({ po, date, source }) => ({
+        poId: po.id,
+        poNumber: po.po_number,
+        partner:
+          retailerById.get(po.retailer_id ?? "")?.name ??
+          vendorById.get(po.vendor_id ?? "")?.name ??
+          po.ship_to_company_name ??
+          po.bill_to_company_name ??
+          "Unassigned",
+        shipDate: date,
+        source,
+        units: getPoUnits(po),
+      }));
 
     const incomingByProduct = new Map<string, number>();
     products.forEach((product) => {
@@ -660,10 +684,6 @@ export const dashboardService = {
       .sort((left, right) => right.value - left.value)
       .slice(0, 6);
 
-    const getPoUnits = (po: PurchaseOrder) => {
-      const lineUnits = (lineItemsByPo.get(po.id) ?? []).reduce((sum, item) => sum + Number(item.quantity_ordered ?? 0), 0);
-      return lineUnits > 0 ? lineUnits : Number(po.total_units ?? 0);
-    };
     const purchaserVelocityBase = retailers
       .map((retailer) => {
         const accountOrders = wholesaleOrders
@@ -888,15 +908,14 @@ export const dashboardService = {
       revenueByChannelYtd,
       wholesaleChannelRows,
       poMapPoints,
+      openWholesalePipelineLedger,
       poStatusCounts: [...poStatusCounts.entries()]
         .map(([status, count]) => ({ status, count }))
         .sort((left, right) => right.count - left.count),
       missingPoLocationCount,
       latePurchaseOrders,
       behindPaceAccounts,
-      unitsShippedThisWeek,
-      unitsShippedVsLastWeekPercent,
-      unitsShippedFourWeekAverage,
+      shippedUnitsLedger,
       purchaserVelocityAverage,
       purchaserVelocityRows,
       topSkusYtd,
@@ -917,7 +936,6 @@ export const dashboardService = {
       inventoryAlerts,
       skuReorderWindows,
       reorderNowItems,
-      oversoldProductCount: products.filter((product) => product.current_inventory < 0).length,
     };
   },
 };
