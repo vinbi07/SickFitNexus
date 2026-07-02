@@ -1,22 +1,40 @@
-import type { InventoryEvent, PoLineItem, Product, PurchaseOrder, Vendor } from "@/types/domain";
+import type { InventoryEvent, InventoryItem, PoLineItem, Product, PurchaseOrder, Vendor } from "@/types/domain";
 import { addDays } from "@/utils/date";
 import { calculateAverageDailyUsage } from "@/utils/forecasting";
 
 export const DANGER_INVENTORY_THRESHOLD = 25;
+export const SLOW_MOVER_LOOKBACK_DAYS = 30;
+export const SLOW_MOVER_MIN_USAGE_EVENTS = 2;
 
-export function isInventoryDanger(quantity: number) {
-  return Number(quantity ?? 0) <= DANGER_INVENTORY_THRESHOLD;
+function countRecentUsageEvents(events: InventoryEvent[], referenceDate: Date) {
+  const cutoff = addDays(referenceDate, -SLOW_MOVER_LOOKBACK_DAYS);
+  return events.filter(
+    (event) => Number(event.quantity_change ?? 0) < 0 && new Date(`${event.event_date}T00:00:00`) >= cutoff,
+  ).length;
 }
 
-export function getInventoryHealthLabel(quantity: number, safetyStock = 0) {
-  if (isInventoryDanger(quantity)) return "Danger";
+export function isSlowMover(events: InventoryEvent[], referenceDate = new Date()) {
+  return countRecentUsageEvents(events, referenceDate) < SLOW_MOVER_MIN_USAGE_EVENTS;
+}
+
+export function isInventoryDanger(quantity: number, events: InventoryEvent[]) {
+  const withinThreshold = Number(quantity ?? 0) <= DANGER_INVENTORY_THRESHOLD;
+  return withinThreshold && !isSlowMover(events);
+}
+
+export function getInventoryHealthLabel(quantity: number, events: InventoryEvent[], safetyStock = 0) {
+  const withinThreshold = Number(quantity ?? 0) <= DANGER_INVENTORY_THRESHOLD;
+  if (withinThreshold && isSlowMover(events)) return "Slow Mover";
+  if (isInventoryDanger(quantity, events)) return "Danger";
   if (Number(quantity ?? 0) <= Number(safetyStock ?? 0)) return "Low";
   return "Healthy";
 }
 
-export function getInventoryHealthTone(quantity: number, safetyStock = 0) {
-  if (isInventoryDanger(quantity)) return "danger" as const;
-  if (Number(quantity ?? 0) <= Number(safetyStock ?? 0)) return "warning" as const;
+export function getInventoryHealthTone(quantity: number, events: InventoryEvent[], safetyStock = 0) {
+  const label = getInventoryHealthLabel(quantity, events, safetyStock);
+  if (label === "Danger") return "danger" as const;
+  if (label === "Slow Mover") return "neutral" as const;
+  if (label === "Low") return "warning" as const;
   return "healthy" as const;
 }
 
@@ -76,7 +94,7 @@ export function buildSkuReorderWindow(params: {
 
   if (usagePerDay <= 0) {
     return {
-      recommendation: isInventoryDanger(product.current_inventory)
+      recommendation: isInventoryDanger(product.current_inventory, events)
         ? "Danger now: reorder manually until movement history exists."
         : "Watch manually: no movement history yet.",
       reorderByDate: null,
@@ -87,7 +105,7 @@ export function buildSkuReorderWindow(params: {
   const reorderDaysOut = Math.max(Math.floor(coverageDays - leadTimeDays), 0);
   const reorderByDate = addDays(new Date(), reorderDaysOut).toISOString().slice(0, 10);
 
-  if (isInventoryDanger(product.current_inventory) || coverageDays <= leadTimeDays) {
+  if (isInventoryDanger(product.current_inventory, events) || coverageDays <= leadTimeDays) {
     return {
       recommendation: "Reorder now",
       reorderByDate,
@@ -105,4 +123,33 @@ export function buildSkuReorderWindow(params: {
     recommendation: "Monitor window",
     reorderByDate,
   };
+}
+
+export interface DuplicateInventoryGroup {
+  sku: string;
+  locationId: string;
+  locationName: string;
+  items: InventoryItem[];
+}
+
+export function findDuplicateInventoryGroups(items: InventoryItem[]): DuplicateInventoryGroup[] {
+  const groups = new Map<string, InventoryItem[]>();
+  for (const item of items) {
+    const sku = item.products?.sku?.trim();
+    if (!sku) continue;
+    const key = `${sku.toLowerCase()}::${item.location_id}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(item);
+    groups.set(key, bucket);
+  }
+
+  return Array.from(groups.values())
+    .filter((bucket) => new Set(bucket.map((item) => item.product_id)).size > 1)
+    .map((bucket) => ({
+      sku: bucket[0].products!.sku,
+      locationId: bucket[0].location_id,
+      locationName: bucket[0].locations?.name ?? "Unknown Location",
+      items: bucket,
+    }))
+    .sort((a, b) => a.sku.localeCompare(b.sku) || a.locationName.localeCompare(b.locationName));
 }

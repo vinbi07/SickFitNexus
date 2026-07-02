@@ -10,13 +10,14 @@ import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { inventoryService } from "@/services/inventoryService";
 import { shopifyService } from "@/services/shopifyService";
 import { supportService } from "@/services/supportService";
 import { vendorService } from "@/services/vendorService";
-import type { Product } from "@/types/domain";
+import type { InventoryEvent, Product } from "@/types/domain";
 import { formatCurrency } from "@/utils/format";
 import { getProductFamilyName, getProductVariantLabel } from "@/utils/lookbook";
-import { getMarginMetrics, isInventoryDanger } from "@/utils/operations";
+import { getInventoryHealthLabel, getMarginMetrics, isInventoryDanger } from "@/utils/operations";
 
 type ProductFormValues = Partial<Product> & {
   starting_inventory?: number;
@@ -38,12 +39,21 @@ export function ProductsPage() {
     async () => ({
       products: await supportService.listProducts(),
       vendors: await vendorService.list(),
+      events: await inventoryService.listEvents(),
     }),
     [],
   );
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load products"} />;
+
+  const eventsByProductId = new Map<string, InventoryEvent[]>();
+  data.events.forEach((event) => {
+    if (!event.product_id) return;
+    const bucket = eventsByProductId.get(event.product_id) ?? [];
+    bucket.push(event);
+    eventsByProductId.set(event.product_id, bucket);
+  });
 
   const categories = [...new Set(data.products.map((product) => product.category).filter(Boolean))] as string[];
   const parentCandidates = data.products.filter((product) => !product.parent_product_id);
@@ -181,7 +191,15 @@ export function ProductsPage() {
             },
           },
           { key: "inventory", title: "Inventory", render: (row) => row.current_inventory },
-          { key: "danger", title: "Health", render: (row) => <StatusBadge label={isInventoryDanger(row.current_inventory) ? "Danger" : "Healthy"} /> },
+          {
+            key: "danger",
+            title: "Health",
+            render: (row) => (
+              <StatusBadge
+                label={getInventoryHealthLabel(row.current_inventory, eventsByProductId.get(row.id) ?? [], row.safety_stock ?? 0)}
+              />
+            ),
+          },
           {
             key: "actions",
             title: "Actions",
@@ -337,7 +355,7 @@ export function ProductsPage() {
             <div className="detail-card"><span>Variant</span><strong>{getProductVariantLabel(viewing)}</strong></div>
             <div className="detail-card"><span>Vendor</span><strong>{viewing.vendors?.name ?? "Unassigned"}</strong></div>
             <div className="detail-card"><span>Category</span><strong>{viewing.category ?? "Uncategorized"}</strong></div>
-            <div className="detail-card"><span>Inventory</span><strong className={isInventoryDanger(viewing.current_inventory) ? "danger-text" : ""}>{viewing.current_inventory}</strong></div>
+            <div className="detail-card"><span>Inventory</span><strong className={isInventoryDanger(viewing.current_inventory, eventsByProductId.get(viewing.id) ?? []) ? "danger-text" : ""}>{viewing.current_inventory}</strong></div>
             <div className="detail-card"><span>COGS</span><strong>{formatCurrency(viewing.unit_cost)}</strong></div>
             <div className="detail-card"><span>Unit Price</span><strong>{formatCurrency(viewing.unit_price ?? 0)}</strong></div>
             <div className="detail-card"><span>Margin</span><strong>{getMarginMetrics(viewing.unit_cost, viewing.unit_price).marginPercent.toFixed(0)}%</strong></div>

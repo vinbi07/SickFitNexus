@@ -1252,10 +1252,10 @@ export function DashboardPage() {
   if (error || !data)
     return <ErrorState message={error ?? "Unable to load dashboard"} />;
 
-  const reorderNowRows = data.reorderNowItems.slice(0, 6);
-  const inventoryRiskRows = data.inventoryAlerts.slice(0, 6);
-  const delayedOrderRows = data.latePurchaseOrders.slice(0, 6);
-  const manufacturingIncomingRows = data.manufacturingIncoming.slice(0, 6);
+  const reorderNowRows = data.reorderNowItems.slice(0, 3);
+  const inventoryRiskRows = data.inventoryAlerts.slice(0, 3);
+  const delayedOrderRows = data.latePurchaseOrders.slice(0, 3);
+  const manufacturingIncomingRows = data.manufacturingIncoming.slice(0, 3);
 
   return (
     <div className="dashboard-command dashboard-v2">
@@ -1291,7 +1291,7 @@ export function DashboardPage() {
                 <div className="lane-card-actions">
                   {/* TODO: deep-link vendor/product once the PO builder supports prefill query params */}
                   <Link
-                    className="btn btn-secondary btn-small"
+                    className="btn btn-secondary btn-small po-edit-btn"
                     to="/purchase-orders/new"
                   >
                     Create Manufacturing PO

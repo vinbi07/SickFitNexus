@@ -407,7 +407,7 @@ export const dashboardService = {
       .map((product) => {
         const currentQuantity = product.current_inventory;
         const incomingQuantity = incomingByProduct.get(product.id) ?? 0;
-        const status = getInventoryHealthTone(currentQuantity, product.safety_stock);
+        const status = getInventoryHealthTone(currentQuantity, eventsByProductId.get(product.id) ?? [], product.safety_stock);
         const riskStatus =
           currentQuantity < 0
             ? ("Oversold" as const)
@@ -432,7 +432,7 @@ export const dashboardService = {
       .sort((left, right) => left.currentQuantity - right.currentQuantity)
       .slice(0, 8);
 
-    const dangerProducts = products.filter((product) => isInventoryDanger(product.current_inventory));
+    const dangerProducts = products.filter((product) => isInventoryDanger(product.current_inventory, eventsByProductId.get(product.id) ?? []));
     const riskyProducts90d = skuReorderWindows.filter((item) => item.projectedDaysRemaining !== null && item.projectedDaysRemaining <= 90);
     const openInvoices = activeManufacturerOrders.filter((po) => getInvoiceStatus(po) === "Open");
     const shippedInvoices = activeManufacturerOrders.filter((po) => getInvoiceStatus(po) === "Shipped");
@@ -838,18 +838,23 @@ export const dashboardService = {
     const inventoryStatusBreakdown = [
       {
         label: "Healthy",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, product.safety_stock) === "healthy").length,
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "healthy").length,
         color: "#1f8f63",
       },
       {
         label: "Warning",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, product.safety_stock) === "warning").length,
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "warning").length,
         color: "#f2a93b",
       },
       {
         label: "Danger",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, product.safety_stock) === "danger").length,
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "danger").length,
         color: "#e72027",
+      },
+      {
+        label: "Slow Mover",
+        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "neutral").length,
+        color: "#8a8f98",
       },
     ];
 

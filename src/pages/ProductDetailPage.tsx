@@ -29,7 +29,7 @@ export function ProductDetailPage() {
         <div className="detail-card"><span>Inventory</span><strong>{product.current_inventory}</strong></div>
         <div className="detail-card"><span>Available</span><strong>{product.inventory_available}</strong></div>
         <div className="detail-card"><span>Allocated</span><strong>{product.inventory_allocated}</strong></div>
-        <div className="detail-card"><span>Health</span><strong>{getInventoryHealthLabel(product.current_inventory, product.safety_stock)}</strong></div>
+        <div className="detail-card"><span>Health</span><strong>{getInventoryHealthLabel(product.current_inventory, events, product.safety_stock)}</strong></div>
         <div className="detail-card"><span>UPC</span><strong>{product.upc ?? "N/A"}</strong></div>
         <div className="detail-card"><span>Case Pack</span><strong>{product.case_pack_quantity}</strong></div>
         <div className="detail-card"><span>Wholesale</span><strong>{formatCurrency(product.wholesale_price)}</strong></div>

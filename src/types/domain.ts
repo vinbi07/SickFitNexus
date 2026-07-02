@@ -1065,7 +1065,7 @@ export interface DashboardSnapshot {
     productName: string;
     currentQuantity: number;
     incomingQuantity: number;
-    status: "danger" | "warning" | "healthy";
+    status: "danger" | "warning" | "healthy" | "neutral";
     committedQuantity: number;
     riskStatus: "Safe" | "Low Stock" | "Reorder Soon" | "Oversold" | "Incoming Shipment";
   }>;
