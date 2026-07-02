@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -8,15 +9,18 @@ import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { buildLookbookUrl } from "@/lib/publicUrl";
+import { buyerService } from "@/services/buyerService";
 import { lookbookTemplateService } from "@/services/lookbookTemplateService";
 import { supportService } from "@/services/supportService";
 import type {
+  Buyer,
   LookbookTemplate,
   LookbookTemplateItem,
   Product,
   ProductBarcode,
 } from "@/types/domain";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatDate } from "@/utils/format";
 import {
   deriveInventoryAvailable,
   getDisplaySku,
@@ -45,8 +49,16 @@ function truncateLinkedSku(sku: string) {
   return sku.length > 12 ? `${sku.slice(0, 9)}...` : sku;
 }
 
+function isBuyerLinkExpired(buyer: Buyer) {
+  return Boolean(
+    buyer.token_expires_at &&
+      new Date(buyer.token_expires_at).getTime() < Date.now(),
+  );
+}
+
 export function LookbookTemplatesPage() {
   const [query, setQuery] = useState("");
+  const [lookbookQuery, setLookbookQuery] = useState("");
   const [editing, setEditing] = useState<TemplateEditor | null>(null);
   const [previewing, setPreviewing] = useState<TemplateEditor | null>(null);
   const [deleting, setDeleting] = useState<LookbookTemplate | null>(null);
@@ -59,6 +71,7 @@ export function LookbookTemplatesPage() {
       templates: await lookbookTemplateService.list(),
       products: await supportService.listProducts(),
       barcodes: await supportService.listBarcodes(),
+      buyers: await buyerService.list(),
     }),
     [],
   );
@@ -72,6 +85,22 @@ export function LookbookTemplatesPage() {
         .includes(query.toLowerCase()),
     );
   }, [data, query]);
+
+  const filteredBuyers = useMemo(() => {
+    if (!data) return [];
+    return data.buyers.filter((buyer) =>
+      [
+        buyer.retailers?.name ?? "",
+        buyer.company_name,
+        buyer.buyer_name,
+        buyer.buyer_email,
+        buyer.lookbook_templates?.name ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(lookbookQuery.toLowerCase()),
+    );
+  }, [data, lookbookQuery]);
 
   if (loading) return <LoadingState />;
   if (error || !data)
@@ -175,6 +204,107 @@ export function LookbookTemplatesPage() {
         ]}
         rows={filteredTemplates}
       />
+      <div className="panel section-stack">
+        <div className="panel-header">
+          <h3>Active Lookbooks</h3>
+          <p className="helper-text">
+            Magic links currently assigned to buyer accounts.
+          </p>
+        </div>
+        <div className="filter-row">
+          <input
+            placeholder="Search account, buyer, or template"
+            value={lookbookQuery}
+            onChange={(event) => setLookbookQuery(event.target.value)}
+          />
+        </div>
+        <DataTable
+          emptyMessage="No buyer accounts have a lookbook magic link yet."
+          columns={[
+            {
+              key: "account",
+              title: "Account",
+              render: (row) => (
+                <Link
+                  className="table-link"
+                  to={`/retailers/${row.retailer_id}`}
+                >
+                  {row.retailers?.name ?? row.company_name}
+                </Link>
+              ),
+            },
+            {
+              key: "buyer",
+              title: "Buyer",
+              render: (row) => (
+                <div className="cell-stack">
+                  <strong>{row.buyer_name}</strong>
+                  <span className="helper-text">{row.buyer_email}</span>
+                </div>
+              ),
+            },
+            {
+              key: "template",
+              title: "Lookbook Template",
+              render: (row) =>
+                row.lookbook_templates?.name ?? "All wholesale products",
+            },
+            {
+              key: "status",
+              title: "Status",
+              render: (row) => (
+                <StatusBadge
+                  label={isBuyerLinkExpired(row) ? "Expired" : "Active"}
+                />
+              ),
+            },
+            {
+              key: "last_accessed_at",
+              title: "Last Viewed",
+              render: (row) =>
+                row.last_accessed_at ? formatDate(row.last_accessed_at) : "Never",
+            },
+            {
+              key: "access",
+              title: "Magic Link",
+              render: (row) => (
+                <span className="helper-text">
+                  {buildLookbookUrl(row.access_token)}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              title: "Actions",
+              render: (row) => (
+                <div className="btn-row">
+                  <Link
+                    className="btn btn-ghost btn-small"
+                    to={`/retailers/${row.retailer_id}`}
+                  >
+                    Open Profile
+                  </Link>
+                  <button
+                    className="btn btn-ghost btn-small"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(
+                        buildLookbookUrl(row.access_token),
+                      );
+                      setNotice({
+                        tone: "success",
+                        message: "Magic link copied to clipboard.",
+                      });
+                    }}
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              ),
+            },
+          ]}
+          rows={filteredBuyers}
+        />
+      </div>
       {editing ? (
         <LookbookTemplateEditor
           initialValue={editing}
