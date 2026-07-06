@@ -129,7 +129,7 @@ export function PurchaseOrdersPage() {
     <div className="section-stack">
       <PageHeader
         title="Purchase Orders"
-        description="Centralized command-center management for intake, builder workflows, retailer orders, manufacturer orders, document previews, and delivery lifecycle tracking."
+        description="Review retailer/customer POs, update statuses, and check whether inventory is available to fulfill each order."
         actions={
           <div className="btn-row">
             <button className="btn btn-secondary" onClick={() => void reload()}>

@@ -3,24 +3,42 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { CommentsPanel } from "@/features/comments/CommentsPanel";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
+import { InventoryImpactList } from "@/components/InventoryImpactList";
 import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
+import { OrderSummaryCard } from "@/components/OrderSummaryCard";
 import { PageHeader } from "@/components/PageHeader";
+import { ProductNameWithMetadata } from "@/components/ProductNameWithMetadata";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
 import { ManufacturerPoDocumentView } from "@/components/orders/ManufacturerPoDocumentView";
+import { ReceiveInventoryModal } from "@/components/ReceiveInventoryModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { dashboardService } from "@/services/dashboardService";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
 import { sockCardService } from "@/services/sockCardService";
-import type { PurchaseOrderCounterEvent } from "@/types/domain";
+import { supportService } from "@/services/supportService";
+import type { PurchaseOrderCounterEvent, PurchaseOrderStatus } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
 import { formatCurrency, formatDate } from "@/utils/format";
+import {
+  getAvailableAfterIncoming,
+  getInventoryHealthTone,
+  getInventoryRiskStatus,
+  getManufacturerDisplayName,
+  getManufacturingOrderStatusLabel,
+  getManufacturingOrderTitle,
+  getOversoldLabel,
+  getPaymentStatusLabel,
+} from "@/utils/operations";
 import { printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
 import { buildPurchaseOrderDocumentHtml } from "@/utils/purchaseOrderDocument";
 import { buildManufacturerOrderText } from "@/utils/manufacturerOrderDocument";
 import { exportPoLineItemsExcel } from "@/utils/exportPoLineItemsExcel";
 import { downloadManufacturerFilesZip } from "@/utils/downloadManufacturerFiles";
 import { invoiceService } from "@/services/invoiceService";
+
+const EDITABLE_PO_STATUSES: PurchaseOrderStatus[] = ["Draft", "Pending", "On Hold", "Delayed", "Issue Flagged"];
 
 function formatCounterEventTitle(event: PurchaseOrderCounterEvent) {
   switch (event.event_type) {
@@ -66,12 +84,34 @@ export function PurchaseOrderDetailPage() {
   });
   const { data, loading, error, reload } = useAsyncData(() => purchaseOrderService.getById(poId), [poId]);
   const { data: sockCards } = useAsyncData(() => sockCardService.listCards(), []);
+  const { data: snapshot } = useAsyncData(() => dashboardService.getSnapshot(), []);
+  const { data: locations } = useAsyncData(() => supportService.listLocations(), []);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [receiving, setReceiving] = useState(false);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load purchase order detail"} />;
+
+  const reorderBySku = new Map(
+    (snapshot?.skuReorderWindows ?? []).map((item) => [item.sku, item]),
+  );
+
+  const handleStatusChange = async (nextStatus: string) => {
+    if (!nextStatus) return;
+    setStatusUpdating(true);
+    try {
+      await purchaseOrderService.updateStatus(poId, nextStatus as PurchaseOrderStatus);
+      await reload();
+      setNotice({ tone: "success", message: `PO status changed to ${nextStatus}.` });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to update PO status." });
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
 
   const paidToDeliveredDays =
     data.purchaseOrder.invoice_paid_at && data.purchaseOrder.actual_delivery_date
@@ -79,6 +119,8 @@ export function PurchaseOrderDetailPage() {
       : null;
   const generated = data.generatedDocuments[0];
   const isManufacturerPo = data.purchaseOrder.po_type === "Manufacturer PO";
+  const manufacturingStatus = getManufacturingOrderStatusLabel(data.purchaseOrder);
+  const paymentStatus = getPaymentStatusLabel(data.purchaseOrder);
   const currentDocumentHtml = buildPurchaseOrderDocumentHtml(
     data.purchaseOrder,
     data.lineItems,
@@ -86,14 +128,36 @@ export function PurchaseOrderDetailPage() {
     data.purchaseOrder.retailers ?? null,
   );
 
+  const handleMarkAsPaid = async () => {
+    try {
+      await purchaseOrderService.markAsPaid(poId);
+      await reload();
+      setNotice({ tone: "success", message: "Manufacturing order marked as paid." });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to mark as paid." });
+    }
+  };
+
+  const handleMarkAsShipped = async () => {
+    try {
+      await purchaseOrderService.markAsShipped(poId);
+      await reload();
+      setNotice({ tone: "success", message: "Manufacturing order marked as shipped." });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to mark as shipped." });
+    }
+  };
+
   return (
     <div className="section-stack">
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <PageHeader
         title={isManufacturerPo
-          ? (data.purchaseOrder.vendors?.name ?? "Manufacturing Order")
+          ? getManufacturerDisplayName(data.purchaseOrder, data.purchaseOrder.vendors)
           : (data.purchaseOrder.retailers?.name ?? data.purchaseOrder.bill_to_company_name ?? "Purchase Order")}
-        description={`PO ${data.purchaseOrder.po_number} · ${data.purchaseOrder.po_type}${data.purchaseOrder.buyers?.buyer_name ? ` | ${data.purchaseOrder.buyers.buyer_name}` : ""}`}
+        description={isManufacturerPo
+          ? `Manufacturing Order · ${getManufacturingOrderTitle(data.purchaseOrder)}`
+          : `PO ${data.purchaseOrder.po_number} · ${data.purchaseOrder.po_type}${data.purchaseOrder.buyers?.buyer_name ? ` | ${data.purchaseOrder.buyers.buyer_name}` : ""}`}
         actions={(
           <div className="btn-row">
             <StatusBadge label={data.purchaseOrder.status} />
@@ -124,86 +188,119 @@ export function PurchaseOrderDetailPage() {
             >
               Email PO
             </button>
-            <button className="btn btn-primary btn-small" onClick={async () => {
-              try {
-                await purchaseOrderService.approve(poId);
-                await reload();
-                setNotice({ tone: "success", message: "PO approved successfully." });
-              } catch (err) {
-                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to approve PO." });
-              }
-            }}>Approve</button>
-            <button className="btn btn-secondary btn-small" onClick={async () => {
-              const response = window.prompt("Add counter note for the buyer", data.purchaseOrder.internal_notes ?? "");
-              if (response === null) return;
-              try {
-                await purchaseOrderService.counter(poId, response);
-                await reload();
-                setNotice({ tone: "success", message: "PO moved to countered status." });
-              } catch (err) {
-                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to counter this PO." });
-              }
-            }}>Counter</button>
-            <button className="btn btn-ghost btn-small" onClick={async () => {
-              try {
-                await purchaseOrderService.queueForFulfillment(poId);
-                await reload();
-                setNotice({ tone: "success", message: "PO queued for fulfillment." });
-              } catch (err) {
-                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to queue PO." });
-              }
-            }}>Queue for Fulfillment</button>
-            <button className="btn btn-secondary btn-small" onClick={async () => {
-              try {
-                await purchaseOrderService.fulfill(poId);
-                await reload();
-                setNotice({ tone: "success", message: "PO fulfilled and inventory committed." });
-              } catch (err) {
-                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to fulfill PO." });
-              }
-            }}>Fulfill</button>
-            <button className="btn btn-danger btn-small" onClick={async () => {
-              try {
-                await purchaseOrderService.reject(poId, "Cancelled from approval workspace.");
-                await reload();
-                setNotice({ tone: "success", message: "PO rejected and allocation released." });
-              } catch (err) {
-                setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to reject PO." });
-              }
-            }}>Reject / Cancel</button>
+            {isManufacturerPo ? (
+              <>
+                <button className="btn btn-secondary btn-small" disabled={paymentStatus === "Paid"} onClick={() => void handleMarkAsPaid()}>
+                  Mark as Paid
+                </button>
+                <button className="btn btn-secondary btn-small" disabled={Boolean(data.purchaseOrder.ship_date)} onClick={() => void handleMarkAsShipped()}>
+                  Mark as Shipped
+                </button>
+                <button
+                  className="btn btn-primary btn-small"
+                  disabled={manufacturingStatus === "Received"}
+                  onClick={() => setReceiving(true)}
+                >
+                  Receive Inventory
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="btn btn-primary btn-small" onClick={async () => {
+                  try {
+                    await purchaseOrderService.approve(poId);
+                    await reload();
+                    setNotice({ tone: "success", message: "PO approved successfully." });
+                  } catch (err) {
+                    setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to approve PO." });
+                  }
+                }}>Approve</button>
+                <button className="btn btn-secondary btn-small" onClick={async () => {
+                  const response = window.prompt("Add counter note for the buyer", data.purchaseOrder.internal_notes ?? "");
+                  if (response === null) return;
+                  try {
+                    await purchaseOrderService.counter(poId, response);
+                    await reload();
+                    setNotice({ tone: "success", message: "PO moved to countered status." });
+                  } catch (err) {
+                    setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to counter this PO." });
+                  }
+                }}>Counter</button>
+                <button className="btn btn-ghost btn-small" onClick={async () => {
+                  try {
+                    await purchaseOrderService.queueForFulfillment(poId);
+                    await reload();
+                    setNotice({ tone: "success", message: "PO queued for fulfillment." });
+                  } catch (err) {
+                    setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to queue PO." });
+                  }
+                }}>Queue for Fulfillment</button>
+                <button className="btn btn-secondary btn-small" onClick={async () => {
+                  try {
+                    await purchaseOrderService.fulfill(poId);
+                    await reload();
+                    setNotice({ tone: "success", message: "PO fulfilled and inventory committed." });
+                  } catch (err) {
+                    setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to fulfill PO." });
+                  }
+                }}>Fulfill</button>
+                <button className="btn btn-danger btn-small" onClick={async () => {
+                  try {
+                    await purchaseOrderService.reject(poId, "Cancelled from approval workspace.");
+                    await reload();
+                    setNotice({ tone: "success", message: "PO rejected and allocation released." });
+                  } catch (err) {
+                    setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to reject PO." });
+                  }
+                }}>Reject / Cancel</button>
+              </>
+            )}
           </div>
         )}
       />
-      <div className="card-grid">
-        <div className="card metric-card">
-          <span className="metric-label">Total Cost</span>
-          <strong className="metric-value">{formatCurrency(data.purchaseOrder.total_cost)}</strong>
-        </div>
-        <div className="card metric-card">
-          <span className="metric-label">Submitted</span>
-          <strong className="metric-value">{formatDate(data.purchaseOrder.submitted_at ?? data.purchaseOrder.order_date)}</strong>
-        </div>
-        <div className="card metric-card">
-          <span className="metric-label">Expected Delivery</span>
-          <strong className="metric-value">{formatDate(data.purchaseOrder.expected_delivery_date)}</strong>
-        </div>
-        <div className="card metric-card">
-          <span className="metric-label">Invoice Status</span>
-          <strong className="metric-value">{data.purchaseOrder.invoice_status ?? "Open"}</strong>
-        </div>
-        <div className="card metric-card">
-          <span className="metric-label">Allocation</span>
-          <strong className="metric-value">{data.purchaseOrder.allocation_status}</strong>
-        </div>
-        <div className="card metric-card">
-          <span className="metric-label">Compliance</span>
-          <strong className="metric-value">{String((data.purchaseOrder.compliance_snapshot as { summary?: string } | null)?.summary ?? "N/A")}</strong>
-        </div>
-        <div className="card metric-card">
-          <span className="metric-label">Paid to Delivered</span>
-          <strong className="metric-value">{paidToDeliveredDays !== null ? `${paidToDeliveredDays}d` : "Open"}</strong>
-        </div>
-      </div>
+      <OrderSummaryCard
+        heading={data.purchaseOrder.retailers?.name ?? data.purchaseOrder.vendors?.name ?? data.purchaseOrder.bill_to_company_name ?? "Purchase Order"}
+        metaLine={isManufacturerPo
+          ? `Manufacturing Order · ${getManufacturingOrderTitle(data.purchaseOrder)}`
+          : `PO ${data.purchaseOrder.po_number} · ${data.purchaseOrder.po_type}${data.purchaseOrder.buyers?.buyer_name ? ` | ${data.purchaseOrder.buyers.buyer_name}` : ""}`}
+        statusControl={(
+          <div className="cell-stack">
+            <StatusBadge label={isManufacturerPo ? manufacturingStatus : data.purchaseOrder.status} />
+            {!isManufacturerPo && EDITABLE_PO_STATUSES.includes(data.purchaseOrder.status) ? (
+              <select
+                disabled={statusUpdating}
+                value=""
+                onChange={(event) => void handleStatusChange(event.target.value)}
+              >
+                <option value="">Change status...</option>
+                {EDITABLE_PO_STATUSES.filter((status) => status !== data.purchaseOrder.status).map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+            ) : !isManufacturerPo ? (
+              <span className="helper-text">Use Approve/Fulfill/Reject for this status — they update inventory too.</span>
+            ) : null}
+          </div>
+        )}
+        fields={isManufacturerPo ? [
+          { label: "Ordered", value: formatDate(data.purchaseOrder.order_date) },
+          { label: "Expected Ship", value: formatDate(data.purchaseOrder.ship_date) },
+          { label: "Expected Arrival", value: formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date) },
+          { label: "Received Date", value: data.purchaseOrder.actual_delivery_date ? formatDate(data.purchaseOrder.actual_delivery_date) : "Not yet received" },
+          { label: "Payment Status", value: <StatusBadge label={paymentStatus} /> },
+          { label: "Total Units", value: data.purchaseOrder.total_units },
+          { label: "Total Cost", value: formatCurrency(data.purchaseOrder.total_cost) },
+          { label: "Inventory Impact", value: <InventoryImpactList lineItems={data.lineItems} /> },
+        ] : [
+          { label: "Created", value: formatDate(data.purchaseOrder.order_date) },
+          { label: "Needed By", value: formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date) },
+          { label: "Payment Status", value: <StatusBadge label={data.purchaseOrder.invoice_status ?? "Open"} /> },
+          { label: "Fulfillment Status", value: <StatusBadge label={data.purchaseOrder.allocation_status} /> },
+          { label: "Total Units", value: data.purchaseOrder.total_units },
+          { label: "Total Cost", value: formatCurrency(data.purchaseOrder.total_cost) },
+          { label: "Paid to Delivered", value: paidToDeliveredDays !== null ? `${paidToDeliveredDays}d` : "Open" },
+        ]}
+      />
       <div className="panel">
         <div className="panel-header">
           <h3>PO Preview</h3>
@@ -271,47 +368,80 @@ export function PurchaseOrderDetailPage() {
           <PurchaseOrderDocumentView purchaseOrder={data.purchaseOrder} lineItems={data.lineItems} />
         )}
       </div>
-      <div className="split-grid">
-        <div className="panel section-stack">
-          <div className="panel-header"><h3>Lifecycle</h3></div>
-          <div className="detail-grid">
-            <div className="detail-card"><span>Retailer</span><strong>{data.purchaseOrder.retailers?.name ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Buyer</span><strong>{data.purchaseOrder.buyers?.buyer_name ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Vendor</span><strong>{data.purchaseOrder.vendors?.name ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Ship Date</span><strong>{formatDate(data.purchaseOrder.ship_date)}</strong></div>
-            <div className="detail-card"><span>ETA</span><strong>{formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date)}</strong></div>
-            <div className="detail-card"><span>Approval</span><strong>{data.purchaseOrder.approval_status}</strong></div>
-            <div className="detail-card"><span>Allocation</span><strong>{data.purchaseOrder.allocation_status}</strong></div>
-            <div className="detail-card"><span>Invoice Status</span><strong>{data.purchaseOrder.invoice_status ?? "Open"}</strong></div>
-            <div className="detail-card"><span>Invoice Paid</span><strong>{formatDate(data.purchaseOrder.invoice_paid_at)}</strong></div>
-            <div className="detail-card"><span>Shipment Status</span><strong>{data.purchaseOrder.shipment_status ?? data.purchaseOrder.tracking_status ?? "None"}</strong></div>
-            <div className="detail-card"><span>Tracking</span><strong>{data.purchaseOrder.tracking_number ?? "None"}</strong></div>
-            <div className="detail-card"><span>Source Channel</span><strong>{data.purchaseOrder.source_channel ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Generated Form</span><strong>{data.purchaseOrder.generated_form_url ? <a href={data.purchaseOrder.generated_form_url} target="_blank" rel="noreferrer">Open</a> : "Not generated"}</strong></div>
-            <div className="detail-card"><span>Counter Status</span><strong>{data.purchaseOrder.counter_status}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Compliance Snapshot</span><strong>{String((data.purchaseOrder.compliance_snapshot as { summary?: string } | null)?.summary ?? "No compliance snapshot recorded.")}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Hold Reason</span><strong>{data.purchaseOrder.hold_reason ?? "No hold reason."}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Buyer Notes</span><strong>{data.purchaseOrder.buyer_notes ?? "No buyer notes added."}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Internal Notes</span><strong>{data.purchaseOrder.internal_notes ?? "No internal notes added."}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.purchaseOrder.notes ?? "No notes added."}</strong></div>
-          </div>
+      <div className="panel section-stack">
+        <div className="panel-header"><h3>Lifecycle</h3></div>
+        <div className="detail-grid">
+          <div className="detail-card"><span>Retailer</span><strong>{data.purchaseOrder.retailers?.name ?? "N/A"}</strong></div>
+          <div className="detail-card"><span>Buyer</span><strong>{data.purchaseOrder.buyers?.buyer_name ?? "N/A"}</strong></div>
+          <div className="detail-card"><span>Vendor</span><strong>{data.purchaseOrder.vendors?.name ?? "N/A"}</strong></div>
+          <div className="detail-card"><span>Ship Date</span><strong>{formatDate(data.purchaseOrder.ship_date)}</strong></div>
+          <div className="detail-card"><span>ETA</span><strong>{formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date)}</strong></div>
+          <div className="detail-card"><span>Approval</span><strong>{data.purchaseOrder.approval_status}</strong></div>
+          <div className="detail-card"><span>Allocation</span><strong>{data.purchaseOrder.allocation_status}</strong></div>
+          <div className="detail-card"><span>Invoice Status</span><strong>{data.purchaseOrder.invoice_status ?? "Open"}</strong></div>
+          <div className="detail-card"><span>Invoice Paid</span><strong>{formatDate(data.purchaseOrder.invoice_paid_at)}</strong></div>
+          <div className="detail-card"><span>Shipment Status</span><strong>{data.purchaseOrder.shipment_status ?? data.purchaseOrder.tracking_status ?? "None"}</strong></div>
+          <div className="detail-card"><span>Tracking</span><strong>{data.purchaseOrder.tracking_number ?? "None"}</strong></div>
+          <div className="detail-card"><span>Source Channel</span><strong>{data.purchaseOrder.source_channel ?? "N/A"}</strong></div>
+          <div className="detail-card"><span>Generated Form</span><strong>{data.purchaseOrder.generated_form_url ? <a href={data.purchaseOrder.generated_form_url} target="_blank" rel="noreferrer">Open</a> : "Not generated"}</strong></div>
+          <div className="detail-card"><span>Counter Status</span><strong>{data.purchaseOrder.counter_status}</strong></div>
+          <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Compliance Snapshot</span><strong>{String((data.purchaseOrder.compliance_snapshot as { summary?: string } | null)?.summary ?? "No compliance snapshot recorded.")}</strong></div>
+          <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Hold Reason</span><strong>{data.purchaseOrder.hold_reason ?? "No hold reason."}</strong></div>
+          <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Buyer Notes</span><strong>{data.purchaseOrder.buyer_notes ?? "No buyer notes added."}</strong></div>
+          <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Internal Notes</span><strong>{data.purchaseOrder.internal_notes ?? "No internal notes added."}</strong></div>
+          <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.purchaseOrder.notes ?? "No notes added."}</strong></div>
         </div>
-        <div className="panel section-stack">
-          <div className="panel-header"><h3>PO Line Items</h3></div>
-          <DataTable
-            columns={[
-              { key: "sku", title: "SKU", render: (row) => row.sku },
-              { key: "product_name", title: "Product", render: (row) => row.product_name },
-              { key: "case_quantity", title: "Cases", render: (row) => row.case_quantity },
-              { key: "quantity_ordered", title: "Ordered", render: (row) => row.quantity_ordered },
-              { key: "unit_quantity", title: "Units", render: (row) => row.unit_quantity },
-              { key: "quantity_received", title: "Received", render: (row) => row.quantity_received },
-              { key: "unit_cost", title: "Unit Cost", render: (row) => formatCurrency(row.unit_cost) },
-              { key: "line_total", title: "Extended Cost", render: (row) => formatCurrency(row.extended_cost || row.line_total) },
-            ]}
-            rows={data.lineItems}
-          />
-        </div>
+      </div>
+      <div className="panel section-stack">
+        <div className="panel-header"><h3>PO Line Items</h3></div>
+        <DataTable
+          columns={[
+            {
+              key: "product_name",
+              title: "Product",
+              width: "25%",
+              render: (row) => (
+                <ProductNameWithMetadata
+                  product={row.products}
+                  fallbackName={row.product_name}
+                  fallbackSku={row.sku}
+                />
+              ),
+            },
+            { key: "case_quantity", title: "Cases", render: (row) => row.case_quantity },
+            { key: "quantity_ordered", title: "Ordered", render: (row) => row.quantity_ordered },
+            { key: "unit_quantity", title: "Units", render: (row) => row.unit_quantity },
+            { key: "quantity_received", title: "Received", render: (row) => row.quantity_received },
+            { key: "unit_cost", title: "Unit Cost", render: (row) => formatCurrency(row.unit_cost) },
+            { key: "line_total", title: "Extended Cost", render: (row) => formatCurrency(row.extended_cost || row.line_total) },
+            {
+              key: "inventory_status",
+              title: "Inventory",
+              render: (row) => {
+                const product = row.products;
+                if (!product) return <StatusBadge label="Unknown" />;
+                const incoming = reorderBySku.get(row.sku)?.incomingQuantity ?? 0;
+                const tone = getInventoryHealthTone(product.current_inventory, [], product.safety_stock ?? 0);
+                const riskStatus = getInventoryRiskStatus(product.current_inventory, tone, incoming);
+                const label = riskStatus === "Safe" ? "In Stock" : riskStatus;
+                if (!isManufacturerPo) return <StatusBadge label={label} />;
+                const incomingFromThisOrder = Math.max(Number(row.quantity_ordered ?? 0) - Number(row.quantity_received ?? 0), 0);
+                const committed = Number(product.inventory_allocated ?? 0);
+                return (
+                  <div className="cell-stack">
+                    <StatusBadge label={label} />
+                    <span className="helper-text">{getOversoldLabel(product.current_inventory) ?? `Current Stock: ${product.current_inventory}`}</span>
+                    <span className="helper-text">Incoming From This Order: {incomingFromThisOrder}</span>
+                    <span className="helper-text">
+                      Available After Incoming: {getAvailableAfterIncoming(product.current_inventory, incoming, committed)}
+                    </span>
+                  </div>
+                );
+              },
+            },
+          ]}
+          rows={data.lineItems}
+        />
       </div>
       <div className="split-grid">
         <div className="panel section-stack">
@@ -522,6 +652,24 @@ export function PurchaseOrderDetailPage() {
         </div>
         <CommentsPanel entityType="purchase_order" entityId={poId} comments={data.comments} onSaved={reload} />
       </div>
+      {receiving ? (
+        <ReceiveInventoryModal
+          purchaseOrder={data.purchaseOrder}
+          lineItems={data.lineItems}
+          locations={locations ?? []}
+          onClose={() => setReceiving(false)}
+          onConfirm={async (lines) => {
+            try {
+              await purchaseOrderService.receiveInventory(poId, lines);
+              setReceiving(false);
+              await reload();
+              setNotice({ tone: "success", message: "Inventory received successfully." });
+            } catch (err) {
+              setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to receive inventory." });
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

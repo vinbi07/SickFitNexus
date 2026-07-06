@@ -20,10 +20,16 @@ import { calculateForecastMetric, calculateVendorReliability } from "@/utils/for
 import { getAverageTimelineDays, getProductionTimelineExceptionCount, getProductionTimelineRows, getProductionTimelineTrend } from "@/utils/productionTimeline";
 import {
   buildSkuReorderWindow,
+  calculateManufacturingInventoryImpact,
+  summarizeManufacturingInventoryImpact,
   getDaysLate,
   getIncomingQuantityForProduct,
   getInventoryHealthTone,
+  getInventoryRiskStatus,
   getInvoiceStatus,
+  getManufacturerDisplayName,
+  getManufacturingOrderStatusLabel,
+  getPaymentStatusLabel,
   getShipmentStatus,
   isInventoryDanger,
 } from "@/utils/operations";
@@ -63,16 +69,6 @@ function toDateOnly(value: string) {
 
 function dateOnlyDaysAgo(daysAgo: number) {
   return new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
-}
-
-function getManufacturingStatus(po: PurchaseOrder): "Draft" | "Ordered" | "In Production" | "Shipped" | "Received" | "Delayed" {
-  if (po.status === "Delayed") return "Delayed";
-  if (po.status === "Draft") return "Draft";
-  if (["Received", "Partially Received", "Closed", "Fulfilled"].includes(po.status)) return "Received";
-  if (po.status === "In Transit" || po.ship_date || po.tracking_number) return "Shipped";
-  // TODO: "In Production" is inferred from paid-but-unshipped; add a dedicated production_status field for accuracy.
-  if (po.invoice_paid_at) return "In Production";
-  return "Ordered";
 }
 
 function getInitials(value: string) {
@@ -342,7 +338,7 @@ export const dashboardService = {
 
     const incomingInventoryByManufacturer = activeManufacturerOrders
       .reduce<Map<string, number>>((acc, po) => {
-        const manufacturer = vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned";
+        const manufacturer = getManufacturerDisplayName(po, vendorById.get(po.vendor_id ?? ""));
         const incomingUnits = (lineItemsByPo.get(po.id) ?? []).reduce(
           (sum, item) => sum + Math.max(Number(item.quantity_ordered ?? 0) - Number(item.quantity_received ?? 0), 0),
           0,
@@ -408,16 +404,7 @@ export const dashboardService = {
         const currentQuantity = product.current_inventory;
         const incomingQuantity = incomingByProduct.get(product.id) ?? 0;
         const status = getInventoryHealthTone(currentQuantity, eventsByProductId.get(product.id) ?? [], product.safety_stock);
-        const riskStatus =
-          currentQuantity < 0
-            ? ("Oversold" as const)
-            : status === "danger"
-              ? ("Low Stock" as const)
-              : status === "warning"
-                ? ("Reorder Soon" as const)
-                : incomingQuantity > 0
-                  ? ("Incoming Shipment" as const)
-                  : ("Safe" as const);
+        const riskStatus = getInventoryRiskStatus(currentQuantity, status, incomingQuantity);
         return {
           sku: product.sku,
           productName: product.name,
@@ -459,26 +446,31 @@ export const dashboardService = {
         return {
           poId: po.id,
           poNumber: po.po_number,
-          manufacturer: vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned",
+          manufacturer: getManufacturerDisplayName(po, vendorById.get(po.vendor_id ?? "")),
           invoiceStatus: getInvoiceStatus(po),
           shipmentStatus: getShipmentStatus(po),
+          orderDate: po.order_date,
           etaDate: po.eta_date ?? po.expected_delivery_date,
           shipDate: po.ship_date,
           skuCount: uniqueSkuCount,
           incomingUnits,
           reorderWindowSummary: reorderWindowSummary || "No reorder recommendation yet",
+          paymentStatus: getPaymentStatusLabel(po),
+          manufacturingStatus: getManufacturingOrderStatusLabel(po),
+          inventoryImpactSummary: summarizeManufacturingInventoryImpact(poLineItems),
+          inventoryImpactItems: calculateManufacturingInventoryImpact(poLineItems),
         };
       })
       .sort((left, right) => (left.etaDate ?? "9999-12-31").localeCompare(right.etaDate ?? "9999-12-31"));
 
     const manufacturingIncoming = activeManufacturerOrders
       .flatMap((po) => {
-        const manufacturer = vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned";
+        const manufacturer = getManufacturerDisplayName(po, vendorById.get(po.vendor_id ?? ""));
         const orderedDate = po.order_date ?? po.submitted_at;
-        const paymentStatus: "Paid" | "Unpaid" = po.invoice_paid_at ? "Paid" : "Unpaid";
+        const paymentStatus = getPaymentStatusLabel(po);
         const shipDate = po.ship_date;
         const arrivalDate = po.eta_date ?? po.expected_delivery_date ?? po.actual_delivery_date;
-        const manufacturingStatus = getManufacturingStatus(po);
+        const manufacturingStatus = getManufacturingOrderStatusLabel(po);
         return (lineItemsByPo.get(po.id) ?? [])
           .filter((item) => Number(item.quantity_ordered ?? 0) - Number(item.quantity_received ?? 0) > 0)
           .map((item) => ({
@@ -559,7 +551,7 @@ export const dashboardService = {
       }] : openInvoices.slice(0, 2).map((po) => ({
         id: `open-${po.id}`,
         title: `Open invoice ${po.po_number}`,
-        detail: `${vendorById.get(po.vendor_id ?? "")?.name ?? "Manufacturer"} has not shipped yet.`,
+        detail: `${vendorById.get(po.vendor_id ?? "")?.name ?? po.bill_to_company_name ?? po.ship_to_company_name ?? "Manufacturer"} has not shipped yet.`,
         severity: "warning" as const,
         actionLabel: "Follow up on shipment timing",
       }))),
@@ -881,7 +873,7 @@ export const dashboardService = {
       inventoryStatusBreakdown,
       spendByVendor: purchaseOrders
         .reduce<Array<{ vendor: string; spend: number }>>((acc, po) => {
-          const vendorName = vendorById.get(po.vendor_id ?? "")?.name ?? "Unassigned";
+          const vendorName = getManufacturerDisplayName(po, vendorById.get(po.vendor_id ?? ""));
           const current = acc.find((entry) => entry.vendor === vendorName);
           if (current) current.spend += Number(po.total_cost ?? 0);
           else acc.push({ vendor: vendorName, spend: Number(po.total_cost ?? 0) });

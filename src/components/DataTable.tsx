@@ -6,7 +6,7 @@ export function DataTable<T>({
   emptyMessage = "No records available.",
   className,
 }: {
-  columns: Array<{ key: string; title: string; render: (row: T) => ReactNode }>;
+  columns: Array<{ key: string; title: string; width?: string; render: (row: T) => ReactNode }>;
   rows: T[];
   emptyMessage?: string;
   className?: string;
@@ -21,7 +21,7 @@ export function DataTable<T>({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key}>{column.title}</th>
+              <th key={column.key} style={column.width ? { width: column.width } : undefined}>{column.title}</th>
             ))}
           </tr>
         </thead>

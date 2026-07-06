@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { Modal } from "@/components/Modal";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
+import { ProductNameWithMetadata } from "@/components/ProductNameWithMetadata";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardService } from "@/services/dashboardService";
@@ -18,8 +19,12 @@ import type { InventoryEvent, InventoryItem } from "@/types/domain";
 import { formatCurrency, formatDate } from "@/utils/format";
 import {
   findDuplicateInventoryGroups,
+  getAvailableAfterIncoming,
   getInventoryHealthLabel,
+  getInventoryHealthTone,
+  getInventoryRiskStatus,
   getMarginMetrics,
+  getOversoldLabel,
   isInventoryDanger,
 } from "@/utils/operations";
 import { getProductVariantLabel } from "@/utils/lookbook";
@@ -152,7 +157,7 @@ export function InventoryPage() {
     <div className="section-stack">
       <PageHeader
         title="Inventory"
-        description="Run inventory from the facts that matter: current quantity, incoming quantity, COGS, margin, bundle eligibility, and clear danger alerts."
+        description="Track what is physically in stock, what is already committed to orders, and what is incoming from manufacturing."
         actions={
           <div className="btn-row">
             <button
@@ -263,62 +268,43 @@ export function InventoryPage() {
             {
               key: "product",
               title: "Product",
-              render: (row) => (
-                <div className="inventory-product-cell">
-                  <div className="product-thumb-shell">
-                    {row.products?.image_url ? (
-                      <img
-                        className="product-thumb"
-                        src={row.products.image_url}
-                        alt={row.products.name}
-                      />
-                    ) : (
-                      <span className="product-thumb-fallback">
-                        {row.products?.sku?.slice(0, 2) ?? "NA"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="cell-stack">
-                    <strong>
-                      {row.products?.id ? (
-                        <Link
-                          className="table-link"
-                          to={`/products/${row.products.id}`}
-                        >
-                          {row.products.name}
-                        </Link>
-                      ) : (
-                        (row.products?.name ?? "Unknown Product")
-                      )}
-                    </strong>
-                    <span className="helper-text">
-                      {row.products?.sku ?? "No SKU"}
-                    </span>
-                    {row.products ? (
-                      <span className="helper-text">
-                        {getProductVariantLabel(row.products)}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              ),
+              render: (row) => <ProductNameWithMetadata product={row.products} />,
             },
             {
               key: "quantities",
-              title: "Inventory",
-              render: (row) => (
-                <div className="cell-stack">
-                  <strong>On hand {row.quantity_on_hand}</strong>
-                  <span className="helper-text">
-                    Incoming{" "}
-                    {reorderBySku.get(row.products?.sku ?? "")
-                      ?.incomingQuantity ?? 0}
-                  </span>
-                  <span className="helper-text">
-                    {row.locations?.name ?? "Unknown Location"}
-                  </span>
-                </div>
-              ),
+              title: "Stock",
+              render: (row) => {
+                const incoming =
+                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
+                const committed = Number(row.products?.inventory_allocated ?? 0);
+                const oversoldLabel = getOversoldLabel(row.quantity_on_hand);
+                return (
+                  <div className="cell-stack">
+                    <strong>{oversoldLabel ?? `On hand ${row.quantity_on_hand}`}</strong>
+                    <span className="helper-text">Committed {committed}</span>
+                    <span className="helper-text">Incoming {incoming}</span>
+                    {/* Committed/Incoming are product-level aggregates, not per-location,
+                        so multi-location products repeat the same values on each row. */}
+                    <span className="helper-text">
+                      {row.locations?.name ?? "Unknown Location"}
+                    </span>
+                  </div>
+                );
+              },
+            },
+            {
+              key: "available_after_incoming",
+              title: "Available After Incoming",
+              render: (row) => {
+                const incoming =
+                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
+                const committed = Number(row.products?.inventory_allocated ?? 0);
+                return (
+                  <strong>
+                    {getAvailableAfterIncoming(row.quantity_on_hand, incoming, committed)}
+                  </strong>
+                );
+              },
             },
             {
               key: "planning",
@@ -350,15 +336,25 @@ export function InventoryPage() {
             {
               key: "status",
               title: "Status",
-              render: (row) => (
-                <StatusBadge
-                  label={getInventoryHealthLabel(
-                    row.quantity_on_hand,
-                    eventsByProductId.get(row.product_id) ?? [],
-                    row.products?.safety_stock ?? 0,
-                  )}
-                />
-              ),
+              render: (row) => {
+                const incoming =
+                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
+                const tone = getInventoryHealthTone(
+                  row.quantity_on_hand,
+                  eventsByProductId.get(row.product_id) ?? [],
+                  row.products?.safety_stock ?? 0,
+                );
+                return (
+                  <StatusBadge
+                    label={getInventoryRiskStatus(row.quantity_on_hand, tone, incoming)}
+                  />
+                );
+              },
+            },
+            {
+              key: "last_updated",
+              title: "Last Updated",
+              render: (row) => formatDate(row.updated_at),
             },
             {
               key: "actions",
@@ -389,6 +385,13 @@ export function InventoryPage() {
                   >
                     Transfer
                   </button>
+                  {/* TODO: deep-link vendor/product once the PO builder supports prefill query params */}
+                  <Link
+                    className="btn btn-secondary btn-small"
+                    to="/purchase-orders/new"
+                  >
+                    Create Manufacturing PO
+                  </Link>
                   <button
                     className="btn btn-danger btn-small"
                     onClick={() => setDeleting(row)}
@@ -558,13 +561,27 @@ export function InventoryPage() {
             </div>
             <div className="detail-card">
               <span>Current Quantity</span>
-              <strong>{viewing.quantity_on_hand}</strong>
+              <strong>{getOversoldLabel(viewing.quantity_on_hand) ?? viewing.quantity_on_hand}</strong>
+            </div>
+            <div className="detail-card">
+              <span>Committed</span>
+              <strong>{Number(viewing.products?.inventory_allocated ?? 0)}</strong>
             </div>
             <div className="detail-card">
               <span>Incoming Quantity</span>
               <strong>
                 {reorderBySku.get(viewing.products?.sku ?? "")
                   ?.incomingQuantity ?? 0}
+              </strong>
+            </div>
+            <div className="detail-card">
+              <span>Available After Incoming</span>
+              <strong>
+                {getAvailableAfterIncoming(
+                  viewing.quantity_on_hand,
+                  reorderBySku.get(viewing.products?.sku ?? "")?.incomingQuantity ?? 0,
+                  Number(viewing.products?.inventory_allocated ?? 0),
+                )}
               </strong>
             </div>
             <div className="detail-card">

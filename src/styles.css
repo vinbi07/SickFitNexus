@@ -919,6 +919,76 @@ textarea {
   font-size: 0.85rem;
 }
 
+.hover-tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+  border-bottom: 1px dashed var(--brand-border);
+}
+
+.hover-tooltip-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: var(--brand-radius-sm);
+  border: 1px solid var(--brand-border);
+  background: var(--brand-surface);
+  box-shadow: var(--brand-card-shadow-strong);
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+
+.hover-tooltip:hover .hover-tooltip-panel,
+.hover-tooltip:focus-visible .hover-tooltip-panel {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hover-tooltip-panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hover-tooltip-panel li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+  padding: 2px 0;
+}
+
+.inventory-impact-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inventory-impact-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.inventory-impact-list li span{
+  color: #0f1012;
+  font-weight:700;
+  text-transform: none;
+  font-size: 0.7rem;
+}
+
 .danger-text {
   color: #b41f29;
 }

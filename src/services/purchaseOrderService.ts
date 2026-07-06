@@ -17,6 +17,7 @@ import type {
   ComplianceHold,
   GeneratedPurchaseOrderDocument,
   InventoryEvent,
+  InventoryItem,
   InventoryReservation,
   Location,
   PoLineItem,
@@ -682,6 +683,122 @@ export const purchaseOrderService = {
       .eq("id", id);
 
     await recordStatusHistory(id, detail.purchaseOrder.status, "Fulfilled", actor, "Inventory committed.");
+  },
+
+  async markAsPaid(id: string) {
+    const supabase = assertSupabase();
+    const { data: current, error } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    if ((current as PurchaseOrder).invoice_paid_at) return current as PurchaseOrder;
+
+    const { data, error: updateError } = await supabase
+      .from("purchase_orders")
+      .update({ invoice_paid_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+
+    await activityService.create({
+      event_type: "purchase_order_marked_paid",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${(data as PurchaseOrder).po_number} marked as paid`,
+      description: "Manufacturing order payment recorded.",
+      metadata: { purchaseOrderId: id },
+    });
+    return data as PurchaseOrder;
+  },
+
+  async markAsShipped(id: string, shipDate?: string) {
+    const supabase = assertSupabase();
+    const { data: current, error } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    const currentPo = current as PurchaseOrder;
+    const nextShipDate = shipDate ?? new Date().toISOString().slice(0, 10);
+    const nextStatus = ["Draft", "Pending", "Ordered"].includes(currentPo.status) ? "In Transit" : currentPo.status;
+
+    const { data, error: updateError } = await supabase
+      .from("purchase_orders")
+      .update({ ship_date: nextShipDate, status: nextStatus })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+
+    await activityService.create({
+      event_type: "purchase_order_marked_shipped",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${(data as PurchaseOrder).po_number} marked as shipped`,
+      description: `Ship date set to ${nextShipDate}.`,
+      metadata: { purchaseOrderId: id },
+    });
+    return data as PurchaseOrder;
+  },
+
+  async receiveInventory(
+    id: string,
+    lines: Array<{ lineItemId: string; productId: string; locationId: string; quantityToReceive: number }>,
+  ) {
+    const supabase = assertSupabase();
+    const { data: poRow, error: poError } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (poError) throw poError;
+    const purchaseOrder = poRow as PurchaseOrder;
+    if (["Received", "Closed", "Cancelled"].includes(purchaseOrder.status)) {
+      throw new Error("This manufacturing order has already been received or closed.");
+    }
+
+    for (const line of lines) {
+      if (line.quantityToReceive <= 0) continue;
+
+      const { data: existingItem, error: itemError } = await supabase
+        .from("inventory_items")
+        .select("id")
+        .eq("product_id", line.productId)
+        .eq("location_id", line.locationId)
+        .maybeSingle();
+      if (itemError) throw itemError;
+
+      if (!existingItem) {
+        await insertTable<InventoryItem>("inventory_items", {
+          product_id: line.productId,
+          location_id: line.locationId,
+          quantity_on_hand: 0,
+          inventory_category: "Core",
+        });
+      }
+
+      await inventoryService.createAdjustment({
+        product_id: line.productId,
+        location_id: line.locationId,
+        related_po_id: id,
+        event_type: "PO Received",
+        quantity_change: line.quantityToReceive,
+        event_date: new Date().toISOString().slice(0, 10),
+        notes: `Received from Manufacturing Order ${purchaseOrder.po_number}.`,
+      });
+
+      const { data: lineItemRow, error: lineItemError } = await supabase
+        .from("po_line_items")
+        .select("quantity_ordered, quantity_received")
+        .eq("id", line.lineItemId)
+        .single();
+      if (lineItemError) throw lineItemError;
+      const nextReceived = Math.min(
+        Number(lineItemRow.quantity_received ?? 0) + line.quantityToReceive,
+        Number(lineItemRow.quantity_ordered ?? 0),
+      );
+      await supabase.from("po_line_items").update({ quantity_received: nextReceived }).eq("id", line.lineItemId);
+    }
+
+    await supabase
+      .from("purchase_orders")
+      .update({ actual_delivery_date: new Date().toISOString().slice(0, 10) })
+      .eq("id", id);
+
+    const actor = await getDashboardActor().catch(() => null);
+    return this.updateStatus(id, "Received", actor ?? undefined, "Inventory received.");
   },
 
   async saveComplianceHold(payload: Partial<ComplianceHold>) {

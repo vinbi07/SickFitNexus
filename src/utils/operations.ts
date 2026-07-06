@@ -38,6 +38,29 @@ export function getInventoryHealthTone(quantity: number, events: InventoryEvent[
   return "healthy" as const;
 }
 
+export type InventoryRiskStatus = "Oversold" | "Low Stock" | "Reorder Soon" | "Incoming Shipment" | "Safe";
+
+export function getInventoryRiskStatus(
+  currentQuantity: number,
+  tone: ReturnType<typeof getInventoryHealthTone>,
+  incomingQuantity: number,
+): InventoryRiskStatus {
+  if (Number(currentQuantity ?? 0) < 0) return "Oversold";
+  if (tone === "danger") return "Low Stock";
+  if (tone === "warning") return "Reorder Soon";
+  if (Number(incomingQuantity ?? 0) > 0) return "Incoming Shipment";
+  return "Safe";
+}
+
+export function getAvailableAfterIncoming(currentStock: number, incomingQuantity: number, committedQuantity: number) {
+  return Number(currentStock ?? 0) + Number(incomingQuantity ?? 0) - Number(committedQuantity ?? 0);
+}
+
+export function getOversoldLabel(currentStock: number) {
+  const quantity = Number(currentStock ?? 0);
+  return quantity < 0 ? `Oversold by ${Math.abs(quantity)} pairs` : null;
+}
+
 export function getMarginMetrics(unitCost: number, unitPrice: number) {
   const marginDollars = Number(unitPrice ?? 0) - Number(unitCost ?? 0);
   const marginPercent = Number(unitPrice ?? 0) > 0 ? (marginDollars / Number(unitPrice ?? 0)) * 100 : 0;
@@ -57,6 +80,40 @@ export function getInvoiceStatus(po: PurchaseOrder) {
 
 export function getShipmentStatus(po: PurchaseOrder) {
   return po.shipment_status ?? po.tracking_status ?? po.status;
+}
+
+export type ManufacturingOrderStatus = "Draft" | "Ordered" | "In Production" | "Shipped" | "Received" | "Delayed";
+
+export function getManufacturingOrderStatusLabel(po: PurchaseOrder): ManufacturingOrderStatus {
+  if (po.status === "Delayed") return "Delayed";
+  if (po.status === "Draft") return "Draft";
+  if (["Received", "Partially Received", "Closed", "Fulfilled"].includes(po.status)) return "Received";
+  if (po.status === "In Transit" || po.ship_date || po.tracking_number) return "Shipped";
+  // TODO: "In Production" is inferred from paid-but-unshipped; add a dedicated production_status field for accuracy.
+  if (po.invoice_paid_at) return "In Production";
+  return "Ordered";
+}
+
+export function getPaymentStatusLabel(po: PurchaseOrder): "Paid" | "Unpaid" {
+  // TODO: only Paid/Unpaid is tracked today (via invoice_paid_at). A "Deposit Paid" tri-state
+  // would need a new deposit_amount/balance_due column — not added since the transcript never
+  // described partial deposits, only "we've paid this" as a yes/no fact.
+  return po.invoice_paid_at ? "Paid" : "Unpaid";
+}
+
+export function getManufacturingOrderTitle(po: Pick<PurchaseOrder, "po_number">) {
+  return po.po_number.replace(/^PO/i, "MO");
+}
+
+export function getManufacturerDisplayName(
+  po: Pick<PurchaseOrder, "vendor_id" | "bill_to_company_name" | "ship_to_company_name">,
+  vendor: Pick<Vendor, "name"> | null | undefined,
+) {
+  // Manufacturer builder orders don't always have a vendor_id selected, but they always
+  // snapshot a company name into bill_to/ship_to — fall back to those before "Unassigned"
+  // so orders without a linked vendor still show the manufacturer name (matches the
+  // fallback chain already used on the Purchase Orders list).
+  return vendor?.name ?? po.bill_to_company_name ?? po.ship_to_company_name ?? "Unassigned";
 }
 
 export function getDaysLate(dueDate: string | null, referenceDate = new Date()) {
@@ -123,6 +180,29 @@ export function buildSkuReorderWindow(params: {
     recommendation: "Monitor window",
     reorderByDate,
   };
+}
+
+export function calculateManufacturingInventoryImpact(lineItems: PoLineItem[]) {
+  return lineItems
+    .map((item) => ({
+      productName: item.product_name || item.sku,
+      incomingUnits: Math.max(Number(item.quantity_ordered ?? 0) - Number(item.quantity_received ?? 0), 0),
+    }))
+    .filter((line) => line.incomingUnits > 0);
+}
+
+export function formatManufacturingInventoryImpact(lineItems: PoLineItem[]) {
+  const impact = calculateManufacturingInventoryImpact(lineItems);
+  if (!impact.length) return "No incoming inventory";
+  return impact.map((line) => `${line.productName} +${line.incomingUnits}`).join(" | ");
+}
+
+export function summarizeManufacturingInventoryImpact(lineItems: PoLineItem[]) {
+  const impact = calculateManufacturingInventoryImpact(lineItems);
+  if (!impact.length) return "No incoming inventory";
+  const totalUnits = impact.reduce((sum, line) => sum + line.incomingUnits, 0);
+  if (impact.length === 1) return `${impact[0].productName} +${impact[0].incomingUnits}`;
+  return `${impact.length} products · +${totalUnits} units`;
 }
 
 export interface DuplicateInventoryGroup {

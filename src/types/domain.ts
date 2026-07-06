@@ -1046,11 +1046,16 @@ export interface DashboardSnapshot {
     manufacturer: string;
     invoiceStatus: string;
     shipmentStatus: string;
+    orderDate: string | null;
     etaDate: string | null;
     shipDate: string | null;
     skuCount: number;
     incomingUnits: number;
     reorderWindowSummary: string;
+    paymentStatus: "Paid" | "Unpaid";
+    manufacturingStatus: "Draft" | "Ordered" | "In Production" | "Shipped" | "Received" | "Delayed";
+    inventoryImpactSummary: string;
+    inventoryImpactItems: Array<{ productName: string; incomingUnits: number }>;
   }>;
   wholesaleAccounts: Array<{
     retailerId: string;

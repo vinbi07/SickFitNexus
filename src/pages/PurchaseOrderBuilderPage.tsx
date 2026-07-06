@@ -5,6 +5,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
+import { StatusBadge } from "@/components/StatusBadge";
 import { ManufacturerOrderGrid } from "@/components/orders/ManufacturerOrderGrid";
 import { ManufacturerOrderCheckPanel } from "@/components/orders/ManufacturerOrderCheckPanel";
 import { SockCardDrawPanel } from "@/components/orders/SockCardDrawPanel";
@@ -41,6 +42,9 @@ type BuilderState = {
   order_date: string;
   start_ship_date: string;
   ship_complete_date: string;
+  ship_date: string;
+  expected_delivery_date: string;
+  actual_delivery_date: string;
   currency_code: string;
   bill_to_company_name: string;
   bill_to_contact_name: string;
@@ -183,6 +187,9 @@ function buildEmptyBuilderState(poNumber: string): BuilderState {
     order_date: today(),
     start_ship_date: "",
     ship_complete_date: "",
+    ship_date: "",
+    expected_delivery_date: "",
+    actual_delivery_date: "",
     currency_code: "USD",
     bill_to_company_name: "",
     bill_to_contact_name: "",
@@ -302,6 +309,8 @@ export function PurchaseOrderBuilderPage() {
   const isEditMode = Boolean(editId);
   const autosaveKey = `${AUTOSAVE_PREFIX}:${isEditMode ? editId : duplicateFromId || "new"}`;
   const [purchaseOrder, setPurchaseOrder] = useState<BuilderState | null>(null);
+  const [manufacturerPaidAt, setManufacturerPaidAt] = useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = useState(false);
   const [lineItems, setLineItems] = useState<BuilderLineItem[]>([]);
   const [mfrLines, setMfrLines] = useState<ManufacturerBuilderLine[]>([]);
   const [localSockCards, setLocalSockCards] = useState<SockCard[]>([]);
@@ -314,6 +323,7 @@ export function PurchaseOrderBuilderPage() {
   const [error, setError] = useState<UiErrorLog | null>(null);
   const initializedRef = useRef(false);
   const autosaveNoticeRef = useRef(false);
+  const [loadedFromDraft, setLoadedFromDraft] = useState(false);
 
   const { data, loading, error: loadError } = useAsyncData(async () => {
     const [retailers, buyers, locations, products, vendors, catalogOptions, sockCards] = await Promise.all([
@@ -347,6 +357,7 @@ export function PurchaseOrderBuilderPage() {
         setLineItems(parsed.lineItems.length ? normalizeBuilderLineItems(parsed.lineItems) : [buildEmptyLineItem(0)]);
         initializedRef.current = true;
         autosaveNoticeRef.current = true;
+        setLoadedFromDraft(true);
         return;
       } catch {
         window.localStorage.removeItem(autosaveKey);
@@ -355,6 +366,7 @@ export function PurchaseOrderBuilderPage() {
 
     if (data.sourceDetail?.purchaseOrder) {
       const source = data.sourceDetail.purchaseOrder;
+      setManufacturerPaidAt(source.invoice_paid_at ?? null);
       setPurchaseOrder({
         id: editId ? source.id : undefined,
         po_number: editId ? source.po_number : data.poNumber,
@@ -367,6 +379,9 @@ export function PurchaseOrderBuilderPage() {
         order_date: source.order_date ?? today(),
         start_ship_date: source.start_ship_date ?? "",
         ship_complete_date: source.ship_complete_date ?? "",
+        ship_date: source.ship_date ?? "",
+        expected_delivery_date: source.expected_delivery_date ?? "",
+        actual_delivery_date: source.actual_delivery_date ?? "",
         currency_code: source.currency_code ?? "USD",
         bill_to_company_name: source.bill_to_company_name ?? "",
         bill_to_contact_name: source.bill_to_contact_name ?? "",
@@ -549,6 +564,15 @@ export function PurchaseOrderBuilderPage() {
 
   function updatePurchaseOrder<K extends keyof BuilderState>(key: K, value: BuilderState[K]) {
     setPurchaseOrder((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function handleStartFresh() {
+    window.localStorage.removeItem(autosaveKey);
+    setPurchaseOrder(buildEmptyBuilderState(data?.poNumber ?? ""));
+    setLineItems([buildEmptyLineItem(0)]);
+    setMfrLines([]);
+    setLoadedFromDraft(false);
+    setNotice({ tone: "success", message: "Discarded the saved draft — starting a new Purchase Order." });
   }
 
   function applyRetailer(retailerId: string) {
@@ -836,6 +860,10 @@ export function PurchaseOrderBuilderPage() {
           order_date: builderPo.order_date || null,
           start_ship_date: builderPo.start_ship_date || null,
           ship_complete_date: builderPo.ship_complete_date || null,
+          ship_date: builderPo.ship_date || null,
+          expected_delivery_date: builderPo.expected_delivery_date || null,
+          // actual_delivery_date and invoice_paid_at are intentionally omitted here — they're
+          // only ever written by the Receive Inventory / Mark as Paid actions, not this form.
           currency_code: builderPo.currency_code || "USD",
           bill_to_company_name: "Foshan Lion King Clothing Co., Ltd.",
           bill_to_contact_name: "Tina",
@@ -873,7 +901,7 @@ export function PurchaseOrderBuilderPage() {
             variant_label: String(item.colorway ?? item.variant_label ?? ""),
             unit: "pairs",
             quantity_ordered: qty,
-            quantity_received: 0,
+            quantity_received: Number(item.quantity_received ?? 0),
             unit_cost: unitCost,
             unit_retail: unitRetail,
             unit_quantity: qty,
@@ -969,6 +997,12 @@ export function PurchaseOrderBuilderPage() {
     return (
       <div className="section-stack po-builder-shell">
         {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+        {loadedFromDraft && !isEditMode ? (
+          <div className="notice-banner notice-success">
+            <span>You're viewing a saved draft. If you meant to start a different order (e.g. a Retailer PO instead), discard it.</span>
+            <button className="btn btn-secondary btn-small" onClick={handleStartFresh}>Discard Draft &amp; Start New PO</button>
+          </div>
+        ) : null}
         {showNewDesignModal ? (
           <NewDesignModal
             sockCards={localSockCards}
@@ -985,18 +1019,6 @@ export function PurchaseOrderBuilderPage() {
               <Link className="btn btn-ghost" to={builderPo.id ? `/purchase-orders/${builderPo.id}` : "/purchase-orders"}>
                 Cancel
               </Link>
-              <div className="field field-half" style={{ margin: 0 }}>
-                <select
-                  value={builderPo.po_type}
-                  onChange={(e) => updatePurchaseOrder("po_type", e.target.value as PurchaseOrder["po_type"])}
-                  style={{ fontSize: 13 }}
-                >
-                  <option value="Manufacturer PO">Manufacturer PO</option>
-                  <option value="Retailer PO">Retailer PO</option>
-                  <option value="Customer Reorder">Customer Reorder</option>
-                  <option value="Work Order">Work Order</option>
-                </select>
-              </div>
               <button className="btn btn-secondary" disabled={saving} onClick={() => void saveManufacturerOrder(true)}>
                 {saving ? "Saving..." : "Save Draft"}
               </button>
@@ -1012,11 +1034,38 @@ export function PurchaseOrderBuilderPage() {
         <div className="panel">
           <div className="panel-header">
             <div><p className="lookbook-kicker">Order Header</p><h3>Production Order Details</h3></div>
+            {isEditMode ? (
+              <div className="btn-row">
+                <StatusBadge label={manufacturerPaidAt ? "Paid" : "Unpaid"} />
+                <button
+                  className="btn btn-secondary btn-small"
+                  disabled={Boolean(manufacturerPaidAt) || markingPaid || !builderPo.id}
+                  onClick={async () => {
+                    if (!builderPo.id) return;
+                    setMarkingPaid(true);
+                    try {
+                      const updated = await purchaseOrderService.markAsPaid(builderPo.id);
+                      setManufacturerPaidAt(updated.invoice_paid_at);
+                      setNotice({ tone: "success", message: "Manufacturing order marked as paid." });
+                    } catch (err) {
+                      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to mark as paid." });
+                    } finally {
+                      setMarkingPaid(false);
+                    }
+                  }}
+                >
+                  Mark as Paid
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="form-grid">
-            <div className="field"><label>PO Number</label><input value={builderPo.po_number} onChange={(e) => updatePurchaseOrder("po_number", e.target.value)} /></div>
+            <div className="field"><label>Manufacturing Order #</label><input value={builderPo.po_number} onChange={(e) => updatePurchaseOrder("po_number", e.target.value)} /></div>
             <div className="field"><label>Order Date</label><input type="date" value={builderPo.order_date} onChange={(e) => updatePurchaseOrder("order_date", e.target.value)} /></div>
             <div className="field"><label>Req. Ship Date</label><input type="date" value={builderPo.start_ship_date} onChange={(e) => updatePurchaseOrder("start_ship_date", e.target.value)} /></div>
+            <div className="field"><label>Expected Ship Date</label><input type="date" value={builderPo.ship_date} onChange={(e) => updatePurchaseOrder("ship_date", e.target.value)} /></div>
+            <div className="field"><label>Expected Arrival Date</label><input type="date" value={builderPo.expected_delivery_date} onChange={(e) => updatePurchaseOrder("expected_delivery_date", e.target.value)} /></div>
+            <div className="field"><label>Received Date</label><input value={builderPo.actual_delivery_date || "Not yet received"} disabled /></div>
             <div className="field">
               <label>Vendor / Manufacturer</label>
               <select value={builderPo.vendor_id} onChange={(e) => updatePurchaseOrder("vendor_id", e.target.value)}>
@@ -1024,6 +1073,21 @@ export function PurchaseOrderBuilderPage() {
                 {builderData.vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </div>
+            <details className="field field-wide">
+              <summary>Advanced</summary>
+              <div className="field">
+                <label>Order Type</label>
+                <select
+                  value={builderPo.po_type}
+                  onChange={(e) => updatePurchaseOrder("po_type", e.target.value as PurchaseOrder["po_type"])}
+                >
+                  <option value="Manufacturer PO">Manufacturing Order</option>
+                  <option value="Retailer PO">Retailer PO</option>
+                  <option value="Customer Reorder">Customer Reorder</option>
+                  <option value="Work Order">Work Order</option>
+                </select>
+              </div>
+            </details>
             <div className="field field-wide">
               <label>Internal Notes</label>
               <textarea rows={2} value={builderPo.notes} onChange={(e) => updatePurchaseOrder("notes", e.target.value)} placeholder="Internal production notes" />
@@ -1079,6 +1143,12 @@ export function PurchaseOrderBuilderPage() {
   return (
     <div className="section-stack po-builder-shell">
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+      {loadedFromDraft && !isEditMode ? (
+        <div className="notice-banner notice-success">
+          <span>You're viewing a saved draft. If you meant to start a different order (e.g. a Manufacturing Order instead), discard it.</span>
+          <button className="btn btn-secondary btn-small" onClick={handleStartFresh}>Discard Draft &amp; Start New PO</button>
+        </div>
+      ) : null}
       <PageHeader
         title={isEditMode ? `Edit ${builderPo.po_number}` : "Purchase Order Builder"}
         description="Fill the real SickFit PO document directly, pull products from the catalog, and keep creation fast enough for live ops."

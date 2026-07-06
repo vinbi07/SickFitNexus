@@ -1380,7 +1380,7 @@ export function DashboardPage() {
                 </span>
                 <div className="lane-card-meta">
                   <span>Ordered {formatDate(row.orderedDate)}</span>
-                  <span>{row.paymentStatus}</span>
+                  <StatusBadge label={row.paymentStatus} />
                   {row.shipDate ? (
                     <span>Ship {formatDate(row.shipDate)}</span>
                   ) : null}
