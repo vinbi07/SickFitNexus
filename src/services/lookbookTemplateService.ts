@@ -102,8 +102,9 @@ export const lookbookTemplateService = {
       await upsertTable<LookbookTemplateItem>(
         "lookbook_template_items",
         items.map((item, index) => ({
-          ...item,
+          id: item.id || crypto.randomUUID(),
           template_id: savedTemplate.id,
+          product_id: item.product_id,
           sort_order: Number(item.sort_order ?? index),
           featured: Boolean(item.featured),
         })),

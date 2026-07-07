@@ -11,10 +11,10 @@ function resolveClassName(normalized: string) {
   if (normalized.includes("warning") || normalized.includes("partial") || normalized.includes("overdue") || normalized.includes("low") || normalized.includes("reorder")) {
     return "status-warning";
   }
-  if (normalized.includes("receive") || normalized.includes("resolved") || normalized.includes("complete") || normalized.includes("safe") || normalized.includes("paid")) {
+  if (normalized.includes("receive") || normalized.includes("resolved") || normalized.includes("complete") || normalized.includes("safe") || normalized.includes("paid") || normalized.includes("shared") || normalized.includes("convert")) {
     return "status-success";
   }
-  if (normalized.includes("transit") || normalized.includes("ordered") || normalized.includes("ship") || normalized.includes("route") || normalized.includes("production")) {
+  if (normalized.includes("transit") || normalized.includes("ordered") || normalized.includes("ship") || normalized.includes("route") || normalized.includes("production") || normalized.includes("ready")) {
     return "status-info";
   }
   return "status-neutral";

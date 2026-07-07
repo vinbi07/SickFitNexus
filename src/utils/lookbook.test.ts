@@ -60,6 +60,7 @@ const buyer: Buyer = {
   id: "buyer-1",
   retailer_id: "retailer-1",
   lookbook_template_id: null,
+  lookbook_status: "draft",
   company_name: "Retailer Co",
   buyer_name: "Alex Buyer",
   buyer_email: "alex@example.com",

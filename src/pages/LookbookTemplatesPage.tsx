@@ -1,67 +1,37 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { CopyShareLinkButton } from "@/components/CopyShareLinkButton";
+import { CreatePOFromLookbookModal } from "@/components/CreatePOFromLookbookModal";
 import { DataTable } from "@/components/DataTable";
+import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
+import { ExportPdfButton } from "@/components/ExportPdfButton";
 import { LoadingState } from "@/components/LoadingState";
-import { Modal } from "@/components/Modal";
+import { LookbookStatusBadge } from "@/components/LookbookStatusBadge";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { buildLookbookUrl } from "@/lib/publicUrl";
 import { buyerService } from "@/services/buyerService";
+import { lookbookService } from "@/services/lookbookService";
 import { lookbookTemplateService } from "@/services/lookbookTemplateService";
+import { retailerService } from "@/services/retailerService";
 import { supportService } from "@/services/supportService";
-import type {
-  Buyer,
-  LookbookTemplate,
-  LookbookTemplateItem,
-  Product,
-  ProductBarcode,
-} from "@/types/domain";
-import { formatCurrency, formatDate } from "@/utils/format";
-import {
-  deriveInventoryAvailable,
-  getDisplaySku,
-  getLookbookMetaLine,
-  getLookbookRetailPrice,
-  getLookbookWholesalePrice,
-  getOrderUnitLabel,
-  getProductFamilyName,
-  getProductVariantLabel,
-  resolveCasePackQuantity,
-} from "@/utils/lookbook";
-
-type TemplateEditor = {
-  template: Partial<LookbookTemplate>;
-  items: Array<Partial<LookbookTemplateItem>>;
-};
-
-function getPrimaryLinkedProduct(barcode: ProductBarcode) {
-  return (
-    barcode.product_barcode_links?.find((link) => link.products)?.products ??
-    null
-  );
-}
-
-function truncateLinkedSku(sku: string) {
-  return sku.length > 12 ? `${sku.slice(0, 9)}...` : sku;
-}
-
-function isBuyerLinkExpired(buyer: Buyer) {
-  return Boolean(
-    buyer.token_expires_at &&
-      new Date(buyer.token_expires_at).getTime() < Date.now(),
-  );
-}
+import type { Buyer, LookbookTemplate } from "@/types/domain";
+import { formatDate } from "@/utils/format";
+import { buildLookbookDocumentHtml } from "@/utils/lookbookDocument";
+import { printLookbookDocument } from "@/utils/lookbookActions";
 
 export function LookbookTemplatesPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [query, setQuery] = useState("");
   const [lookbookQuery, setLookbookQuery] = useState("");
-  const [editing, setEditing] = useState<TemplateEditor | null>(null);
-  const [previewing, setPreviewing] = useState<TemplateEditor | null>(null);
   const [deleting, setDeleting] = useState<LookbookTemplate | null>(null);
+  const [creatingPoFor, setCreatingPoFor] = useState<Buyer | null>(null);
+  const [creatingLookbookAccount, setCreatingLookbookAccount] = useState<Partial<Buyer> | null>(null);
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
     message: string;
@@ -71,10 +41,20 @@ export function LookbookTemplatesPage() {
       templates: await lookbookTemplateService.list(),
       products: await supportService.listProducts(),
       barcodes: await supportService.listBarcodes(),
-      buyers: await buyerService.list(),
+      lookbooks: await lookbookService.listLookbooks(),
+      retailers: await retailerService.list(),
     }),
     [],
   );
+
+  useEffect(() => {
+    const state = location.state as { notice?: { tone: "success" | "error"; message: string } } | null;
+    if (state?.notice) {
+      setNotice(state.notice);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredTemplates = useMemo(() => {
     if (!data) return [];
@@ -86,9 +66,9 @@ export function LookbookTemplatesPage() {
     );
   }, [data, query]);
 
-  const filteredBuyers = useMemo(() => {
+  const filteredLookbooks = useMemo(() => {
     if (!data) return [];
-    return data.buyers.filter((buyer) =>
+    return data.lookbooks.filter(({ buyer }) =>
       [
         buyer.retailers?.name ?? "",
         buyer.company_name,
@@ -108,6 +88,16 @@ export function LookbookTemplatesPage() {
       <ErrorState message={error ?? "Unable to load lookbook templates"} />
     );
 
+  function getLookbookProducts(buyer: Buyer) {
+    if (!data) return [];
+    if (buyer.lookbook_template_id) {
+      const template = data.templates.find((entry) => entry.id === buyer.lookbook_template_id);
+      const productIds = new Set((template?.items ?? []).map((item) => item.product_id));
+      return data.products.filter((product) => productIds.has(product.id));
+    }
+    return data.products.filter((product) => Number(product.case_pack_quantity ?? 0) > 0);
+  }
+
   return (
     <div className="section-stack">
       {notice ? (
@@ -118,98 +108,26 @@ export function LookbookTemplatesPage() {
         />
       ) : null}
       <PageHeader
-        title="Lookbook Templates"
-        description="Build reusable product assortments and assign them to buyer magic links."
-        actions={
-          <button
-            className="btn btn-primary"
-            onClick={() =>
-              setEditing({ template: { name: "", is_active: true }, items: [] })
-            }
-          >
-            Create Template
-          </button>
-        }
-      />
-      <div className="panel">
-        <div className="filter-row">
-          <input
-            placeholder="Search template name or description"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <button className="btn btn-secondary" onClick={() => void reload()}>
-            Refresh
-          </button>
-        </div>
-      </div>
-      <DataTable
-        emptyMessage="No lookbook templates yet."
-        columns={[
-          {
-            key: "name",
-            title: "Template",
-            render: (row) => (
-              <div className="cell-stack">
-                <strong>{row.name}</strong>
-                <span className="helper-text">
-                  {row.description ?? "No description"}
-                </span>
-              </div>
-            ),
-          },
-          {
-            key: "status",
-            title: "Status",
-            render: (row) => (
-              <StatusBadge label={row.is_active ? "Active" : "Inactive"} />
-            ),
-          },
-          { key: "items", title: "SKUs", render: (row) => row.items.length },
-          {
-            key: "featured",
-            title: "Featured",
-            render: (row) => row.items.filter((item) => item.featured).length,
-          },
-          {
-            key: "actions",
-            title: "Actions",
-            render: (row) => (
-              <div className="btn-row">
-                <button
-                  className="btn btn-ghost btn-small"
-                  onClick={() =>
-                    setPreviewing({ template: row, items: row.items })
-                  }
-                >
-                  Preview
-                </button>
-                <button
-                  className="btn btn-secondary btn-small po-edit-btn"
-                  onClick={() =>
-                    setEditing({ template: row, items: row.items })
-                  }
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn btn-danger btn-small po-edit-btn"
-                  onClick={() => setDeleting(row)}
-                >
-                  Delete
-                </button>
-              </div>
-            ),
-          },
-        ]}
-        rows={filteredTemplates}
+        title="Lookbooks"
+        description="Create account-specific product lookbooks for retailers, airport accounts, and store buyers. Preview, export, share, and turn selected products into a Retailer PO."
       />
       <div className="panel section-stack">
         <div className="panel-header">
-          <h3>Active Lookbooks</h3>
-          <p className="helper-text">
-            Magic links currently assigned to buyer accounts.
-          </p>
+          <h3>Lookbooks</h3>
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              setCreatingLookbookAccount({
+                retailer_id: "",
+                buyer_name: "",
+                buyer_email: "",
+                order_mode_enabled: true,
+                lookbook_status: "draft",
+              })
+            }
+          >
+            Create Lookbook
+          </button>
         </div>
         <div className="filter-row">
           <input
@@ -217,6 +135,9 @@ export function LookbookTemplatesPage() {
             value={lookbookQuery}
             onChange={(event) => setLookbookQuery(event.target.value)}
           />
+          <button className="btn btn-secondary" onClick={() => void reload()}>
+            Refresh
+          </button>
         </div>
         <DataTable
           emptyMessage="No buyer accounts have a lookbook magic link yet."
@@ -224,109 +145,285 @@ export function LookbookTemplatesPage() {
             {
               key: "account",
               title: "Account",
-              render: (row) => (
-                <Link
-                  className="table-link"
-                  to={`/retailers/${row.retailer_id}`}
-                >
-                  {row.retailers?.name ?? row.company_name}
-                </Link>
-              ),
-            },
-            {
-              key: "buyer",
-              title: "Buyer",
-              render: (row) => (
+              render: ({ buyer }) => (
                 <div className="cell-stack">
-                  <strong>{row.buyer_name}</strong>
-                  <span className="helper-text">{row.buyer_email}</span>
+                  <Link className="table-link" to={`/retailers/${buyer.retailer_id}`}>
+                    {buyer.retailers?.name ?? buyer.company_name}
+                  </Link>
+                  <span className="helper-text">{buyer.buyer_name}</span>
                 </div>
               ),
             },
             {
               key: "template",
-              title: "Lookbook Template",
-              render: (row) =>
-                row.lookbook_templates?.name ?? "All wholesale products",
+              title: "Lookbook",
+              render: ({ buyer }) => buyer.lookbook_templates?.name ?? "All wholesale products",
+            },
+            {
+              key: "status",
+              title: "Status",
+              render: ({ buyer, purchaseOrders }) => (
+                <LookbookStatusBadge buyer={buyer} purchaseOrders={purchaseOrders} />
+              ),
+            },
+            {
+              key: "products",
+              title: "Products",
+              render: ({ buyer }) => {
+                if (!buyer.lookbook_template_id) return "All wholesale products";
+                const template = data.templates.find((entry) => entry.id === buyer.lookbook_template_id);
+                return template?.items.length ?? 0;
+              },
+            },
+            {
+              key: "created_at",
+              title: "Created",
+              render: ({ buyer }) => formatDate(buyer.created_at),
+            },
+            {
+              key: "updated_at",
+              title: "Last Updated",
+              render: ({ buyer }) => formatDate(buyer.updated_at),
+            },
+            {
+              key: "last_accessed_at",
+              title: "Last Viewed",
+              render: ({ buyer }) => (buyer.last_accessed_at ? formatDate(buyer.last_accessed_at) : "Never"),
+            },
+            {
+              key: "converted_po",
+              title: "Converted PO",
+              render: ({ purchaseOrders }) => {
+                const convertedPo = purchaseOrders.find((po) => po.status !== "Cancelled");
+                return convertedPo ? (
+                  <Link className="table-link" to={`/purchase-orders/${convertedPo.id}`}>
+                    {convertedPo.po_number}
+                  </Link>
+                ) : (
+                  "N/A"
+                );
+              },
+            },
+            {
+              key: "actions",
+              title: "Actions",
+              width: "26%",
+              render: ({ buyer }) => {
+                const products = getLookbookProducts(buyer);
+                const hasAssortment = products.length > 0;
+                const noAssortmentTitle = !hasAssortment ? "Assign a product assortment first" : undefined;
+                const accountName = buyer.retailers?.name ?? buyer.company_name;
+                return (
+                  <div className="btn-row">
+                    <button
+                      className="btn btn-ghost btn-small"
+                      disabled={!hasAssortment}
+                      title={noAssortmentTitle}
+                      onClick={() => navigate(`/lookbook-templates/preview/${buyer.id}`)}
+                    >
+                      Preview
+                    </button>
+                    <ExportPdfButton
+                      disabled={!hasAssortment}
+                      title={noAssortmentTitle}
+                      onClick={() => {
+                        const html = buildLookbookDocumentHtml({
+                          accountName,
+                          buyerName: buyer.buyer_name,
+                          retailer: buyer.retailers ?? null,
+                          products,
+                          generatedDate: formatDate(new Date().toISOString()),
+                        });
+                        printLookbookDocument(html);
+                      }}
+                    />
+                    <CopyShareLinkButton
+                      url={buildLookbookUrl(buyer.access_token)}
+                      onCopied={() => setNotice({ tone: "success", message: "Share link copied." })}
+                    />
+                    <button
+                      className="btn btn-secondary btn-small"
+                      disabled={!hasAssortment}
+                      title={noAssortmentTitle}
+                      onClick={() => setCreatingPoFor(buyer)}
+                    >
+                      Create PO from Lookbook
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-small"
+                      disabled={!buyer.lookbook_template_id}
+                      title={!buyer.lookbook_template_id ? "Assign a product assortment first" : undefined}
+                      onClick={() => {
+                        if (!buyer.lookbook_template_id) return;
+                        navigate(`/lookbook-templates/${buyer.lookbook_template_id}/edit`);
+                      }}
+                    >
+                      Edit Products
+                    </button>
+                  </div>
+                );
+              },
+            },
+          ]}
+          rows={filteredLookbooks}
+        />
+      </div>
+      <div className="panel section-stack">
+        <div className="panel-header">
+          <h3>Lookbook Templates</h3>
+          <button className="btn btn-primary" onClick={() => navigate("/lookbook-templates/new")}>
+            Create Template
+          </button>
+        </div>
+        <div className="filter-row">
+          <input
+            placeholder="Search template name or description"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <DataTable
+          emptyMessage="No lookbook templates yet."
+          columns={[
+            {
+              key: "name",
+              title: "Template",
+              render: (row) => (
+                <div className="cell-stack">
+                  <strong>{row.name}</strong>
+                  <span className="helper-text">
+                    {row.description ?? "No description"}
+                  </span>
+                </div>
+              ),
             },
             {
               key: "status",
               title: "Status",
               render: (row) => (
-                <StatusBadge
-                  label={isBuyerLinkExpired(row) ? "Expired" : "Active"}
-                />
+                <StatusBadge label={row.is_active ? "Active" : "Inactive"} />
               ),
             },
+            { key: "items", title: "SKUs", render: (row) => row.items.length },
             {
-              key: "last_accessed_at",
-              title: "Last Viewed",
-              render: (row) =>
-                row.last_accessed_at ? formatDate(row.last_accessed_at) : "Never",
-            },
-            {
-              key: "access",
-              title: "Magic Link",
-              render: (row) => (
-                <span className="helper-text">
-                  {buildLookbookUrl(row.access_token)}
-                </span>
-              ),
+              key: "featured",
+              title: "Featured",
+              render: (row) => row.items.filter((item) => item.featured).length,
             },
             {
               key: "actions",
               title: "Actions",
               render: (row) => (
                 <div className="btn-row">
-                  <Link
-                    className="btn btn-ghost btn-small"
-                    to={`/retailers/${row.retailer_id}`}
-                  >
-                    Open Profile
-                  </Link>
                   <button
                     className="btn btn-ghost btn-small"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(
-                        buildLookbookUrl(row.access_token),
-                      );
-                      setNotice({
-                        tone: "success",
-                        message: "Magic link copied to clipboard.",
-                      });
-                    }}
+                    onClick={() =>
+                      navigate("/lookbook-templates/preview", {
+                        state: {
+                          products: row.items
+                            .map((item) => data.products.find((product) => product.id === item.product_id))
+                            .filter((product): product is (typeof data.products)[number] => Boolean(product)),
+                          title: row.name,
+                          description: row.description,
+                        },
+                      })
+                    }
                   >
-                    Copy Link
+                    Preview
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-small po-edit-btn"
+                    onClick={() => navigate(`/lookbook-templates/${row.id}/edit`)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-danger btn-small po-edit-btn"
+                    onClick={() => setDeleting(row)}
+                  >
+                    Delete
                   </button>
                 </div>
               ),
             },
           ]}
-          rows={filteredBuyers}
+          rows={filteredTemplates}
         />
       </div>
-      {editing ? (
-        <LookbookTemplateEditor
-          initialValue={editing}
-          products={data.products}
-          barcodes={data.barcodes}
-          onClose={() => setEditing(null)}
-          onSaved={async () => {
-            await reload();
-            setNotice({
-              tone: "success",
-              message: editing.template.id
-                ? "Template updated successfully."
-                : "Template created successfully.",
-            });
-          }}
+      {creatingPoFor ? (
+        <CreatePOFromLookbookModal
+          buyer={creatingPoFor}
+          products={getLookbookProducts(creatingPoFor)}
+          onClose={() => setCreatingPoFor(null)}
         />
       ) : null}
-      {previewing ? (
-        <LookbookTemplatePreview
-          preview={previewing}
-          products={data.products}
-          onClose={() => setPreviewing(null)}
+      {creatingLookbookAccount ? (
+        <EntityFormModal<Partial<Buyer>>
+          title="Create Lookbook"
+          saveLabel="Create Lookbook"
+          initialValues={{
+            retailer_id: creatingLookbookAccount.retailer_id ?? "",
+            company_name: creatingLookbookAccount.company_name ?? "",
+            buyer_name: creatingLookbookAccount.buyer_name ?? "",
+            buyer_email: creatingLookbookAccount.buyer_email ?? "",
+            phone: creatingLookbookAccount.phone ?? "",
+            billing_address: creatingLookbookAccount.billing_address ?? "",
+            shipping_address: creatingLookbookAccount.shipping_address ?? "",
+            payment_terms: creatingLookbookAccount.payment_terms ?? "",
+            compliance_requirements: creatingLookbookAccount.compliance_requirements ?? "",
+            assigned_sales_rep: creatingLookbookAccount.assigned_sales_rep ?? "",
+            lookbook_template_id: creatingLookbookAccount.lookbook_template_id ?? "",
+            lookbook_status: creatingLookbookAccount.lookbook_status ?? "draft",
+            link_validity_days: creatingLookbookAccount.link_validity_days ?? 30,
+            order_mode_enabled: creatingLookbookAccount.order_mode_enabled ?? true,
+            token_expires_at: creatingLookbookAccount.token_expires_at ?? "",
+          }}
+          fields={[
+            {
+              key: "retailer_id",
+              label: "Account",
+              type: "select",
+              required: true,
+              options: data.retailers.map((retailer) => ({ label: retailer.name, value: retailer.id })),
+            },
+            { key: "company_name", label: "Company Name" },
+            { key: "buyer_name", label: "Buyer Name", required: true },
+            { key: "buyer_email", label: "Buyer Email", required: true },
+            { key: "phone", label: "Phone" },
+            { key: "payment_terms", label: "Payment Terms" },
+            { key: "assigned_sales_rep", label: "Assigned Sales Rep" },
+            {
+              key: "lookbook_template_id",
+              label: "Lookbook Template",
+              type: "select",
+              options: data.templates.map((template) => ({ label: template.name, value: template.id })),
+            },
+            {
+              key: "lookbook_status",
+              label: "Lookbook Status",
+              type: "select",
+              options: [
+                { label: "Draft", value: "draft" },
+                { label: "Ready to Share", value: "ready" },
+              ],
+            },
+            { key: "link_validity_days", label: "Link Validity (days)", type: "number", min: 1, step: 1 },
+            { key: "billing_address", label: "Billing Address", type: "textarea" },
+            { key: "shipping_address", label: "Shipping Address", type: "textarea" },
+            { key: "compliance_requirements", label: "Compliance Requirements", type: "textarea" },
+            { key: "token_expires_at", label: "Token Expires", type: "date" },
+            { key: "order_mode_enabled", label: "Order Mode Enabled", type: "checkbox" },
+          ]}
+          onSave={async (values) => {
+            if (!values.retailer_id) throw new Error("Select an account before creating a lookbook.");
+            await buyerService.upsert({
+              ...values,
+              link_validity_days: Number(values.link_validity_days ?? 30),
+            });
+            await reload();
+            setNotice({ tone: "success", message: "Lookbook created successfully." });
+          }}
+          onClose={() => setCreatingLookbookAccount(null)}
         />
       ) : null}
       {deleting ? (
@@ -346,513 +443,6 @@ export function LookbookTemplatesPage() {
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-function LookbookTemplatePreview({
-  preview,
-  products,
-  onClose,
-}: {
-  preview: TemplateEditor;
-  products: Product[];
-  onClose: () => void;
-}) {
-  const previewProducts = [...preview.items]
-    .sort(
-      (left, right) =>
-        Number(left.sort_order ?? 0) - Number(right.sort_order ?? 0),
-    )
-    .map((item) => ({
-      item,
-      product:
-        products.find((entry) => entry.id === item.product_id) ??
-        item.products ??
-        null,
-    }))
-    .filter(
-      (
-        entry,
-      ): entry is { item: Partial<LookbookTemplateItem>; product: Product } =>
-        Boolean(entry.product),
-    );
-
-  return (
-    <Modal
-      title={`Preview | ${preview.template.name ?? "Lookbook Template"}`}
-      onClose={onClose}
-      actions={
-        <button className="btn btn-ghost" onClick={onClose}>
-          Close
-        </button>
-      }
-    >
-      <div
-        className="lookbook-shell"
-        style={{ padding: 0, background: "transparent", minHeight: "auto" }}
-      >
-        <div className="lookbook-hero" style={{ marginBottom: 18 }}>
-          <div>
-            <p className="lookbook-kicker">Preview mode</p>
-            <h1>{preview.template.name ?? "Lookbook Template"}</h1>
-            <span>
-              {preview.template.description ??
-                "Read-only preview of the assigned buyer experience."}
-            </span>
-          </div>
-        </div>
-        {!previewProducts.length ? (
-          <div className="empty-state">
-            No products selected for this template yet.
-          </div>
-        ) : (
-          <div className="lookbook-grid">
-            {previewProducts.map(({ item, product }) => {
-              const displaySku = getDisplaySku(product);
-              const metaLine = getLookbookMetaLine(product);
-              const wholesalePrice = getLookbookWholesalePrice(product);
-
-              return (
-                <article
-                  key={`${product.id}-${item.sort_order ?? 0}`}
-                  className="lookbook-card"
-                >
-                  <div className="lookbook-card-media">
-                    {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={getProductFamilyName(product)}
-                      />
-                    ) : (
-                      <span>{displaySku.slice(0, 2)}</span>
-                    )}
-                  </div>
-                  <div className="lookbook-card-body">
-                    <div className="lookbook-card-topline">
-                      <strong className="lookbook-card-title">
-                        {getProductFamilyName(product)}
-                      </strong>
-                      <div className="lookbook-card-badge-row">
-                        <span className="lookbook-card-sku">
-                          {getProductVariantLabel(product)} | {displaySku}
-                        </span>
-                        {item.featured ? (
-                          <StatusBadge label="Featured" />
-                        ) : null}
-                      </div>
-                    </div>
-                    {metaLine ? (
-                      <p className="lookbook-card-copy">{metaLine}</p>
-                    ) : null}
-                    <p className="lookbook-card-copy">
-                      {resolveCasePackQuantity(product)}{" "}
-                      {getOrderUnitLabel(product)}/case |{" "}
-                      {product.weight ?? "Weight TBD"} |{" "}
-                      {product.dimensions ?? "Dimensions TBD"}
-                    </p>
-                    <div className="lookbook-price-row">
-                      <div>
-                        <span>Wholesale</span>
-                        <strong>{formatCurrency(wholesalePrice)}</strong>
-                      </div>
-                      <div>
-                        <span>MSRP</span>
-                        <strong>
-                          {formatCurrency(getLookbookRetailPrice(product))}
-                        </strong>
-                      </div>
-                    </div>
-                    <div className="lookbook-card-footer">
-                      <span>
-                        {deriveInventoryAvailable(product)}{" "}
-                        {getOrderUnitLabel(product)} available
-                      </span>
-                      {product.compliance_docs_status === "Missing" ? (
-                        <span>Compliance docs missing</span>
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function LookbookTemplateEditor({
-  initialValue,
-  products,
-  barcodes,
-  onClose,
-  onSaved,
-}: {
-  initialValue: TemplateEditor;
-  products: Product[];
-  barcodes: ProductBarcode[];
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const [template, setTemplate] = useState<Partial<LookbookTemplate>>({
-    id: initialValue.template.id,
-    name: initialValue.template.name ?? "",
-    description: initialValue.template.description ?? "",
-    is_active: initialValue.template.is_active ?? true,
-  });
-  const [items, setItems] = useState<Array<Partial<LookbookTemplateItem>>>(
-    initialValue.items,
-  );
-  const [search, setSearch] = useState("");
-
-  const selectedIds = new Set(
-    items.map((item) => item.product_id).filter(Boolean),
-  );
-  const filteredBarcodes = [...barcodes]
-    .sort((left, right) => {
-      const productComparison = left.product_name.localeCompare(
-        right.product_name,
-      );
-      if (productComparison !== 0) return productComparison;
-      return left.sku.localeCompare(right.sku);
-    })
-    .filter((barcode) => {
-      const linkedProducts = (barcode.product_barcode_links ?? [])
-        .map((link) => link.products)
-        .filter((product): product is Product => Boolean(product));
-      return [
-        barcode.product_name,
-        barcode.sku,
-        barcode.handle ?? "",
-        barcode.collection ?? "",
-        barcode.barcode_upc ?? "",
-        barcode.size ?? "",
-        ...linkedProducts.flatMap((product) => [
-          product.name,
-          product.sku,
-          product.category ?? "",
-          product.variant_title ?? "",
-          product.parent_products?.name ?? "",
-        ]),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(search.toLowerCase());
-    });
-
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-shell" style={{ width: "min(1100px, 100%)" }}>
-        <div className="panel-header">
-          <div>
-            <h2>
-              {template.id
-                ? "Edit Lookbook Template"
-                : "Create Lookbook Template"}
-            </h2>
-            <p className="modal-message">
-              Choose exactly which products appear for buyers assigned to this
-              template.
-            </p>
-          </div>
-          <div className="btn-row">
-            <button className="btn btn-ghost" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={async () => {
-                if (!String(template.name ?? "").trim())
-                  throw new Error("Template name is required.");
-                await lookbookTemplateService.upsert(template, items);
-                await onSaved();
-                onClose();
-              }}
-            >
-              Save Template
-            </button>
-          </div>
-        </div>
-        <div className="form-grid" style={{ marginTop: 16 }}>
-          <div className="field">
-            <label>Name</label>
-            <input
-              value={String(template.name ?? "")}
-              onChange={(event) =>
-                setTemplate((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <div className="field">
-            <label>Status</label>
-            <select
-              value={template.is_active ? "active" : "inactive"}
-              onChange={(event) =>
-                setTemplate((current) => ({
-                  ...current,
-                  is_active: event.target.value === "active",
-                }))
-              }
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-          <div className="field field-wide">
-            <label>Description</label>
-            <textarea
-              rows={3}
-              value={String(template.description ?? "")}
-              onChange={(event) =>
-                setTemplate((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-            />
-          </div>
-        </div>
-        <div className="split-grid" style={{ marginTop: 18 }}>
-          <div className="panel section-stack">
-            <div className="panel-header">
-              <h3>Catalog</h3>
-            </div>
-            <div className="filter-row">
-              <input
-                placeholder="Search barcode catalog"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-            <DataTable
-              emptyMessage="No barcode rows match this search."
-              columns={[
-                {
-                  key: "add",
-                  title: "Add",
-                  render: (row) => {
-                    const linkedProduct = getPrimaryLinkedProduct(row);
-                    const isAdded = linkedProduct
-                      ? selectedIds.has(linkedProduct.id)
-                      : false;
-                    return (
-                      <button
-                        className="btn btn-secondary btn-small"
-                        disabled={!linkedProduct || isAdded}
-                        onClick={() => {
-                          if (!linkedProduct) return;
-                          setItems((current) => [
-                            ...current,
-                            {
-                              product_id: linkedProduct.id,
-                              sort_order: current.length,
-                              featured: false,
-                            },
-                          ]);
-                        }}
-                      >
-                        {!linkedProduct
-                          ? "Unlinked"
-                          : isAdded
-                            ? "Added"
-                            : "Add"}
-                      </button>
-                    );
-                  },
-                },
-                {
-                  key: "link",
-                  title: "Shopify Link",
-                  render: (row) => {
-                    const linkedProduct = getPrimaryLinkedProduct(row);
-                    return linkedProduct ? (
-                      <div className="cell-stack">
-                        <StatusBadge label="Linked" />
-                        <span className="helper-text" title={linkedProduct.sku}>
-                          {truncateLinkedSku(linkedProduct.sku)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="cell-stack">
-                        <StatusBadge label="Warning" />
-                        <span className="helper-text">
-                          Not linked to a Shopify product.
-                        </span>
-                      </div>
-                    );
-                  },
-                },
-                {
-                  key: "image",
-                  title: "Image",
-                  render: (row) => {
-                    const linkedProduct = getPrimaryLinkedProduct(row);
-                    return (
-                      <div className="product-thumb-shell">
-                        {linkedProduct?.image_url ? (
-                          <img
-                            className="product-thumb"
-                            src={linkedProduct.image_url}
-                            alt={getProductFamilyName(linkedProduct)}
-                          />
-                        ) : (
-                          <span className="product-thumb-fallback">
-                            {row.sku.slice(0, 2)}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  },
-                },
-                { key: "sku", title: "SKU", render: (row) => row.sku },
-                {
-                  key: "name",
-                  title: "Barcode Product",
-                  render: (row) => (
-                    <div className="cell-stack">
-                      <strong>{row.product_name}</strong>
-                      <span className="helper-text">
-                        UPC {row.barcode_upc ?? "Pending"}
-                        {row.size ? ` | ${row.size}` : ""}
-                        {row.handle ? ` | ${row.handle}` : ""}
-                      </span>
-                    </div>
-                  ),
-                },
-                {
-                  key: "collection",
-                  title: "Collection",
-                  render: (row) => row.collection ?? "N/A",
-                },
-              ]}
-              rows={filteredBarcodes}
-            />
-          </div>
-          <div className="panel section-stack">
-            <div className="panel-header">
-              <h3>Template Assortment</h3>
-            </div>
-            {items.length ? (
-              <div className="timeline">
-                {[...items]
-                  .sort(
-                    (left, right) =>
-                      Number(left.sort_order ?? 0) -
-                      Number(right.sort_order ?? 0),
-                  )
-                  .map((item, index) => {
-                    const product = products.find(
-                      (entry) => entry.id === item.product_id,
-                    );
-                    return (
-                      <div
-                        key={`${item.product_id}-${index}`}
-                        className="detail-card"
-                      >
-                        <div className="panel-header">
-                          <div className="inventory-product-cell">
-                            <div className="product-thumb-shell">
-                              {product?.image_url ? (
-                                <img
-                                  className="product-thumb"
-                                  src={product.image_url}
-                                  alt={getProductFamilyName(product)}
-                                />
-                              ) : (
-                                <span className="product-thumb-fallback">
-                                  {product?.sku?.slice(0, 2) ?? "NA"}
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              <strong>
-                                {product
-                                  ? getProductFamilyName(product)
-                                  : "Unknown product"}
-                              </strong>
-                              <p className="helper-text">
-                                {product
-                                  ? `${getProductVariantLabel(product)} | ${product.sku}`
-                                  : "SKU missing"}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            className="btn btn-danger btn-small"
-                            onClick={() =>
-                              setItems((current) =>
-                                current.filter(
-                                  (entry) =>
-                                    entry.product_id !== item.product_id,
-                                ),
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div className="form-grid" style={{ marginTop: 12 }}>
-                          <div className="field">
-                            <label>Sort Order</label>
-                            <input
-                              type="number"
-                              value={String(item.sort_order ?? index)}
-                              onChange={(event) =>
-                                setItems((current) =>
-                                  current.map((entry) =>
-                                    entry.product_id === item.product_id
-                                      ? {
-                                          ...entry,
-                                          sort_order: Number(
-                                            event.target.value,
-                                          ),
-                                        }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                            />
-                          </div>
-                          <div className="field">
-                            <label>Featured</label>
-                            <select
-                              value={item.featured ? "yes" : "no"}
-                              onChange={(event) =>
-                                setItems((current) =>
-                                  current.map((entry) =>
-                                    entry.product_id === item.product_id
-                                      ? {
-                                          ...entry,
-                                          featured:
-                                            event.target.value === "yes",
-                                        }
-                                      : entry,
-                                  ),
-                                )
-                              }
-                            >
-                              <option value="no">No</option>
-                              <option value="yes">Yes</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : (
-              <div className="empty-state">
-                No products selected for this template yet.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

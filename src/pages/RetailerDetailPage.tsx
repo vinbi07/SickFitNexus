@@ -140,6 +140,7 @@ export function RetailerDetailPage() {
               { key: "template", title: "Lookbook", render: (row) => row.lookbook_templates?.name ?? "All wholesale products" },
               { key: "order_mode_enabled", title: "Order Mode", render: (row) => <StatusBadge label={row.order_mode_enabled ? "Enabled" : "Disabled"} /> },
               { key: "link_validity_days", title: "Validity", render: (row) => `${row.link_validity_days ?? 30} days` },
+              { key: "token_expires_at", title: "Expires", render: (row) => row.token_expires_at ? formatDate(row.token_expires_at) : "Not set yet" },
               { key: "last_accessed_at", title: "Last Viewed", render: (row) => row.last_accessed_at ? formatDate(row.last_accessed_at) : "Never" },
               { key: "access", title: "Magic Link", render: (row) => <span className="helper-text">{buildLookbookUrl(row.access_token)}</span> },
               {
@@ -247,9 +248,9 @@ export function RetailerDetailPage() {
             compliance_requirements: editingBuyer.compliance_requirements ?? "",
             assigned_sales_rep: editingBuyer.assigned_sales_rep ?? "",
             lookbook_template_id: editingBuyer.lookbook_template_id ?? "",
+            lookbook_status: editingBuyer.lookbook_status ?? "draft",
             link_validity_days: editingBuyer.link_validity_days ?? 30,
             order_mode_enabled: editingBuyer.order_mode_enabled ?? true,
-            token_expires_at: editingBuyer.token_expires_at ?? "",
           }}
           fields={[
             { key: "company_name", label: "Company Name" },
@@ -259,11 +260,11 @@ export function RetailerDetailPage() {
             { key: "payment_terms", label: "Payment Terms" },
             { key: "assigned_sales_rep", label: "Assigned Sales Rep" },
             { key: "lookbook_template_id", label: "Lookbook Template", type: "select", options: data.lookbookTemplates.map((template) => ({ label: template.name, value: template.id })) },
+            { key: "lookbook_status", label: "Lookbook Status", type: "select", options: [{ label: "Draft", value: "draft" }, { label: "Ready to Share", value: "ready" }] },
             { key: "link_validity_days", label: "Link Validity (days)", type: "number", min: 1, step: 1 },
             { key: "billing_address", label: "Billing Address", type: "textarea" },
             { key: "shipping_address", label: "Shipping Address", type: "textarea" },
             { key: "compliance_requirements", label: "Compliance Requirements", type: "textarea" },
-            { key: "token_expires_at", label: "Token Expires", type: "date" },
             { key: "order_mode_enabled", label: "Order Mode Enabled", type: "checkbox" },
           ]}
           onSave={async (values) => {

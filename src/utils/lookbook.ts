@@ -1,4 +1,4 @@
-import type { Buyer, ComplianceSnapshot, LookbookOrderInputLine, LookbookOrderTotals, PoLineItem, Product } from "@/types/domain";
+import type { Buyer, ComplianceSnapshot, LookbookOrderInputLine, LookbookOrderTotals, PoLineItem, Product, PurchaseOrder } from "@/types/domain";
 
 export function deriveInventoryAvailable(product: Pick<Product, "current_inventory" | "inventory_allocated">) {
   return Math.max(Number(product.current_inventory ?? 0) - Number(product.inventory_allocated ?? 0), 0);
@@ -50,15 +50,26 @@ export function resolveCasePackQuantity(product: Pick<Product, "name" | "pack_si
 }
 
 export function getOrderUnitLabel(product: Pick<Product, "name" | "pack_size">) {
-  return (getUnitsPerPack(product) ?? 1) > 1 ? "packs" : "units";
+  return (getUnitsPerPack(product) ?? 1) > 1 ? "packs" : "pairs";
 }
 
 export function getProductFamilyName(product: Pick<Product, "name"> & Partial<Pick<Product, "parent_products">>) {
   return product.parent_products?.name ?? product.name;
 }
 
-export function getDisplaySku(product: Pick<Product, "sku" | "product_barcode_links">) {
-  return product.product_barcode_links?.find((link) => link.product_barcodes?.sku)?.product_barcodes?.sku ?? product.sku;
+export function getDisplaySku(product: Pick<Product, "sku">) {
+  const raw = product.sku ?? "";
+  const separatorIndex = raw.indexOf("--");
+  return separatorIndex >= 0 ? raw.slice(0, separatorIndex) : raw;
+}
+
+export function resolveBarcode(product: Pick<Product, "upc" | "product_barcode_links">) {
+  const linkedBarcode = product.product_barcode_links?.find((link) => link.product_barcodes?.barcode_upc)?.product_barcodes?.barcode_upc;
+  return linkedBarcode ?? product.upc ?? null;
+}
+
+export function getDisplayBarcode(product: Pick<Product, "upc" | "product_barcode_links">) {
+  return resolveBarcode(product) ?? "Pending";
 }
 
 export function getLookbookMetaLine(product: Pick<Product, "upc" | "pack_size">) {
@@ -126,10 +137,10 @@ export function buildLineItemFromProduct(product: Product, caseQuantity: number)
   return {
     product_id: product.id,
     sku: product.sku,
-    upc: product.upc,
+    upc: resolveBarcode(product),
     product_name: product.name,
     variant_label: getProductVariantLabel(product),
-    description: product.description,
+    description: product.name,
     unit: "EA",
     case_pack_quantity: resolveCasePackQuantity(product),
     case_quantity: safeCaseQuantity,
@@ -185,6 +196,38 @@ export function buildComplianceSnapshot(params: {
     missingDocs,
     productWarnings,
   };
+}
+
+export function isBuyerLinkExpired(buyer: Pick<Buyer, "token_expires_at">) {
+  return Boolean(buyer.token_expires_at && new Date(buyer.token_expires_at).getTime() < Date.now());
+}
+
+export type LookbookStatusLabel = "Draft" | "Ready to Share" | "Shared" | "Converted to PO" | "Archived";
+
+export function hasLookbookAlreadyGeneratedPO(purchaseOrders: Array<Pick<PurchaseOrder, "source_channel" | "status">>) {
+  return purchaseOrders.some((po) => po.source_channel === "Lookbook" && po.status !== "Cancelled");
+}
+
+export function getLookbookStatusLabel(
+  buyer: Pick<Buyer, "token_expires_at" | "last_accessed_at" | "lookbook_status">,
+  purchaseOrders: Array<Pick<PurchaseOrder, "source_channel" | "status">>,
+): LookbookStatusLabel {
+  if (hasLookbookAlreadyGeneratedPO(purchaseOrders)) return "Converted to PO";
+  if (isBuyerLinkExpired(buyer)) return "Archived";
+  if (buyer.last_accessed_at) return "Shared";
+  return buyer.lookbook_status === "ready" ? "Ready to Share" : "Draft";
+}
+
+export function mapLookbookItemsToPOLineItems(
+  lines: Array<{ product: Product; caseQuantity: number }>,
+): Array<Partial<PoLineItem>> {
+  return lines
+    .filter((line) => Number(line.caseQuantity) > 0)
+    .map((line) => buildLineItemFromProduct(line.product, line.caseQuantity));
+}
+
+export function validateLookbookBeforePOCreation(lines: LookbookOrderInputLine[], products: Product[]) {
+  validateLookbookSelection(lines, products, { enforceInventory: false });
 }
 
 export function validateLookbookSelection(lines: LookbookOrderInputLine[], products: Product[], options?: { enforceInventory?: boolean }) {

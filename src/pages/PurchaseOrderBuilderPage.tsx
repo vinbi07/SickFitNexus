@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { InlineErrorLog } from "@/components/InlineErrorLog";
 import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
@@ -17,15 +22,28 @@ import { buyerService } from "@/services/buyerService";
 import { orderDesignService } from "@/services/orderDesignService";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
 import { retailerService } from "@/services/retailerService";
-import { sockCardService, calculateCardsUsed } from "@/services/sockCardService";
+import {
+  sockCardService,
+  calculateCardsUsed,
+} from "@/services/sockCardService";
 import { supportService } from "@/services/supportService";
 import { vendorService } from "@/services/vendorService";
-import type { OrderDesign, PoLineItem, Product, ProductBarcode, PurchaseOrder, SockCard } from "@/types/domain";
+import type {
+  OrderDesign,
+  PoLineItem,
+  Product,
+  ProductBarcode,
+  PurchaseOrder,
+  SockCard,
+} from "@/types/domain";
 import { getUiErrorLog, type UiErrorLog } from "@/utils/errors";
 import { formatCurrency } from "@/utils/format";
 import { assertSupabase } from "@/lib/supabase";
 import { buildManufacturerOrderHtml } from "@/utils/manufacturerOrderDocument";
-import { hasStopIssues, validateManufacturerOrder } from "@/utils/manufacturerOrderValidation";
+import {
+  hasStopIssues,
+  validateManufacturerOrder,
+} from "@/utils/manufacturerOrderValidation";
 import { downloadManufacturerFilesZip } from "@/utils/downloadManufacturerFiles";
 
 type BuilderLineItem = Partial<PoLineItem> & { tempId: string };
@@ -128,8 +146,13 @@ function buildEmptyMfrLine(index: number): ManufacturerBuilderLine {
   };
 }
 
-function buildLineFromDesign(design: Partial<OrderDesign>, sockCards: SockCard[], index: number): ManufacturerBuilderLine {
-  const card = sockCards.find((c) => c.id === design.default_sock_card_id) ?? null;
+function buildLineFromDesign(
+  design: Partial<OrderDesign>,
+  sockCards: SockCard[],
+  index: number,
+): ManufacturerBuilderLine {
+  const card =
+    sockCards.find((c) => c.id === design.default_sock_card_id) ?? null;
   const quantity = 0;
   const unitCost = Number(design.exw_cost ?? 1.89);
   return {
@@ -216,10 +239,15 @@ function buildEmptyBuilderState(poNumber: string): BuilderState {
 function splitAddressParts(address: string | null | undefined) {
   const text = String(address ?? "").trim();
   if (!text) return { street: "", city: "", state: "", zip: "" };
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
   if (lines.length >= 2) {
     const street = lines[0];
-    const cityStateZip = lines[1].match(/^(.*?)(?:,\s*([A-Za-z]{2}))?(?:\s+(\d{5}(?:-\d{4})?))?$/);
+    const cityStateZip = lines[1].match(
+      /^(.*?)(?:,\s*([A-Za-z]{2}))?(?:\s+(\d{5}(?:-\d{4})?))?$/,
+    );
     return {
       street,
       city: cityStateZip?.[1]?.trim() ?? "",
@@ -231,14 +259,22 @@ function splitAddressParts(address: string | null | undefined) {
 }
 
 function getLinkedBarcodeProduct(barcode: ProductBarcode) {
-  return (barcode.product_barcode_links ?? []).find((link) => link.products)?.products ?? null;
+  return (
+    (barcode.product_barcode_links ?? []).find((link) => link.products)
+      ?.products ?? null
+  );
 }
 
 function normalizePoSku(value: string | null | undefined) {
-  return String(value ?? "").replace(/--\d+$/, "").trim();
+  return String(value ?? "")
+    .replace(/--\d+$/, "")
+    .trim();
 }
 
-function buildLineItemFromBarcode(barcode: ProductBarcode, index: number): BuilderLineItem {
+function buildLineItemFromBarcode(
+  barcode: ProductBarcode,
+  index: number,
+): BuilderLineItem {
   const product = getLinkedBarcodeProduct(barcode);
   const quantity = 1;
   const unitCost = Number(product?.wholesale_price || product?.unit_cost || 0);
@@ -248,8 +284,8 @@ function buildLineItemFromBarcode(barcode: ProductBarcode, index: number): Build
     product_id: product?.id ?? null,
     sku: normalizePoSku(
       /^SF-\d+$/.test(String(barcode.sku ?? ""))
-        ? (product?.sku || barcode.sku)
-        : (barcode.sku || product?.sku)
+        ? product?.sku || barcode.sku
+        : barcode.sku || product?.sku,
     ),
     upc: barcode.barcode_upc ?? product?.upc ?? "",
     product_name: barcode.product_name,
@@ -263,7 +299,9 @@ function buildLineItemFromBarcode(barcode: ProductBarcode, index: number): Build
     extended_cost: quantity * unitCost,
     extended_retail: quantity * unitRetail,
     unit_quantity: quantity,
-    case_pack_quantity: Number(product?.case_pack_quantity ?? barcode.pack_quantity ?? 1),
+    case_pack_quantity: Number(
+      product?.case_pack_quantity ?? barcode.pack_quantity ?? 1,
+    ),
     case_quantity: Number(barcode.pack_quantity ?? 1),
     sort_order: index,
   };
@@ -309,7 +347,9 @@ export function PurchaseOrderBuilderPage() {
   const isEditMode = Boolean(editId);
   const autosaveKey = `${AUTOSAVE_PREFIX}:${isEditMode ? editId : duplicateFromId || "new"}`;
   const [purchaseOrder, setPurchaseOrder] = useState<BuilderState | null>(null);
-  const [manufacturerPaidAt, setManufacturerPaidAt] = useState<string | null>(null);
+  const [manufacturerPaidAt, setManufacturerPaidAt] = useState<string | null>(
+    null,
+  );
   const [markingPaid, setMarkingPaid] = useState(false);
   const [lineItems, setLineItems] = useState<BuilderLineItem[]>([]);
   const [mfrLines, setMfrLines] = useState<ManufacturerBuilderLine[]>([]);
@@ -319,14 +359,29 @@ export function PurchaseOrderBuilderPage() {
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [activeProductIndex, setActiveProductIndex] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [error, setError] = useState<UiErrorLog | null>(null);
   const initializedRef = useRef(false);
   const autosaveNoticeRef = useRef(false);
   const [loadedFromDraft, setLoadedFromDraft] = useState(false);
 
-  const { data, loading, error: loadError } = useAsyncData(async () => {
-    const [retailers, buyers, locations, products, vendors, catalogOptions, sockCards] = await Promise.all([
+  const {
+    data,
+    loading,
+    error: loadError,
+  } = useAsyncData(async () => {
+    const [
+      retailers,
+      buyers,
+      locations,
+      products,
+      vendors,
+      catalogOptions,
+      sockCards,
+    ] = await Promise.all([
       retailerService.list(),
       buyerService.list(),
       supportService.listLocations(),
@@ -340,8 +395,20 @@ export function PurchaseOrderBuilderPage() {
       : duplicateFromId
         ? await purchaseOrderService.getById(duplicateFromId)
         : null;
-    const poNumber = editId ? sourceDetail?.purchaseOrder.po_number ?? "" : await purchaseOrderService.generatePoNumber();
-    return { retailers, buyers, locations, barcodes: products, vendors, sourceDetail, poNumber, catalogOptions, sockCards };
+    const poNumber = editId
+      ? (sourceDetail?.purchaseOrder.po_number ?? "")
+      : await purchaseOrderService.generatePoNumber();
+    return {
+      retailers,
+      buyers,
+      locations,
+      barcodes: products,
+      vendors,
+      sourceDetail,
+      poNumber,
+      catalogOptions,
+      sockCards,
+    };
   }, [editId, duplicateFromId]);
 
   useEffect(() => {
@@ -352,9 +419,16 @@ export function PurchaseOrderBuilderPage() {
     const draft = !editId ? window.localStorage.getItem(autosaveKey) : null;
     if (draft) {
       try {
-        const parsed = JSON.parse(draft) as { purchaseOrder: BuilderState; lineItems: BuilderLineItem[] };
+        const parsed = JSON.parse(draft) as {
+          purchaseOrder: BuilderState;
+          lineItems: BuilderLineItem[];
+        };
         setPurchaseOrder(parsed.purchaseOrder);
-        setLineItems(parsed.lineItems.length ? normalizeBuilderLineItems(parsed.lineItems) : [buildEmptyLineItem(0)]);
+        setLineItems(
+          parsed.lineItems.length
+            ? normalizeBuilderLineItems(parsed.lineItems)
+            : [buildEmptyLineItem(0)],
+        );
         initializedRef.current = true;
         autosaveNoticeRef.current = true;
         setLoadedFromDraft(true);
@@ -439,25 +513,46 @@ export function PurchaseOrderBuilderPage() {
     const handle = window.setTimeout(() => {
       window.localStorage.setItem(
         autosaveKey,
-        JSON.stringify({ purchaseOrder, lineItems: normalizeBuilderLineItems(lineItems) }),
+        JSON.stringify({
+          purchaseOrder,
+          lineItems: normalizeBuilderLineItems(lineItems),
+        }),
       );
       if (!autosaveNoticeRef.current) {
         autosaveNoticeRef.current = true;
-        setNotice({ tone: "success", message: "Draft autosaved locally so you can jump back in without losing your work." });
+        setNotice({
+          tone: "success",
+          message:
+            "Draft autosaved locally so you can jump back in without losing your work.",
+        });
       }
     }, 600);
     return () => window.clearTimeout(handle);
   }, [autosaveKey, isEditMode, lineItems, purchaseOrder]);
 
   if (loading || !purchaseOrder || !data) return <LoadingState />;
-  if (loadError) return <InlineErrorLog error={getUiErrorLog(loadError, "We couldn't load the purchase order builder")} />;
+  if (loadError)
+    return (
+      <InlineErrorLog
+        error={getUiErrorLog(
+          loadError,
+          "We couldn't load the purchase order builder",
+        )}
+      />
+    );
   const builderData = data;
   const builderPo = purchaseOrder;
 
   const recentProductIds = readLocalList(RECENT_PRODUCTS_KEY);
   const recentRetailerIds = readLocalList(RECENT_RETAILERS_KEY);
-  const buyersForRetailer = builderData.buyers.filter((buyer) => !builderPo.retailer_id || buyer.retailer_id === builderPo.retailer_id);
-  const locationsForRetailer = builderData.locations.filter((location) => !builderPo.retailer_id || location.retailer_id === builderPo.retailer_id);
+  const buyersForRetailer = builderData.buyers.filter(
+    (buyer) =>
+      !builderPo.retailer_id || buyer.retailer_id === builderPo.retailer_id,
+  );
+  const locationsForRetailer = builderData.locations.filter(
+    (location) =>
+      !builderPo.retailer_id || location.retailer_id === builderPo.retailer_id,
+  );
   const recentProducts = recentProductIds
     .map((id) => builderData.barcodes.find((barcode) => barcode.id === id))
     .filter((barcode): barcode is ProductBarcode => Boolean(barcode));
@@ -475,23 +570,55 @@ export function PurchaseOrderBuilderPage() {
         barcode.size ?? "",
         barcode.handle ?? "",
         barcode.pack_unit ?? "",
-        linkedProducts.map((product) => [product.name, product.sku, product.upc ?? "", product.category ?? "", product.variant_title ?? ""].join(" ")).join(" "),
-      ].join(" ").toLowerCase();
+        linkedProducts
+          .map((product) =>
+            [
+              product.name,
+              product.sku,
+              product.upc ?? "",
+              product.category ?? "",
+              product.variant_title ?? "",
+            ].join(" "),
+          )
+          .join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
       return haystack.includes(productSearch.trim().toLowerCase());
     })
     .sort((left, right) => {
       const needle = productSearch.trim().toLowerCase();
       if (!needle) return left.product_name.localeCompare(right.product_name);
-      const leftStarts = `${left.sku} ${left.product_name}`.toLowerCase().startsWith(needle) ? -1 : 0;
-      const rightStarts = `${right.sku} ${right.product_name}`.toLowerCase().startsWith(needle) ? -1 : 0;
-      return leftStarts - rightStarts || left.product_name.localeCompare(right.product_name);
+      const leftStarts = `${left.sku} ${left.product_name}`
+        .toLowerCase()
+        .startsWith(needle)
+        ? -1
+        : 0;
+      const rightStarts = `${right.sku} ${right.product_name}`
+        .toLowerCase()
+        .startsWith(needle)
+        ? -1
+        : 0;
+      return (
+        leftStarts - rightStarts ||
+        left.product_name.localeCompare(right.product_name)
+      );
     })
     .slice(0, 30);
 
   const normalizedLines = normalizeBuilderLineItems(lineItems);
-  const totalCost = normalizedLines.reduce((sum, item) => sum + Number(item.extended_cost ?? 0), 0);
-  const totalRetail = normalizedLines.reduce((sum, item) => sum + Number(item.extended_retail ?? 0), 0);
-  const totalUnits = normalizedLines.reduce((sum, item) => sum + Number(item.quantity_ordered ?? 0), 0);
+  const totalCost = normalizedLines.reduce(
+    (sum, item) => sum + Number(item.extended_cost ?? 0),
+    0,
+  );
+  const totalRetail = normalizedLines.reduce(
+    (sum, item) => sum + Number(item.extended_retail ?? 0),
+    0,
+  );
+  const totalUnits = normalizedLines.reduce(
+    (sum, item) => sum + Number(item.quantity_ordered ?? 0),
+    0,
+  );
 
   const previewPurchaseOrder = {
     id: builderPo.id ?? "preview",
@@ -556,14 +683,29 @@ export function PurchaseOrderBuilderPage() {
     notes: builderPo.notes || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    vendors: builderData.vendors.find((vendor) => vendor.id === builderPo.vendor_id) ?? null,
-    retailers: builderData.retailers.find((retailer) => retailer.id === builderPo.retailer_id) ?? null,
-    buyers: builderData.buyers.find((buyer) => buyer.id === builderPo.buyer_id) ?? null,
-    locations: builderData.locations.find((location) => location.id === builderPo.location_id) ?? null,
+    vendors:
+      builderData.vendors.find((vendor) => vendor.id === builderPo.vendor_id) ??
+      null,
+    retailers:
+      builderData.retailers.find(
+        (retailer) => retailer.id === builderPo.retailer_id,
+      ) ?? null,
+    buyers:
+      builderData.buyers.find((buyer) => buyer.id === builderPo.buyer_id) ??
+      null,
+    locations:
+      builderData.locations.find(
+        (location) => location.id === builderPo.location_id,
+      ) ?? null,
   } satisfies PurchaseOrder;
 
-  function updatePurchaseOrder<K extends keyof BuilderState>(key: K, value: BuilderState[K]) {
-    setPurchaseOrder((current) => (current ? { ...current, [key]: value } : current));
+  function updatePurchaseOrder<K extends keyof BuilderState>(
+    key: K,
+    value: BuilderState[K],
+  ) {
+    setPurchaseOrder((current) =>
+      current ? { ...current, [key]: value } : current,
+    );
   }
 
   function handleStartFresh() {
@@ -572,15 +714,25 @@ export function PurchaseOrderBuilderPage() {
     setLineItems([buildEmptyLineItem(0)]);
     setMfrLines([]);
     setLoadedFromDraft(false);
-    setNotice({ tone: "success", message: "Discarded the saved draft — starting a new Purchase Order." });
+    setNotice({
+      tone: "success",
+      message: "Discarded the saved draft — starting a new Purchase Order.",
+    });
   }
 
   function applyRetailer(retailerId: string) {
-    const retailer = builderData.retailers.find((entry) => entry.id === retailerId) ?? null;
-    const buyer = builderData.buyers.find((entry) => entry.retailer_id === retailerId) ?? null;
-    const location = builderData.locations.find((entry) => entry.retailer_id === retailerId) ?? null;
+    const retailer =
+      builderData.retailers.find((entry) => entry.id === retailerId) ?? null;
+    const buyer =
+      builderData.buyers.find((entry) => entry.retailer_id === retailerId) ??
+      null;
+    const location =
+      builderData.locations.find((entry) => entry.retailer_id === retailerId) ??
+      null;
     const billToAddress = splitAddressParts(buyer?.billing_address);
-    const shipToAddress = splitAddressParts(location?.address ?? buyer?.shipping_address);
+    const shipToAddress = splitAddressParts(
+      location?.address ?? buyer?.shipping_address,
+    );
 
     setPurchaseOrder((current) => {
       if (!current) return current;
@@ -589,33 +741,58 @@ export function PurchaseOrderBuilderPage() {
         retailer_id: retailerId,
         buyer_id: buyer?.id ?? "",
         location_id: location?.id ?? "",
-        bill_to_company_name: buyer?.company_name ?? retailer?.name ?? current.bill_to_company_name,
-        bill_to_contact_name: buyer?.buyer_name ?? retailer?.primary_contact_name ?? current.bill_to_contact_name,
+        bill_to_company_name:
+          buyer?.company_name ?? retailer?.name ?? current.bill_to_company_name,
+        bill_to_contact_name:
+          buyer?.buyer_name ??
+          retailer?.primary_contact_name ??
+          current.bill_to_contact_name,
         bill_to_street: billToAddress.street || current.bill_to_street,
         bill_to_city: billToAddress.city || current.bill_to_city,
         bill_to_state: billToAddress.state || current.bill_to_state,
         bill_to_zip: billToAddress.zip || current.bill_to_zip,
-        bill_to_phone: buyer?.phone ?? retailer?.primary_contact_phone ?? current.bill_to_phone,
-        bill_to_email: buyer?.buyer_email ?? retailer?.primary_contact_email ?? current.bill_to_email,
-        ship_to_company_name: location?.name ?? retailer?.name ?? current.ship_to_company_name,
-        ship_to_attention: buyer?.buyer_name ?? retailer?.primary_contact_name ?? current.ship_to_attention,
+        bill_to_phone:
+          buyer?.phone ??
+          retailer?.primary_contact_phone ??
+          current.bill_to_phone,
+        bill_to_email:
+          buyer?.buyer_email ??
+          retailer?.primary_contact_email ??
+          current.bill_to_email,
+        ship_to_company_name:
+          location?.name ?? retailer?.name ?? current.ship_to_company_name,
+        ship_to_attention:
+          buyer?.buyer_name ??
+          retailer?.primary_contact_name ??
+          current.ship_to_attention,
         ship_to_street: shipToAddress.street || current.ship_to_street,
         ship_to_city: shipToAddress.city || current.ship_to_city,
         ship_to_state: shipToAddress.state || current.ship_to_state,
         ship_to_zip: shipToAddress.zip || current.ship_to_zip,
-        ship_to_phone: buyer?.phone ?? retailer?.primary_contact_phone ?? current.ship_to_phone,
-        payment_terms_snapshot: buyer?.payment_terms ?? retailer?.default_payment_terms ?? current.payment_terms_snapshot,
+        ship_to_phone:
+          buyer?.phone ??
+          retailer?.primary_contact_phone ??
+          current.ship_to_phone,
+        payment_terms_snapshot:
+          buyer?.payment_terms ??
+          retailer?.default_payment_terms ??
+          current.payment_terms_snapshot,
         buyer_name_snapshot: buyer?.buyer_name ?? current.buyer_name_snapshot,
-        approver_name_snapshot: retailer?.primary_contact_name ?? current.approver_name_snapshot,
+        approver_name_snapshot:
+          retailer?.primary_contact_name ?? current.approver_name_snapshot,
       };
     });
     if (retailerId) {
-      writeLocalList(RECENT_RETAILERS_KEY, [retailerId, ...recentRetailerIds.filter((id) => id !== retailerId)]);
+      writeLocalList(RECENT_RETAILERS_KEY, [
+        retailerId,
+        ...recentRetailerIds.filter((id) => id !== retailerId),
+      ]);
     }
   }
 
   function applyBuyer(buyerId: string) {
-    const buyer = builderData.buyers.find((entry) => entry.id === buyerId) ?? null;
+    const buyer =
+      builderData.buyers.find((entry) => entry.id === buyerId) ?? null;
     if (!buyer) {
       updatePurchaseOrder("buyer_id", "");
       return;
@@ -627,7 +804,8 @@ export function PurchaseOrderBuilderPage() {
         ...current,
         buyer_id: buyer.id,
         retailer_id: buyer.retailer_id,
-        bill_to_company_name: buyer.company_name || current.bill_to_company_name,
+        bill_to_company_name:
+          buyer.company_name || current.bill_to_company_name,
         bill_to_contact_name: buyer.buyer_name || current.bill_to_contact_name,
         bill_to_street: address.street || current.bill_to_street,
         bill_to_city: address.city || current.bill_to_city,
@@ -635,14 +813,16 @@ export function PurchaseOrderBuilderPage() {
         bill_to_zip: address.zip || current.bill_to_zip,
         bill_to_phone: buyer.phone ?? current.bill_to_phone,
         bill_to_email: buyer.buyer_email || current.bill_to_email,
-        payment_terms_snapshot: buyer.payment_terms ?? current.payment_terms_snapshot,
+        payment_terms_snapshot:
+          buyer.payment_terms ?? current.payment_terms_snapshot,
         buyer_name_snapshot: buyer.buyer_name || current.buyer_name_snapshot,
       };
     });
   }
 
   function applyLocation(locationId: string) {
-    const location = builderData.locations.find((entry) => entry.id === locationId) ?? null;
+    const location =
+      builderData.locations.find((entry) => entry.id === locationId) ?? null;
     const address = splitAddressParts(location?.address);
     setPurchaseOrder((current) => {
       if (!current) return current;
@@ -676,27 +856,35 @@ export function PurchaseOrderBuilderPage() {
 
   function addProductsByIds(productIds: string[]) {
     const selectedBarcodes = productIds
-      .map((productId) => builderData.barcodes.find((barcode) => barcode.id === productId))
+      .map((productId) =>
+        builderData.barcodes.find((barcode) => barcode.id === productId),
+      )
       .filter((barcode): barcode is ProductBarcode => Boolean(barcode));
     if (!selectedBarcodes.length) return;
 
     setLineItems((current) => {
       const base = normalizeBuilderLineItems(current);
-      const additions = selectedBarcodes.map((barcode, index) => buildLineItemFromBarcode(barcode, base.length + index));
+      const additions = selectedBarcodes.map((barcode, index) =>
+        buildLineItemFromBarcode(barcode, base.length + index),
+      );
       return normalizeBuilderLineItems([...base, ...additions]);
     });
 
-    writeLocalList(
-      RECENT_PRODUCTS_KEY,
-      [...selectedBarcodes.map((barcode) => barcode.id), ...recentProductIds.filter((id) => !productIds.includes(id))],
-    );
+    writeLocalList(RECENT_PRODUCTS_KEY, [
+      ...selectedBarcodes.map((barcode) => barcode.id),
+      ...recentProductIds.filter((id) => !productIds.includes(id)),
+    ]);
     setSelectedProductIds([]);
     setProductSearch("");
   }
 
   function duplicateLine(index: number) {
     setLineItems((current) => {
-      const clone = { ...current[index], id: undefined, tempId: `dup-${Date.now()}-${index}` };
+      const clone = {
+        ...current[index],
+        id: undefined,
+        tempId: `dup-${Date.now()}-${index}`,
+      };
       const next = [...current];
       next.splice(index + 1, 0, clone);
       return normalizeBuilderLineItems(next);
@@ -717,13 +905,22 @@ export function PurchaseOrderBuilderPage() {
     try {
       setSaving(true);
       setError(null);
-      if (!builderPo.po_number.trim()) throw new Error("PO number is required.");
-      if (!builderPo.bill_to_company_name.trim()) throw new Error("Bill To company name is required.");
-      if (!builderPo.ship_to_company_name.trim()) throw new Error("Ship To company name is required.");
-      const validLineItems = normalizeBuilderLineItems(lineItems).filter((item) => String(item.product_name ?? "").trim());
-      if (!validLineItems.length) throw new Error("Add at least one product line before saving.");
+      if (!builderPo.po_number.trim())
+        throw new Error("PO number is required.");
+      if (!builderPo.bill_to_company_name.trim())
+        throw new Error("Bill To company name is required.");
+      if (!builderPo.ship_to_company_name.trim())
+        throw new Error("Ship To company name is required.");
+      const validLineItems = normalizeBuilderLineItems(lineItems).filter(
+        (item) => String(item.product_name ?? "").trim(),
+      );
+      if (!validLineItems.length)
+        throw new Error("Add at least one product line before saving.");
       validLineItems.forEach((item, index) => {
-        if (Number(item.quantity_ordered ?? 0) <= 0) throw new Error(`Line ${index + 1} needs a quantity greater than zero.`);
+        if (Number(item.quantity_ordered ?? 0) <= 0)
+          throw new Error(
+            `Line ${index + 1} needs a quantity greater than zero.`,
+          );
       });
 
       const savedPo = await purchaseOrderService.savePurchaseOrder({
@@ -759,8 +956,14 @@ export function PurchaseOrderBuilderPage() {
           buyer_name_snapshot: builderPo.buyer_name_snapshot,
           approver_name_snapshot: builderPo.approver_name_snapshot,
           notes: builderPo.notes || null,
-          buyers: builderData.buyers.find((buyer) => buyer.id === builderPo.buyer_id) ?? null,
-          retailers: builderData.retailers.find((retailer) => retailer.id === builderPo.retailer_id) ?? null,
+          buyers:
+            builderData.buyers.find(
+              (buyer) => buyer.id === builderPo.buyer_id,
+            ) ?? null,
+          retailers:
+            builderData.retailers.find(
+              (retailer) => retailer.id === builderPo.retailer_id,
+            ) ?? null,
         },
         lineItems: validLineItems.map((item, index) => ({
           id: item.id,
@@ -793,7 +996,10 @@ export function PurchaseOrderBuilderPage() {
   }
 
   // ── Manufacturer PO helpers ──────────────────────────────────────────────
-  function updateMfrLine(index: number, patch: Partial<ManufacturerBuilderLine>) {
+  function updateMfrLine(
+    index: number,
+    patch: Partial<ManufacturerBuilderLine>,
+  ) {
     setMfrLines((current) =>
       current.map((line, i) => {
         if (i !== index) return line;
@@ -823,7 +1029,11 @@ export function PurchaseOrderBuilderPage() {
 
   function handleNewDesignSaved(design: OrderDesign) {
     setShowNewDesignModal(false);
-    const newLine = buildLineFromDesign(design, localSockCards, mfrLines.length);
+    const newLine = buildLineFromDesign(
+      design,
+      localSockCards,
+      mfrLines.length,
+    );
     setMfrLines((current) => [...current, newLine]);
   }
 
@@ -831,10 +1041,14 @@ export function PurchaseOrderBuilderPage() {
     try {
       setSaving(true);
       setError(null);
-      if (!builderPo.po_number.trim()) throw new Error("PO number is required.");
+      if (!builderPo.po_number.trim())
+        throw new Error("PO number is required.");
 
-      const validLines = mfrLines.filter((line) => String(line.product_name ?? "").trim());
-      if (!validLines.length) throw new Error("Add at least one design line before saving.");
+      const validLines = mfrLines.filter((line) =>
+        String(line.product_name ?? "").trim(),
+      );
+      if (!validLines.length)
+        throw new Error("Add at least one design line before saving.");
 
       const nextStatus: PurchaseOrder["status"] = isDraft ? "Draft" : "Ordered";
 
@@ -847,7 +1061,9 @@ export function PurchaseOrderBuilderPage() {
         }
       }
 
-      const poPayload: Parameters<typeof purchaseOrderService.savePurchaseOrder>[0] = {
+      const poPayload: Parameters<
+        typeof purchaseOrderService.savePurchaseOrder
+      >[0] = {
         purchaseOrder: {
           id: builderPo.id,
           po_number: builderPo.po_number,
@@ -873,7 +1089,8 @@ export function PurchaseOrderBuilderPage() {
           bill_to_zip: builderPo.bill_to_zip || null,
           bill_to_phone: builderPo.bill_to_phone || null,
           bill_to_email: builderPo.bill_to_email || null,
-          ship_to_company_name: builderPo.ship_to_company_name || "Foshan Lion King",
+          ship_to_company_name:
+            builderPo.ship_to_company_name || "Foshan Lion King",
           ship_to_attention: "Tina",
           ship_to_street: null,
           ship_to_city: null,
@@ -942,7 +1159,11 @@ export function PurchaseOrderBuilderPage() {
           .select("*")
           .eq("purchase_order_id", savedPo.id);
 
-        const tinaHtml = buildManufacturerOrderHtml(savedPo, (savedLines ?? []) as PoLineItem[], localSockCards);
+        const tinaHtml = buildManufacturerOrderHtml(
+          savedPo,
+          (savedLines ?? []) as PoLineItem[],
+          localSockCards,
+        );
 
         // Check if a generated doc already exists
         const { data: existingDoc } = await supabase
@@ -960,10 +1181,16 @@ export function PurchaseOrderBuilderPage() {
         });
 
         // Confirm sock card draw (decrement inventory + ledger)
-        await sockCardService.confirmDraw(savedPo.id, (savedLines ?? []) as PoLineItem[]);
+        await sockCardService.confirmDraw(
+          savedPo.id,
+          (savedLines ?? []) as PoLineItem[],
+        );
 
         // Download all attached mockup/artwork files as a ZIP
-        await downloadManufacturerFilesZip((savedLines ?? []) as PoLineItem[], savedPo.po_number);
+        await downloadManufacturerFilesZip(
+          (savedLines ?? []) as PoLineItem[],
+          savedPo.po_number,
+        );
       }
 
       window.localStorage.removeItem(autosaveKey);
@@ -976,7 +1203,9 @@ export function PurchaseOrderBuilderPage() {
   }
 
   function handleUpdateSockCard(id: string, onHand: number) {
-    setLocalSockCards((prev) => prev.map((c) => (c.id === id ? { ...c, on_hand: onHand } : c)));
+    setLocalSockCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, on_hand: onHand } : c)),
+    );
   }
 
   // ── Manufacturer PO render branch ─────────────────────────────────────────
@@ -987,20 +1216,41 @@ export function PurchaseOrderBuilderPage() {
       bill_to_contact_name: "Tina",
     };
 
-    const mfrTotalPairs = mfrLines.reduce((s, l) => s + Number(l.quantity_ordered ?? 0), 0);
+    const mfrTotalPairs = mfrLines.reduce(
+      (s, l) => s + Number(l.quantity_ordered ?? 0),
+      0,
+    );
     const mfrTotalCards = mfrLines.reduce((s, l) => {
       const p = Number(l.pack_pairs ?? 1);
       return s + (p > 0 ? Math.ceil(Number(l.quantity_ordered ?? 0) / p) : 0);
     }, 0);
-    const mfrTotalGoods = mfrLines.reduce((s, l) => s + Number(l.quantity_ordered ?? 0) * Number(l.unit_cost ?? 1.89), 0);
+    const mfrTotalGoods = mfrLines.reduce(
+      (s, l) =>
+        s + Number(l.quantity_ordered ?? 0) * Number(l.unit_cost ?? 1.89),
+      0,
+    );
 
     return (
       <div className="section-stack po-builder-shell">
-        {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+        {notice ? (
+          <NotificationBanner
+            tone={notice.tone}
+            message={notice.message}
+            onClose={() => setNotice(null)}
+          />
+        ) : null}
         {loadedFromDraft && !isEditMode ? (
           <div className="notice-banner notice-success">
-            <span>You're viewing a saved draft. If you meant to start a different order (e.g. a Retailer PO instead), discard it.</span>
-            <button className="btn btn-secondary btn-small" onClick={handleStartFresh}>Discard Draft &amp; Start New PO</button>
+            <span>
+              You're viewing a saved draft. If you meant to start a different
+              order (e.g. a Retailer PO instead), discard it.
+            </span>
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={handleStartFresh}
+            >
+              Discard Draft &amp; Start New PO
+            </button>
           </div>
         ) : null}
         {showNewDesignModal ? (
@@ -1012,43 +1262,78 @@ export function PurchaseOrderBuilderPage() {
           />
         ) : null}
         <PageHeader
-          title={isEditMode ? `Edit ${builderPo.po_number}` : "Manufacturer Order Builder"}
+          title={
+            isEditMode
+              ? `Edit ${builderPo.po_number}`
+              : "Manufacturer Order Builder"
+          }
           description="Production order for Foshan Lion King — auto-fills specs, tracks sock card draw, generates the Tina document."
-          actions={(
+          actions={
             <div className="btn-row">
-              <Link className="btn btn-ghost" to={builderPo.id ? `/purchase-orders/${builderPo.id}` : "/purchase-orders"}>
+              <Link
+                className="btn btn-ghost"
+                to={
+                  builderPo.id
+                    ? `/purchase-orders/${builderPo.id}`
+                    : "/purchase-orders"
+                }
+              >
                 Cancel
               </Link>
-              <button className="btn btn-secondary" disabled={saving} onClick={() => void saveManufacturerOrder(true)}>
+              <button
+                className="btn btn-secondary"
+                disabled={saving}
+                onClick={() => void saveManufacturerOrder(true)}
+              >
                 {saving ? "Saving..." : "Save Draft"}
               </button>
-              <button className="btn btn-primary" disabled={saving} onClick={() => void saveManufacturerOrder(false)}>
+              <button
+                className="btn btn-primary"
+                disabled={saving}
+                onClick={() => void saveManufacturerOrder(false)}
+              >
                 {saving ? "Saving..." : "Confirm & Send to Tina"}
               </button>
             </div>
-          )}
+          }
         />
         {error ? <InlineErrorLog error={error} /> : null}
 
         {/* PO header fields */}
         <div className="panel">
           <div className="panel-header">
-            <div><p className="lookbook-kicker">Order Header</p><h3>Production Order Details</h3></div>
+            <div>
+              <p className="lookbook-kicker">Order Header</p>
+              <h3>Production Order Details</h3>
+            </div>
             {isEditMode ? (
               <div className="btn-row">
                 <StatusBadge label={manufacturerPaidAt ? "Paid" : "Unpaid"} />
                 <button
                   className="btn btn-secondary btn-small"
-                  disabled={Boolean(manufacturerPaidAt) || markingPaid || !builderPo.id}
+                  disabled={
+                    Boolean(manufacturerPaidAt) || markingPaid || !builderPo.id
+                  }
                   onClick={async () => {
                     if (!builderPo.id) return;
                     setMarkingPaid(true);
                     try {
-                      const updated = await purchaseOrderService.markAsPaid(builderPo.id);
+                      const updated = await purchaseOrderService.markAsPaid(
+                        builderPo.id,
+                      );
                       setManufacturerPaidAt(updated.invoice_paid_at);
-                      setNotice({ tone: "success", message: "Manufacturing order marked as paid." });
+                      setNotice({
+                        tone: "success",
+                        message: "Manufacturing order marked as paid.",
+                      });
                     } catch (err) {
-                      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to mark as paid." });
+                      setNotice({
+                        tone: "error",
+                        message:
+                          err instanceof Error
+                            ? err.message
+                            : "Unable to mark as paid.",
+                      });
                     } finally {
                       setMarkingPaid(false);
                     }
@@ -1060,17 +1345,76 @@ export function PurchaseOrderBuilderPage() {
             ) : null}
           </div>
           <div className="form-grid">
-            <div className="field"><label>Manufacturing Order #</label><input value={builderPo.po_number} onChange={(e) => updatePurchaseOrder("po_number", e.target.value)} /></div>
-            <div className="field"><label>Order Date</label><input type="date" value={builderPo.order_date} onChange={(e) => updatePurchaseOrder("order_date", e.target.value)} /></div>
-            <div className="field"><label>Req. Ship Date</label><input type="date" value={builderPo.start_ship_date} onChange={(e) => updatePurchaseOrder("start_ship_date", e.target.value)} /></div>
-            <div className="field"><label>Expected Ship Date</label><input type="date" value={builderPo.ship_date} onChange={(e) => updatePurchaseOrder("ship_date", e.target.value)} /></div>
-            <div className="field"><label>Expected Arrival Date</label><input type="date" value={builderPo.expected_delivery_date} onChange={(e) => updatePurchaseOrder("expected_delivery_date", e.target.value)} /></div>
-            <div className="field"><label>Received Date</label><input value={builderPo.actual_delivery_date || "Not yet received"} disabled /></div>
+            <div className="field">
+              <label>Manufacturing Order #</label>
+              <input
+                value={builderPo.po_number}
+                onChange={(e) =>
+                  updatePurchaseOrder("po_number", e.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Order Date</label>
+              <input
+                type="date"
+                value={builderPo.order_date}
+                onChange={(e) =>
+                  updatePurchaseOrder("order_date", e.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Req. Ship Date</label>
+              <input
+                type="date"
+                value={builderPo.start_ship_date}
+                onChange={(e) =>
+                  updatePurchaseOrder("start_ship_date", e.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Expected Ship Date</label>
+              <input
+                type="date"
+                value={builderPo.ship_date}
+                onChange={(e) =>
+                  updatePurchaseOrder("ship_date", e.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Expected Arrival Date</label>
+              <input
+                type="date"
+                value={builderPo.expected_delivery_date}
+                onChange={(e) =>
+                  updatePurchaseOrder("expected_delivery_date", e.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Received Date</label>
+              <input
+                value={builderPo.actual_delivery_date || "Not yet received"}
+                disabled
+              />
+            </div>
             <div className="field">
               <label>Vendor / Manufacturer</label>
-              <select value={builderPo.vendor_id} onChange={(e) => updatePurchaseOrder("vendor_id", e.target.value)}>
+              <select
+                value={builderPo.vendor_id}
+                onChange={(e) =>
+                  updatePurchaseOrder("vendor_id", e.target.value)
+                }
+              >
                 <option value="">No vendor selected</option>
-                {builderData.vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                {builderData.vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
               </select>
             </div>
             <details className="field field-wide">
@@ -1079,18 +1423,38 @@ export function PurchaseOrderBuilderPage() {
                 <label>Order Type</label>
                 <select
                   value={builderPo.po_type}
-                  onChange={(e) => updatePurchaseOrder("po_type", e.target.value as PurchaseOrder["po_type"])}
+                  onChange={(e) =>
+                    updatePurchaseOrder(
+                      "po_type",
+                      e.target.value as PurchaseOrder["po_type"],
+                    )
+                  }
                 >
-                  <option value="Manufacturer PO">Manufacturing Order</option>
+                  <option value="Manufacturer PO">Manufacturer Order</option>
                   <option value="Retailer PO">Retailer PO</option>
-                  <option value="Customer Reorder">Customer Reorder</option>
-                  <option value="Work Order">Work Order</option>
+                  <option
+                    value="Customer Reorder"
+                    style={{ textDecoration: "line-through" }}
+                  >
+                    Customer Reorder
+                  </option>
+                  <option
+                    value="Work Order"
+                    style={{ textDecoration: "line-through" }}
+                  >
+                    Work Order
+                  </option>
                 </select>
               </div>
             </details>
             <div className="field field-wide">
               <label>Internal Notes</label>
-              <textarea rows={2} value={builderPo.notes} onChange={(e) => updatePurchaseOrder("notes", e.target.value)} placeholder="Internal production notes" />
+              <textarea
+                rows={2}
+                value={builderPo.notes}
+                onChange={(e) => updatePurchaseOrder("notes", e.target.value)}
+                placeholder="Internal production notes"
+              />
             </div>
           </div>
         </div>
@@ -1113,20 +1477,44 @@ export function PurchaseOrderBuilderPage() {
             {/* Totals */}
             <div className="panel">
               <div className="panel-header">
-                <div><p className="lookbook-kicker">Summary</p><h3>Totals</h3></div>
+                <div>
+                  <p className="lookbook-kicker">Summary</p>
+                  <h3>Totals</h3>
+                </div>
               </div>
-              <div className="mfr-tline"><span className="mfr-tline-label">SKUs</span><span>{mfrLines.length}</span></div>
-              <div className="mfr-tline"><span className="mfr-tline-label">Total pairs</span><span>{mfrTotalPairs}</span></div>
-              <div className="mfr-tline"><span className="mfr-tline-label">Sock cards used</span><span>{mfrTotalCards}</span></div>
-              <div className="mfr-tline"><span className="mfr-tline-label">Goods (EXW)</span><span>${mfrTotalGoods.toFixed(2)}</span></div>
+              <div className="mfr-tline">
+                <span className="mfr-tline-label">SKUs</span>
+                <span>{mfrLines.length}</span>
+              </div>
+              <div className="mfr-tline">
+                <span className="mfr-tline-label">Total pairs</span>
+                <span>{mfrTotalPairs}</span>
+              </div>
+              <div className="mfr-tline">
+                <span className="mfr-tline-label">Sock cards used</span>
+                <span>{mfrTotalCards}</span>
+              </div>
+              <div className="mfr-tline">
+                <span className="mfr-tline-label">Goods (EXW)</span>
+                <span>${mfrTotalGoods.toFixed(2)}</span>
+              </div>
               <div className="mfr-tline mfr-tline-grand">
                 <span className="mfr-tline-label">Grand total (EXW)</span>
-                <strong className="mfr-tline-val">${mfrTotalGoods.toFixed(2)}</strong>
+                <strong className="mfr-tline-val">
+                  ${mfrTotalGoods.toFixed(2)}
+                </strong>
               </div>
             </div>
 
-            <SockCardDrawPanel lines={mfrLines} sockCards={localSockCards} onUpdateCard={handleUpdateSockCard} />
-            <ManufacturerOrderCheckPanel lines={mfrLines} sockCards={localSockCards} />
+            <SockCardDrawPanel
+              lines={mfrLines}
+              sockCards={localSockCards}
+              onUpdateCard={handleUpdateSockCard}
+            />
+            <ManufacturerOrderCheckPanel
+              lines={mfrLines}
+              sockCards={localSockCards}
+            />
           </div>
         </div>
 
@@ -1142,278 +1530,832 @@ export function PurchaseOrderBuilderPage() {
   // ── Existing retailer / standard PO builder ────────────────────────────────
   return (
     <div className="section-stack po-builder-shell">
-      {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
+      {notice ? (
+        <NotificationBanner
+          tone={notice.tone}
+          message={notice.message}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
       {loadedFromDraft && !isEditMode ? (
         <div className="notice-banner notice-success">
-          <span>You're viewing a saved draft. If you meant to start a different order (e.g. a Manufacturing Order instead), discard it.</span>
-          <button className="btn btn-secondary btn-small" onClick={handleStartFresh}>Discard Draft &amp; Start New PO</button>
+          <span>
+            You're viewing a saved draft. If you meant to start a different
+            order (e.g. a Manufacturing Order instead), discard it.
+          </span>
+          <button
+            className="btn btn-secondary btn-small"
+            onClick={handleStartFresh}
+          >
+            Discard Draft &amp; Start New PO
+          </button>
         </div>
       ) : null}
       <PageHeader
-        title={isEditMode ? `Edit ${builderPo.po_number}` : "Purchase Order Builder"}
+        title={
+          isEditMode ? `Edit ${builderPo.po_number}` : "Purchase Order Builder"
+        }
         description="Fill the real SickFit PO document directly, pull products from the catalog, and keep creation fast enough for live ops."
-        actions={(
+        actions={
           <div className="btn-row">
-            <Link className="btn btn-ghost" to={builderPo.id ? `/purchase-orders/${builderPo.id}` : "/purchase-orders"}>
+            <Link
+              className="btn btn-ghost"
+              to={
+                builderPo.id
+                  ? `/purchase-orders/${builderPo.id}`
+                  : "/purchase-orders"
+              }
+            >
               Cancel
             </Link>
-            <div className="field field-half" style={{ margin: 0 }}>
+            <div
+              className="field field-half"
+              style={{ margin: 0, marginTop: 5 }}
+            >
               <select
                 value={builderPo.po_type}
-                onChange={(e) => updatePurchaseOrder("po_type", e.target.value as PurchaseOrder["po_type"])}
+                onChange={(e) =>
+                  updatePurchaseOrder(
+                    "po_type",
+                    e.target.value as PurchaseOrder["po_type"],
+                  )
+                }
                 style={{ fontSize: 13 }}
               >
-                <option value="Manufacturer PO">Manufacturer PO</option>
+                <option value="Manufacturer PO">Manufacturer Order</option>
                 <option value="Retailer PO">Retailer PO</option>
-                <option value="Customer Reorder">Customer Reorder</option>
-                <option value="Work Order">Work Order</option>
+                <option
+                  value="Customer Reorder"
+                  style={{ textDecoration: "line-through" }}
+                >
+                  Customer Reorder
+                </option>
+                <option
+                  value="Work Order"
+                  style={{ textDecoration: "line-through" }}
+                >
+                  Work Order
+                </option>
               </select>
             </div>
-            <button className="btn btn-secondary" disabled={saving} onClick={() => void savePurchaseOrder("Draft")}>
+            <button
+              className="btn btn-secondary"
+              disabled={saving}
+              onClick={() => void savePurchaseOrder("Draft")}
+            >
               {saving ? "Saving..." : "Save Draft"}
             </button>
-            <button className="btn btn-primary" disabled={saving} onClick={() => void savePurchaseOrder("Pending")}>
+            <button
+              className="btn btn-primary"
+              disabled={saving}
+              onClick={() => void savePurchaseOrder("Pending")}
+            >
               {saving ? "Saving..." : isEditMode ? "Save PO" : "Create PO"}
             </button>
           </div>
-        )}
+        }
       />
       {error ? <InlineErrorLog error={error} /> : null}
       <div className="panel po-builder-preview-panel">
-        <div className="panel-header"><div><p className="lookbook-kicker">Live Preview</p><h3>SickFit Purchase Order</h3></div></div>
-        <PurchaseOrderDocumentView purchaseOrder={previewPurchaseOrder} lineItems={normalizedLines as PoLineItem[]} />
+        <div className="panel-header">
+          <div>
+            <p className="lookbook-kicker">Live Preview</p>
+            <h3>SickFit Purchase Order</h3>
+          </div>
+        </div>
+        <PurchaseOrderDocumentView
+          purchaseOrder={previewPurchaseOrder}
+          lineItems={normalizedLines as PoLineItem[]}
+        />
       </div>
       <div className="section-stack">
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="lookbook-kicker">Retailer Template</p>
+              <h3>Start With An Account Profile</h3>
+            </div>
+            <div className="btn-row">
+              {recentRetailerIds.slice(0, 3).map((retailerId) => {
+                const retailer = builderData.retailers.find(
+                  (entry) => entry.id === retailerId,
+                );
+                if (!retailer) return null;
+                return (
+                  <button
+                    key={retailer.id}
+                    className="btn btn-ghost btn-small"
+                    onClick={() => applyRetailer(retailer.id)}
+                  >
+                    {retailer.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="form-grid">
+            <div className="field field-half">
+              <label>Retailer Template</label>
+              <select
+                value={builderPo.retailer_id}
+                onChange={(event) => applyRetailer(event.target.value)}
+              >
+                <option value="">Select retailer...</option>
+                {builderData.retailers.map((retailer) => (
+                  <option key={retailer.id} value={retailer.id}>
+                    {retailer.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field field-half">
+              <label>Buyer Template</label>
+              <select
+                value={builderPo.buyer_id}
+                onChange={(event) => applyBuyer(event.target.value)}
+              >
+                <option value="">Select buyer...</option>
+                {buyersForRetailer.map((buyer) => (
+                  <option key={buyer.id} value={buyer.id}>
+                    {buyer.buyer_name} | {buyer.company_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field field-half">
+              <label>Ship To Location</label>
+              <select
+                value={builderPo.location_id}
+                onChange={(event) => applyLocation(event.target.value)}
+              >
+                <option value="">Select location...</option>
+                {locationsForRetailer.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field field-half">
+              <label>Vendor / Manufacturer</label>
+              <select
+                value={builderPo.vendor_id}
+                onChange={(event) =>
+                  updatePurchaseOrder("vendor_id", event.target.value)
+                }
+              >
+                <option value="">No vendor selected</option>
+                {builderData.vendors.map((vendor) => (
+                  <option key={vendor.id} value={vendor.id}>
+                    {vendor.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="lookbook-kicker">Header</p>
+              <h3>PO Header</h3>
+            </div>
+          </div>
+          <div className="form-grid">
+            <div className="field">
+              <label>PO Number</label>
+              <input
+                value={builderPo.po_number}
+                onChange={(event) =>
+                  updatePurchaseOrder("po_number", event.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Order Date</label>
+              <input
+                type="date"
+                value={builderPo.order_date}
+                onChange={(event) =>
+                  updatePurchaseOrder("order_date", event.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Start Ship Date</label>
+              <input
+                type="date"
+                value={builderPo.start_ship_date}
+                onChange={(event) =>
+                  updatePurchaseOrder("start_ship_date", event.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Ship Complete Date</label>
+              <input
+                type="date"
+                value={builderPo.ship_complete_date}
+                onChange={(event) =>
+                  updatePurchaseOrder("ship_complete_date", event.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Currency</label>
+              <select
+                value={builderPo.currency_code}
+                onChange={(event) =>
+                  updatePurchaseOrder("currency_code", event.target.value)
+                }
+              >
+                <option value="USD">USD</option>
+                <option value="CAD">CAD</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="po-builder-two-up">
           <div className="panel">
             <div className="panel-header">
               <div>
-                <p className="lookbook-kicker">Retailer Template</p>
-                <h3>Start With An Account Profile</h3>
-              </div>
-              <div className="btn-row">
-                {recentRetailerIds.slice(0, 3).map((retailerId) => {
-                  const retailer = builderData.retailers.find((entry) => entry.id === retailerId);
-                  if (!retailer) return null;
-                  return <button key={retailer.id} className="btn btn-ghost btn-small" onClick={() => applyRetailer(retailer.id)}>{retailer.name}</button>;
-                })}
+                <p className="lookbook-kicker">Bill To</p>
+                <h3>Billing Information</h3>
               </div>
             </div>
             <div className="form-grid">
               <div className="field field-half">
-                <label>Retailer Template</label>
-                <select value={builderPo.retailer_id} onChange={(event) => applyRetailer(event.target.value)}>
-                  <option value="">Select retailer...</option>
-                  {builderData.retailers.map((retailer) => <option key={retailer.id} value={retailer.id}>{retailer.name}</option>)}
-                </select>
+                <label>Company Name</label>
+                <input
+                  value={builderPo.bill_to_company_name}
+                  onChange={(event) =>
+                    updatePurchaseOrder(
+                      "bill_to_company_name",
+                      event.target.value,
+                    )
+                  }
+                />
               </div>
               <div className="field field-half">
-                <label>Buyer Template</label>
-                <select value={builderPo.buyer_id} onChange={(event) => applyBuyer(event.target.value)}>
-                  <option value="">Select buyer...</option>
-                  {buyersForRetailer.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.buyer_name} | {buyer.company_name}</option>)}
-                </select>
+                <label>Contact Name</label>
+                <input
+                  value={builderPo.bill_to_contact_name}
+                  onChange={(event) =>
+                    updatePurchaseOrder(
+                      "bill_to_contact_name",
+                      event.target.value,
+                    )
+                  }
+                />
+              </div>
+              <div className="field field-wide">
+                <label>Street Address</label>
+                <input
+                  value={builderPo.bill_to_street}
+                  onChange={(event) =>
+                    updatePurchaseOrder("bill_to_street", event.target.value)
+                  }
+                />
               </div>
               <div className="field field-half">
-                <label>Ship To Location</label>
-                <select value={builderPo.location_id} onChange={(event) => applyLocation(event.target.value)}>
-                  <option value="">Select location...</option>
-                  {locationsForRetailer.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-                </select>
+                <label>City</label>
+                <input
+                  value={builderPo.bill_to_city}
+                  onChange={(event) =>
+                    updatePurchaseOrder("bill_to_city", event.target.value)
+                  }
+                />
+              </div>
+              <div className="field">
+                <label>State</label>
+                <input
+                  value={builderPo.bill_to_state}
+                  onChange={(event) =>
+                    updatePurchaseOrder("bill_to_state", event.target.value)
+                  }
+                />
+              </div>
+              <div className="field">
+                <label>ZIP Code</label>
+                <input
+                  value={builderPo.bill_to_zip}
+                  onChange={(event) =>
+                    updatePurchaseOrder("bill_to_zip", event.target.value)
+                  }
+                />
               </div>
               <div className="field field-half">
-                <label>Vendor / Manufacturer</label>
-                <select value={builderPo.vendor_id} onChange={(event) => updatePurchaseOrder("vendor_id", event.target.value)}>
-                  <option value="">No vendor selected</option>
-                  {builderData.vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
-                </select>
+                <label>Phone</label>
+                <input
+                  value={builderPo.bill_to_phone}
+                  onChange={(event) =>
+                    updatePurchaseOrder("bill_to_phone", event.target.value)
+                  }
+                />
+              </div>
+              <div className="field field-half">
+                <label>Email</label>
+                <input
+                  value={builderPo.bill_to_email}
+                  onChange={(event) =>
+                    updatePurchaseOrder("bill_to_email", event.target.value)
+                  }
+                />
               </div>
             </div>
           </div>
-
           <div className="panel">
             <div className="panel-header">
               <div>
-                <p className="lookbook-kicker">Header</p>
-                <h3>PO Header</h3>
+                <p className="lookbook-kicker">Ship To</p>
+                <h3>Shipping Information</h3>
               </div>
+              <button
+                className="btn btn-ghost btn-small"
+                onClick={copyBillToShipTo}
+              >
+                Copy From Bill To
+              </button>
             </div>
             <div className="form-grid">
-              <div className="field"><label>PO Number</label><input value={builderPo.po_number} onChange={(event) => updatePurchaseOrder("po_number", event.target.value)} /></div>
-              <div className="field"><label>Order Date</label><input type="date" value={builderPo.order_date} onChange={(event) => updatePurchaseOrder("order_date", event.target.value)} /></div>
-              <div className="field"><label>Start Ship Date</label><input type="date" value={builderPo.start_ship_date} onChange={(event) => updatePurchaseOrder("start_ship_date", event.target.value)} /></div>
-              <div className="field"><label>Ship Complete Date</label><input type="date" value={builderPo.ship_complete_date} onChange={(event) => updatePurchaseOrder("ship_complete_date", event.target.value)} /></div>
+              <div className="field field-half">
+                <label>Company Name</label>
+                <input
+                  value={builderPo.ship_to_company_name}
+                  onChange={(event) =>
+                    updatePurchaseOrder(
+                      "ship_to_company_name",
+                      event.target.value,
+                    )
+                  }
+                />
+              </div>
+              <div className="field field-half">
+                <label>Attention</label>
+                <input
+                  value={builderPo.ship_to_attention}
+                  onChange={(event) =>
+                    updatePurchaseOrder("ship_to_attention", event.target.value)
+                  }
+                />
+              </div>
+              <div className="field field-wide">
+                <label>Street Address</label>
+                <input
+                  value={builderPo.ship_to_street}
+                  onChange={(event) =>
+                    updatePurchaseOrder("ship_to_street", event.target.value)
+                  }
+                />
+              </div>
+              <div className="field field-half">
+                <label>City</label>
+                <input
+                  value={builderPo.ship_to_city}
+                  onChange={(event) =>
+                    updatePurchaseOrder("ship_to_city", event.target.value)
+                  }
+                />
+              </div>
               <div className="field">
-                <label>Currency</label>
-                <select value={builderPo.currency_code} onChange={(event) => updatePurchaseOrder("currency_code", event.target.value)}>
-                  <option value="USD">USD</option>
-                  <option value="CAD">CAD</option>
-                  <option value="EUR">EUR</option>
-                </select>
+                <label>State</label>
+                <input
+                  value={builderPo.ship_to_state}
+                  onChange={(event) =>
+                    updatePurchaseOrder("ship_to_state", event.target.value)
+                  }
+                />
               </div>
-            </div>
-          </div>
-
-          <div className="po-builder-two-up">
-            <div className="panel">
-              <div className="panel-header"><div><p className="lookbook-kicker">Bill To</p><h3>Billing Information</h3></div></div>
-              <div className="form-grid">
-                <div className="field field-half"><label>Company Name</label><input value={builderPo.bill_to_company_name} onChange={(event) => updatePurchaseOrder("bill_to_company_name", event.target.value)} /></div>
-                <div className="field field-half"><label>Contact Name</label><input value={builderPo.bill_to_contact_name} onChange={(event) => updatePurchaseOrder("bill_to_contact_name", event.target.value)} /></div>
-                <div className="field field-wide"><label>Street Address</label><input value={builderPo.bill_to_street} onChange={(event) => updatePurchaseOrder("bill_to_street", event.target.value)} /></div>
-                <div className="field field-half"><label>City</label><input value={builderPo.bill_to_city} onChange={(event) => updatePurchaseOrder("bill_to_city", event.target.value)} /></div>
-                <div className="field"><label>State</label><input value={builderPo.bill_to_state} onChange={(event) => updatePurchaseOrder("bill_to_state", event.target.value)} /></div>
-                <div className="field"><label>ZIP Code</label><input value={builderPo.bill_to_zip} onChange={(event) => updatePurchaseOrder("bill_to_zip", event.target.value)} /></div>
-                <div className="field field-half"><label>Phone</label><input value={builderPo.bill_to_phone} onChange={(event) => updatePurchaseOrder("bill_to_phone", event.target.value)} /></div>
-                <div className="field field-half"><label>Email</label><input value={builderPo.bill_to_email} onChange={(event) => updatePurchaseOrder("bill_to_email", event.target.value)} /></div>
-              </div>
-            </div>
-            <div className="panel">
-              <div className="panel-header">
-                <div><p className="lookbook-kicker">Ship To</p><h3>Shipping Information</h3></div>
-                <button className="btn btn-ghost btn-small" onClick={copyBillToShipTo}>Copy From Bill To</button>
-              </div>
-              <div className="form-grid">
-                <div className="field field-half"><label>Company Name</label><input value={builderPo.ship_to_company_name} onChange={(event) => updatePurchaseOrder("ship_to_company_name", event.target.value)} /></div>
-                <div className="field field-half"><label>Attention</label><input value={builderPo.ship_to_attention} onChange={(event) => updatePurchaseOrder("ship_to_attention", event.target.value)} /></div>
-                <div className="field field-wide"><label>Street Address</label><input value={builderPo.ship_to_street} onChange={(event) => updatePurchaseOrder("ship_to_street", event.target.value)} /></div>
-                <div className="field field-half"><label>City</label><input value={builderPo.ship_to_city} onChange={(event) => updatePurchaseOrder("ship_to_city", event.target.value)} /></div>
-                <div className="field"><label>State</label><input value={builderPo.ship_to_state} onChange={(event) => updatePurchaseOrder("ship_to_state", event.target.value)} /></div>
-                <div className="field"><label>ZIP Code</label><input value={builderPo.ship_to_zip} onChange={(event) => updatePurchaseOrder("ship_to_zip", event.target.value)} /></div>
-                <div className="field field-half"><label>Phone</label><input value={builderPo.ship_to_phone} onChange={(event) => updatePurchaseOrder("ship_to_phone", event.target.value)} /></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header"><div><p className="lookbook-kicker">Payment</p><h3>Terms And Approval</h3></div></div>
-            <div className="form-grid">
               <div className="field">
-                <label>Payment Terms</label>
-                <input list="po-payment-terms" value={builderPo.payment_terms_snapshot} onChange={(event) => updatePurchaseOrder("payment_terms_snapshot", event.target.value)} />
-                <datalist id="po-payment-terms">
-                  {DEFAULT_PAYMENT_TERMS.map((term) => <option key={term} value={term} />)}
-                </datalist>
+                <label>ZIP Code</label>
+                <input
+                  value={builderPo.ship_to_zip}
+                  onChange={(event) =>
+                    updatePurchaseOrder("ship_to_zip", event.target.value)
+                  }
+                />
               </div>
-              <div className="field"><label>Buyer</label><input value={builderPo.buyer_name_snapshot} onChange={(event) => updatePurchaseOrder("buyer_name_snapshot", event.target.value)} /></div>
-              <div className="field"><label>Approver</label><input value={builderPo.approver_name_snapshot} onChange={(event) => updatePurchaseOrder("approver_name_snapshot", event.target.value)} /></div>
+              <div className="field field-half">
+                <label>Phone</label>
+                <input
+                  value={builderPo.ship_to_phone}
+                  onChange={(event) =>
+                    updatePurchaseOrder("ship_to_phone", event.target.value)
+                  }
+                />
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="panel">
-            <div className="panel-header">
-              <div><p className="lookbook-kicker">Line Items</p><h3>Catalog-Driven Product Builder</h3></div>
-              <div className="btn-row">
-                <button className="btn btn-secondary btn-small" onClick={() => addProductsByIds(filteredProducts.slice(0, 1).map((product) => product.id))}>Quick Add Top Result</button>
-                <button className="btn btn-primary btn-small" onClick={() => addProductsByIds(selectedProductIds)}>Add Selected Products</button>
-              </div>
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="lookbook-kicker">Payment</p>
+              <h3>Terms And Approval</h3>
             </div>
-            <div className="po-line-grid-scroll">
+          </div>
+          <div className="form-grid">
+            <div className="field">
+              <label>Payment Terms</label>
+              <input
+                list="po-payment-terms"
+                value={builderPo.payment_terms_snapshot}
+                onChange={(event) =>
+                  updatePurchaseOrder(
+                    "payment_terms_snapshot",
+                    event.target.value,
+                  )
+                }
+              />
+              <datalist id="po-payment-terms">
+                {DEFAULT_PAYMENT_TERMS.map((term) => (
+                  <option key={term} value={term} />
+                ))}
+              </datalist>
+            </div>
+            <div className="field">
+              <label>Buyer</label>
+              <input
+                value={builderPo.buyer_name_snapshot}
+                onChange={(event) =>
+                  updatePurchaseOrder("buyer_name_snapshot", event.target.value)
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Approver</label>
+              <input
+                value={builderPo.approver_name_snapshot}
+                onChange={(event) =>
+                  updatePurchaseOrder(
+                    "approver_name_snapshot",
+                    event.target.value,
+                  )
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="lookbook-kicker">Line Items</p>
+              <h3>Catalog-Driven Product Builder</h3>
+            </div>
+            <div className="btn-row">
+              <button
+                className="btn btn-secondary btn-small"
+                onClick={() =>
+                  addProductsByIds(
+                    filteredProducts.slice(0, 1).map((product) => product.id),
+                  )
+                }
+              >
+                Quick Add Top Result
+              </button>
+              <button
+                className="btn btn-primary btn-small"
+                onClick={() => addProductsByIds(selectedProductIds)}
+              >
+                Add Selected Products
+              </button>
+            </div>
+          </div>
+          <div className="po-line-grid-scroll">
             <div className="po-line-grid">
               <div className="po-line-grid-head">
-                <span>Line</span><span>SKU</span><span>Description</span><span>UPC</span><span>Unit</span><span>Qty</span><span>Unit Cost</span><span>Ext Cost</span><span><strong>Suggested</strong> <strong>Retail</strong></span><span>Ext Retail</span><span>Actions</span>
+                <span>Line</span>
+                <span>SKU</span>
+                <span>Description</span>
+                <span>UPC</span>
+                <span>Unit</span>
+                <span>Qty</span>
+                <span>Unit Cost</span>
+                <span>Ext Cost</span>
+                <span>
+                  <strong>Suggested</strong> <strong>Retail</strong>
+                </span>
+                <span>Ext Retail</span>
+                <span>Actions</span>
               </div>
               {normalizedLines.map((item, index) => (
                 <div key={item.id ?? item.tempId} className="po-line-grid-row">
                   <span>{index + 1}</span>
-                  <input value={String(item.sku ?? "")} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, sku: event.target.value } : line))} />
-                  <input value={String(item.description ?? item.product_name ?? "")} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, description: event.target.value, product_name: event.target.value } : line))} />
-                  <input value={String(item.upc ?? "")} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, upc: event.target.value } : line))} />
-                  <input value={String(item.unit ?? "EA")} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, unit: event.target.value } : line))} />
-                  <input type="number" min="0" value={String(item.quantity_ordered ?? 0)} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, quantity_ordered: Number(event.target.value) } : line))} />
-                  <input type="number" min="0" step="0.01" value={String(item.unit_cost ?? 0)} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, unit_cost: Number(event.target.value) } : line))} />
-                  <strong>{formatCurrency(Number(item.extended_cost ?? 0))}</strong>
-                  <input type="number" min="0" step="0.01" value={String(item.unit_retail ?? 0)} onChange={(event) => setLineItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, unit_retail: Number(event.target.value) } : line))} />
-                  <strong>{formatCurrency(Number(item.extended_retail ?? 0))}</strong>
+                  <input
+                    value={String(item.sku ?? "")}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? { ...line, sku: event.target.value }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    value={String(item.description ?? item.product_name ?? "")}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? {
+                                ...line,
+                                description: event.target.value,
+                                product_name: event.target.value,
+                              }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    value={String(item.upc ?? "")}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? { ...line, upc: event.target.value }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    value={String(item.unit ?? "EA")}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? { ...line, unit: event.target.value }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    value={String(item.quantity_ordered ?? 0)}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? {
+                                ...line,
+                                quantity_ordered: Number(event.target.value),
+                              }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={String(item.unit_cost ?? 0)}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? { ...line, unit_cost: Number(event.target.value) }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <strong>
+                    {formatCurrency(Number(item.extended_cost ?? 0))}
+                  </strong>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={String(item.unit_retail ?? 0)}
+                    onChange={(event) =>
+                      setLineItems((current) =>
+                        current.map((line, lineIndex) =>
+                          lineIndex === index
+                            ? {
+                                ...line,
+                                unit_retail: Number(event.target.value),
+                              }
+                            : line,
+                        ),
+                      )
+                    }
+                  />
+                  <strong>
+                    {formatCurrency(Number(item.extended_retail ?? 0))}
+                  </strong>
                   <div className="btn-row">
-                    <button className="btn btn-ghost btn-small" onClick={() => duplicateLine(index)}>Duplicate</button>
-                    <button className="btn btn-ghost btn-small" disabled={index === 0} onClick={() => moveLine(index, -1)}>Up</button>
-                    <button className="btn btn-ghost btn-small" disabled={index === normalizedLines.length - 1} onClick={() => moveLine(index, 1)}>Down</button>
-                    <button className="btn btn-danger btn-small" onClick={() => setLineItems((current) => current.filter((_, lineIndex) => lineIndex !== index))}>Remove</button>
+                    <button
+                      className="btn btn-ghost btn-small"
+                      onClick={() => duplicateLine(index)}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-small"
+                      disabled={index === 0}
+                      onClick={() => moveLine(index, -1)}
+                    >
+                      Up
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-small"
+                      disabled={index === normalizedLines.length - 1}
+                      onClick={() => moveLine(index, 1)}
+                    >
+                      Down
+                    </button>
+                    <button
+                      className="btn btn-danger btn-small"
+                      onClick={() =>
+                        setLineItems((current) =>
+                          current.filter((_, lineIndex) => lineIndex !== index),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+          <div className="po-totals-bar">
+            <div className="detail-card">
+              <span>Total Units</span>
+              <strong>{totalUnits}</strong>
             </div>
-            <div className="po-totals-bar">
-              <div className="detail-card"><span>Total Units</span><strong>{totalUnits}</strong></div>
-              <div className="detail-card"><span>Total Gross Cost</span><strong>{formatCurrency(totalCost)}</strong></div>
-              <div className="detail-card"><span>Total Cost</span><strong>{formatCurrency(totalCost)}</strong></div>
-              <div className="detail-card"><span>Total Suggested Retail</span><strong>{formatCurrency(totalRetail)}</strong></div>
+            <div className="detail-card">
+              <span>Total Gross Cost</span>
+              <strong>{formatCurrency(totalCost)}</strong>
             </div>
-            <div className="po-builder-search">
-              <div className="field field-wide">
-                <label>Search By Product Name, SKU, UPC, Barcode, Collection, Category, Color, Size, Or Variant</label>
-                <input
-                  value={productSearch}
-                  placeholder="Start typing to search the barcode book and product catalog..."
-                  onChange={(event) => {
-                    setProductSearch(event.target.value);
-                    setActiveProductIndex(0);
-                  }}
-                  onKeyDown={(event) => {
-                    if (!filteredProducts.length) return;
-                    if (event.key === "ArrowDown") {
-                      event.preventDefault();
-                      setActiveProductIndex((current) => Math.min(current + 1, filteredProducts.length - 1));
-                    }
-                    if (event.key === "ArrowUp") {
-                      event.preventDefault();
-                      setActiveProductIndex((current) => Math.max(current - 1, 0));
-                    }
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      const product = filteredProducts[activeProductIndex];
-                      if (product) addProductsByIds([product.id]);
-                    }
-                  }}
-                />
+            <div className="detail-card">
+              <span>Total Cost</span>
+              <strong>{formatCurrency(totalCost)}</strong>
+            </div>
+            <div className="detail-card">
+              <span>Total Suggested Retail</span>
+              <strong>{formatCurrency(totalRetail)}</strong>
+            </div>
+          </div>
+          <div className="po-builder-search">
+            <div className="field field-wide">
+              <label>
+                Search By Product Name, SKU, UPC, Barcode, Collection, Category,
+                Color, Size, Or Variant
+              </label>
+              <input
+                value={productSearch}
+                placeholder="Start typing to search the barcode book and product catalog..."
+                onChange={(event) => {
+                  setProductSearch(event.target.value);
+                  setActiveProductIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (!filteredProducts.length) return;
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveProductIndex((current) =>
+                      Math.min(current + 1, filteredProducts.length - 1),
+                    );
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveProductIndex((current) =>
+                      Math.max(current - 1, 0),
+                    );
+                  }
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    const product = filteredProducts[activeProductIndex];
+                    if (product) addProductsByIds([product.id]);
+                  }
+                }}
+              />
+            </div>
+            {recentProducts.length ? (
+              <div className="btn-row">
+                {recentProducts.map((barcode) => (
+                  <button
+                    key={barcode.id}
+                    className="btn btn-ghost btn-small"
+                    onClick={() => addProductsByIds([barcode.id])}
+                  >
+                    Recent: {barcode.sku}
+                  </button>
+                ))}
               </div>
-              {recentProducts.length ? (
-                <div className="btn-row">
-                  {recentProducts.map((barcode) => <button key={barcode.id} className="btn btn-ghost btn-small" onClick={() => addProductsByIds([barcode.id])}>Recent: {barcode.sku}</button>)}
-                </div>
-              ) : null}
-              <div className="po-product-results">
-                {filteredProducts.map((barcode, index) => {
-                  const linkedProduct = getLinkedBarcodeProduct(barcode);
-                  const selected = selectedProductIds.includes(barcode.id);
-                  return (
-                    <div key={barcode.id} className={`po-product-card${index === activeProductIndex ? " po-product-card-active" : ""}`}>
-                      <label className="po-product-card-select">
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={(event) => {
-                            setSelectedProductIds((current) =>
-                              event.target.checked ? [...current, barcode.id] : current.filter((id) => id !== barcode.id),
-                            );
-                          }}
+            ) : null}
+            <div className="po-product-results">
+              {filteredProducts.map((barcode, index) => {
+                const linkedProduct = getLinkedBarcodeProduct(barcode);
+                const selected = selectedProductIds.includes(barcode.id);
+                return (
+                  <div
+                    key={barcode.id}
+                    className={`po-product-card${index === activeProductIndex ? " po-product-card-active" : ""}`}
+                  >
+                    <label className="po-product-card-select">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(event) => {
+                          setSelectedProductIds((current) =>
+                            event.target.checked
+                              ? [...current, barcode.id]
+                              : current.filter((id) => id !== barcode.id),
+                          );
+                        }}
+                      />
+                    </label>
+                    <div className="product-thumb-shell">
+                      {linkedProduct?.image_url ? (
+                        <img
+                          className="product-thumb"
+                          src={linkedProduct.image_url}
+                          alt={barcode.product_name}
                         />
-                      </label>
-                      <div className="product-thumb-shell">
-                        {linkedProduct?.image_url ? <img className="product-thumb" src={linkedProduct.image_url} alt={barcode.product_name} /> : <span className="product-thumb-fallback">PO</span>}
-                      </div>
-                      <div className="cell-stack"><strong>{barcode.product_name}</strong><span className="helper-text">{barcode.collection ?? linkedProduct?.category ?? "Barcode catalog row"}{barcode.size ? ` | ${barcode.size}` : ""}</span></div>
-                      <div className="cell-stack"><strong>{barcode.sku}</strong><span className="helper-text">{barcode.barcode_upc ?? linkedProduct?.upc ?? "No UPC"}</span></div>
-                      <div className="cell-stack"><strong>{formatCurrency(linkedProduct?.wholesale_price || linkedProduct?.unit_cost || 0)}</strong><span className="helper-text">Wholesale</span></div>
-                      <div className="cell-stack"><strong>{formatCurrency(linkedProduct?.unit_price || linkedProduct?.msrp || 0)}</strong><span className="helper-text">Retail</span></div>
-                      <button className="btn btn-secondary btn-small" onClick={() => addProductsByIds([barcode.id])}>Add</button>
+                      ) : (
+                        <span className="product-thumb-fallback">PO</span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="cell-stack">
+                      <strong>{barcode.product_name}</strong>
+                      <span className="helper-text">
+                        {barcode.collection ??
+                          linkedProduct?.category ??
+                          "Barcode catalog row"}
+                        {barcode.size ? ` | ${barcode.size}` : ""}
+                      </span>
+                    </div>
+                    <div className="cell-stack">
+                      <strong>{barcode.sku}</strong>
+                      <span className="helper-text">
+                        {barcode.barcode_upc ?? linkedProduct?.upc ?? "No UPC"}
+                      </span>
+                    </div>
+                    <div className="cell-stack">
+                      <strong>
+                        {formatCurrency(
+                          linkedProduct?.wholesale_price ||
+                            linkedProduct?.unit_cost ||
+                            0,
+                        )}
+                      </strong>
+                      <span className="helper-text">Wholesale</span>
+                    </div>
+                    <div className="cell-stack">
+                      <strong>
+                        {formatCurrency(
+                          linkedProduct?.unit_price || linkedProduct?.msrp || 0,
+                        )}
+                      </strong>
+                      <span className="helper-text">Retail</span>
+                    </div>
+                    <button
+                      className="btn btn-secondary btn-small"
+                      onClick={() => addProductsByIds([barcode.id])}
+                    >
+                      Add
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
+        </div>
 
-          <div className="panel">
-            <div className="panel-header"><div><p className="lookbook-kicker">Notes</p><h3>Notes / Special Instructions</h3></div></div>
-            <div className="form-grid">
-              <div className="field field-wide">
-                <label>Operational Notes</label>
-                <textarea rows={6} value={builderPo.notes} onChange={(event) => updatePurchaseOrder("notes", event.target.value)} placeholder="Shipping instructions, vendor comments, internal notes, or anything the PO should carry forward." />
-              </div>
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="lookbook-kicker">Notes</p>
+              <h3>Notes / Special Instructions</h3>
             </div>
           </div>
+          <div className="form-grid">
+            <div className="field field-wide">
+              <label>Operational Notes</label>
+              <textarea
+                rows={6}
+                value={builderPo.notes}
+                onChange={(event) =>
+                  updatePurchaseOrder("notes", event.target.value)
+                }
+                placeholder="Shipping instructions, vendor comments, internal notes, or anything the PO should carry forward."
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

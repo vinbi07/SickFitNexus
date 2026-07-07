@@ -1416,6 +1416,29 @@ textarea {
   font-size: 0.8rem;
 }
 
+.lookbook-spec-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lookbook-spec-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+}
+
+.lookbook-spec-row dt {
+  color: var(--brand-muted);
+}
+
+.lookbook-spec-row dd {
+  margin: 0;
+  text-align: right;
+}
+
 .lookbook-stepper {
   display: flex;
   align-items: center;
@@ -1435,18 +1458,8 @@ textarea {
 }
 
 .lookbook-stepper > .btn {
-  min-width: 72px;
-  font-size: 0;
-}
-
-.lookbook-stepper > .btn:first-child::before {
-  content: "Less";
-  font-size: 0.76rem;
-}
-
-.lookbook-stepper > .btn:last-child::before {
-  content: "More";
-  font-size: 0.76rem;
+  min-width: 90px;
+  white-space: nowrap;
 }
 
 .lookbook-summary {

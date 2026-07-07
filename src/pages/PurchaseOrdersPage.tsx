@@ -192,7 +192,7 @@ export function PurchaseOrdersPage() {
               )
             }
           >
-            Manufacturing Orders
+            Manufacturer Orders
           </button>
           <button
             className={`btn ${status === purchaseOrderStatuses[1] ? "btn-primary" : "btn-secondary"}`}

@@ -1,4 +1,5 @@
 import { getPurchaseOrderDocumentFontStyles, getPurchaseOrderDocumentStyles } from "@/utils/purchaseOrderDocument";
+import { previewHtmlDocument, printHtmlDocument } from "@/utils/printDocument";
 
 function normalizeDocumentBodyHtml(bodyHtml: string) {
   return bodyHtml.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "").trim();
@@ -52,65 +53,12 @@ function buildDocumentHtml(title: string, bodyHtml: string) {
   `;
 }
 
-function openDocumentWindow(title: string, bodyHtml: string) {
-  const popup = window.open("", "_blank");
-  if (!popup) throw new Error("Popup blocked. Allow popups to preview or print the PO.");
-  popup.document.open();
-  popup.document.write(buildDocumentHtml(title, bodyHtml));
-  popup.document.close();
-  return popup;
-}
-
-async function waitForDocumentAssets(document: Document, view: Window) {
-  await new Promise<void>((resolve) => {
-    view.setTimeout(() => resolve(), 50);
-  });
-  await document.fonts?.ready;
-
-  const imageLoads = Array.from(document.images)
-    .filter((image) => !image.complete)
-    .map((image) => new Promise<void>((resolve) => {
-      image.addEventListener("load", () => resolve(), { once: true });
-      image.addEventListener("error", () => resolve(), { once: true });
-    }));
-
-  if (imageLoads.length) {
-    await Promise.allSettled(imageLoads);
-  }
-}
-
 export function printPurchaseOrderDocument(title: string, bodyHtml: string) {
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
-
-  const frameWindow = iframe.contentWindow;
-  const frameDocument = iframe.contentDocument;
-  if (!frameWindow || !frameDocument) {
-    iframe.remove();
-    throw new Error("Unable to open the browser print view for this purchase order.");
-  }
-
-  frameDocument.open();
-  frameDocument.write(buildDocumentHtml(title, bodyHtml));
-  frameDocument.close();
-
-  void waitForDocumentAssets(frameDocument, frameWindow).finally(() => {
-    frameWindow.focus();
-    frameWindow.print();
-    window.setTimeout(() => iframe.remove(), 1000);
-  });
+  printHtmlDocument(buildDocumentHtml(title, bodyHtml));
 }
 
 export function previewPurchaseOrderDocument(title: string, bodyHtml: string) {
-  const popup = openDocumentWindow(title, bodyHtml);
-  popup.focus();
+  previewHtmlDocument(buildDocumentHtml(title, bodyHtml));
 }
 
 export function downloadPurchaseOrderHtml(title: string, bodyHtml: string) {

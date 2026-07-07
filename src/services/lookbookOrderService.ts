@@ -87,8 +87,7 @@ async function generatePoNumber() {
   return `${prefix}-${sequence}`;
 }
 
-async function buildOrderContext(token: string) {
-  const buyer = await buyerService.getByToken(token);
+async function buildOrderContextFromBuyer(buyer: Buyer) {
   const products = await listWholesaleProducts(buyer.lookbook_template_id);
   const supabase = assertSupabase();
   const { data: retailerData, error: retailerError } = await supabase
@@ -137,6 +136,11 @@ async function buildOrderContext(token: string) {
     counterEvents,
     expired: isExpired,
   };
+}
+
+async function buildOrderContext(token: string) {
+  const buyer = await buyerService.getByToken(token);
+  return buildOrderContextFromBuyer(buyer);
 }
 
 async function buildComplianceForSelection(buyer: Buyer, products: Product[]) {
@@ -213,6 +217,11 @@ export const lookbookOrderService = {
       },
     });
     return context;
+  },
+
+  async loadPreviewByBuyerId(buyerId: string) {
+    const buyer = await buyerService.getById(buyerId);
+    return buildOrderContextFromBuyer(buyer);
   },
 
   async save(token: string, lines: LookbookOrderInputLine[], action: "draft" | "quote" | "submit", notes?: string) {

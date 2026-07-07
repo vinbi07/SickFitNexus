@@ -44,6 +44,7 @@ export interface Buyer {
   id: string;
   retailer_id: string;
   lookbook_template_id: string | null;
+  lookbook_status: "draft" | "ready";
   company_name: string;
   buyer_name: string;
   buyer_email: string;

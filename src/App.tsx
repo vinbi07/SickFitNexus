@@ -30,6 +30,8 @@ import { CompliancePage } from "@/pages/CompliancePage";
 import { ProductionPage } from "@/pages/ProductionPage";
 import { LookbookOrderPage } from "@/pages/LookbookOrderPage";
 import { LookbookTemplatesPage } from "@/pages/LookbookTemplatesPage";
+import { LookbookTemplateEditorPage } from "@/pages/LookbookTemplateEditorPage";
+import { LookbookPreviewPage } from "@/pages/LookbookPreviewPage";
 import { PendingQueuePage } from "@/pages/PendingQueuePage";
 import { AppShell } from "@/components/AppShell";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
@@ -173,6 +175,10 @@ export default function App() {
               <Route path="/products/:id" element={<ProductDetailPage />} />
               <Route path="/barcodes" element={<BarcodesPage />} />
               <Route path="/lookbook-templates" element={<LookbookTemplatesPage />} />
+              <Route path="/lookbook-templates/new" element={<LookbookTemplateEditorPage />} />
+              <Route path="/lookbook-templates/:id/edit" element={<LookbookTemplateEditorPage />} />
+              <Route path="/lookbook-templates/preview/:buyerId" element={<LookbookPreviewPage />} />
+              <Route path="/lookbook-templates/preview" element={<LookbookPreviewPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/sops" element={<SopsPage />} />

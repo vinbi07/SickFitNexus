@@ -34,7 +34,7 @@ export function ProductDetailPage() {
         <div className="detail-card"><span>Case Pack</span><strong>{product.case_pack_quantity}</strong></div>
         <div className="detail-card"><span>Wholesale</span><strong>{formatCurrency(product.wholesale_price)}</strong></div>
         <div className="detail-card"><span>MSRP</span><strong>{formatCurrency(product.msrp)}</strong></div>
-        <div className="detail-card"><span>Dimensions</span><strong>{product.dimensions ?? "N/A"}</strong></div>
+        <div className="detail-card"><span>Dimensions</span><strong>{product.dimensions ?? "15 × 10 × 0.2 in"}</strong></div>
         <div className="detail-card"><span>Weight</span><strong>{product.weight ?? "N/A"}</strong></div>
         <div className="detail-card"><span>Compliance</span><strong>{product.compliance_docs_status ?? "N/A"}</strong></div>
         <div className="detail-card"><span>Storefront</span><strong>{product.shopify_storefront_url ? <a href={product.shopify_storefront_url} target="_blank" rel="noreferrer">Open</a> : "N/A"}</strong></div>

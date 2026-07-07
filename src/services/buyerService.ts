@@ -14,6 +14,7 @@ function normalizeBuyer(payload: Partial<Buyer>) {
     compliance_requirements: payload.compliance_requirements ? String(payload.compliance_requirements) : null,
     assigned_sales_rep: payload.assigned_sales_rep ? String(payload.assigned_sales_rep) : null,
     lookbook_template_id: payload.lookbook_template_id ? String(payload.lookbook_template_id) : null,
+    lookbook_status: (payload.lookbook_status === "ready" ? "ready" : "draft") as Buyer["lookbook_status"],
     link_validity_days:
       buyerPayload.link_validity_days === null || buyerPayload.link_validity_days === undefined
         ? 30
@@ -36,14 +37,42 @@ export const buyerService = {
 
   async upsert(payload: Partial<Buyer>) {
     const normalized = normalizeBuyer(payload);
-    if (!normalized.token_expires_at && !normalized.id) {
-      normalized.token_expires_at = toDateInput(addDays(new Date(), Number(normalized.link_validity_days ?? 30)));
+    const requestedValidityDays = Number(normalized.link_validity_days ?? 30);
+
+    if (!normalized.id) {
+      normalized.token_expires_at = toDateInput(addDays(new Date(), requestedValidityDays));
+    } else {
+      const supabase = assertSupabase();
+      const { data: existing, error: existingError } = await supabase
+        .from("buyers")
+        .select("link_validity_days, token_expires_at")
+        .eq("id", normalized.id)
+        .single();
+      if (existingError) throw existingError;
+
+      const existingValidityDays = Number(existing?.link_validity_days ?? 30);
+      normalized.token_expires_at =
+        existingValidityDays === requestedValidityDays
+          ? (existing?.token_expires_at ?? toDateInput(addDays(new Date(), requestedValidityDays)))
+          : toDateInput(addDays(new Date(), requestedValidityDays));
     }
+
     const [saved] = (await upsertTable<Buyer>("buyers", normalized)) as Buyer[];
     return saved;
   },
 
   remove: (id: string) => deleteFromTable("buyers", id),
+
+  async getById(id: string) {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("buyers")
+      .select("*, retailers(*), lookbook_templates(*)")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return data as Buyer;
+  },
 
   async getByToken(token: string) {
     const supabase = assertSupabase();
