@@ -1355,7 +1355,7 @@ export function PurchaseOrderBuilderPage() {
               />
             </div>
             <div className="field">
-              <label>Order Date</label>
+              <label>Order Date </label>
               <input
                 type="date"
                 value={builderPo.order_date}
