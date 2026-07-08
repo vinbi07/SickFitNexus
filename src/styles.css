@@ -2314,6 +2314,21 @@ textarea {
   border-radius: 50%;
 }
 
+.mfr-upload-cell--product {
+  width: 96px;
+  height: 96px;
+}
+
+.image-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.image-field input[type="text"] {
+  flex: 1;
+}
+
 /* ── End Manufacturer Order Builder ─────────────────────────── */
 
 .topbar-logo {

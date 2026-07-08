@@ -292,7 +292,7 @@ export function ProductsPage() {
             { key: "dimensions", label: "Dimensions" },
             { key: "compliance_docs_required_input", label: "Compliance Docs", type: "textarea" },
             { key: "compliance_docs_status", label: "Compliance Status", type: "select", options: [{ label: "Ready", value: "Ready" }, { label: "Missing", value: "Missing" }, { label: "Pending", value: "Pending" }] },
-            { key: "image_url", label: "Image URL" },
+            { key: "image_url", label: "Product Image", type: "image" },
             { key: "no_bundles", label: "No Bundles", type: "checkbox" },
             { key: "shopify_handle", label: "Shopify Handle" },
             { key: "shopify_storefront_url", label: "Shopify Storefront URL" },

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
+import { FileUploadCell } from "@/components/orders/FileUploadCell";
 import { getErrorMessage } from "@/utils/errors";
 
 export function EntityFormModal<T extends Record<string, unknown>>({
@@ -15,7 +16,7 @@ export function EntityFormModal<T extends Record<string, unknown>>({
   fields: Array<{
     key: keyof T;
     label: string;
-    type?: "text" | "textarea" | "number" | "date" | "color" | "select" | "checkbox";
+    type?: "text" | "textarea" | "number" | "date" | "color" | "select" | "checkbox" | "image";
     required?: boolean;
     min?: number;
     step?: number;
@@ -97,6 +98,27 @@ export function EntityFormModal<T extends Record<string, unknown>>({
                   }))
                 }
               />
+            ) : field.type === "image" ? (
+              <div className="image-field">
+                <FileUploadCell
+                  className="mfr-upload-cell--product"
+                  value={values[field.key] ? String(values[field.key]) : null}
+                  folder="products"
+                  accept="image/*"
+                  label={field.label}
+                  onChange={(url) =>
+                    setValues((current) => ({ ...current, [field.key]: url }))
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Or paste an image URL"
+                  value={String(values[field.key] ?? "")}
+                  onChange={(event) =>
+                    setValues((current) => ({ ...current, [field.key]: event.target.value }))
+                  }
+                />
+              </div>
             ) : (
               <input
                 type={field.type ?? "text"}
