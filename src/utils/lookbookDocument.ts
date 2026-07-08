@@ -106,7 +106,7 @@ export function getLookbookDocumentStyles() {
     .lb-lockup { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .lb-logo-circle { position: relative; width: 84px; height: 84px; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
     .lb-logo-circle.is-placeholder { background: #d9dbdd; }
-    .lb-logo-circle img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .lb-logo-circle img { position: absolute; inset: 0; padding: 6.5px; width: 100%; height: 100%; object-fit: contain; }
     .lb-logo-placeholder { position: relative; font-size: 11px; font-weight: 700; text-align: center; line-height: 1.2; color: #4b4f57; padding: 6px; text-transform: none; }
     .lb-lockup-x { font-size: 18px; font-weight: 700; color: #111111; }
 
@@ -181,7 +181,7 @@ export function buildLookbookDocumentHtml(params: {
                   <div class="lb-card-header">
                     <p class="lb-card-sku">${escapeHtml(displaySku)}</p>
                     <p class="lb-card-name">${escapeHtml(productName)}</p>
-                    <p class="lb-card-size"><strong>${escapeHtml(sizeType)}</strong> | US MEN 7-12 / WOMEN 8-13</p>
+                    <p class="lb-card-size"><strong>ONE SIZE</strong> | US MEN 7-12 / WOMEN 8-13</p>
                   </div>
                   <div class="lb-card-body">
                     <div class="lb-card-row">

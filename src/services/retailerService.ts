@@ -1,5 +1,5 @@
 import { assertSupabase } from "@/lib/supabase";
-import { deleteFromTable, upsertTable } from "@/services/baseService";
+import { deleteFromTable, updateTable, upsertTable } from "@/services/baseService";
 import type {
   Buyer,
   LookbookTemplate,
@@ -75,6 +75,9 @@ export const retailerService = {
   },
 
   remove: (id: string) => deleteFromTable("retailers", id),
+
+  updateLogo: (id: string, logoUrl: string | null) =>
+    updateTable<Retailer>("retailers", id, { logo_url: logoUrl }),
 
   async getSnapshots() {
     const supabase = assertSupabase();

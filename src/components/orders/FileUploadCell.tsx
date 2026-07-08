@@ -10,9 +10,10 @@ type Props = {
   accept: string;
   label: string;
   onChange: (url: string) => void;
+  className?: string;
 };
 
-export function FileUploadCell({ value, folder, accept, label, onChange }: Props) {
+export function FileUploadCell({ value, folder, accept, label, onChange, className }: Props) {
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [largeFileMb, setLargeFileMb] = useState<number | null>(null);
@@ -28,6 +29,7 @@ export function FileUploadCell({ value, folder, accept, label, onChange }: Props
       const url = await uploadManufacturerFile(file, folder);
       onChange(url);
     } catch (e) {
+      console.error("File upload failed", e);
       setErr(getErrorMessage(e));
     } finally {
       setUploading(false);
@@ -48,7 +50,7 @@ export function FileUploadCell({ value, folder, accept, label, onChange }: Props
 
   return (
     <div
-      className="mfr-upload-cell"
+      className={`mfr-upload-cell${className ? ` ${className}` : ""}`}
       onClick={() => !uploading && inputRef.current?.click()}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}

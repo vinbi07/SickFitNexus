@@ -8,11 +8,13 @@ import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { FileUploadCell } from "@/components/orders/FileUploadCell";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { buildLookbookUrl } from "@/lib/publicUrl";
 import { buyerService } from "@/services/buyerService";
 import { retailerService } from "@/services/retailerService";
 import type { Buyer } from "@/types/domain";
+import { getErrorMessage } from "@/utils/errors";
 import { formatCurrency, formatDate } from "@/utils/format";
 
 function formatLookbookEventLabel(eventType: string) {
@@ -40,6 +42,18 @@ export function RetailerDetailPage() {
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load retailer profile"} />;
+
+  async function updateLogo(logoUrl: string | null) {
+    console.debug("Saving retailer logo", { retailerId, logoUrl });
+    try {
+      await retailerService.updateLogo(retailerId, logoUrl);
+      await reload();
+      setNotice({ tone: "success", message: logoUrl ? "Retailer logo updated." : "Retailer logo removed." });
+    } catch (err) {
+      console.error("Retailer logo update failed", err);
+      setNotice({ tone: "error", message: getErrorMessage(err) });
+    }
+  }
 
   return (
     <div className="section-stack">
@@ -93,7 +107,24 @@ export function RetailerDetailPage() {
             <div className="detail-card"><span>Brand Accent</span><strong>{data.retailer.brand_accent_color ?? "Default red"}</strong></div>
             <div className="detail-card"><span>Next Reorder Window</span><strong>{data.retailer.next_reorder_start ? `${formatDate(data.retailer.next_reorder_start)} - ${formatDate(data.retailer.next_reorder_end)}` : "Not set"}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Lookbook Intro</span><strong>{data.retailer.lookbook_intro ?? "No custom intro added yet."}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Retailer Logo</span><strong>{data.retailer.logo_url ? <a href={data.retailer.logo_url} target="_blank" rel="noreferrer">Open logo</a> : "No logo on file."}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
+              <span>Retailer Logo</span>
+              <div className="btn-row" style={{ alignItems: "center" }}>
+                <FileUploadCell
+                  value={data.retailer.logo_url}
+                  folder="retailer-logos"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  label="Logo"
+                  className="mfr-upload-cell--logo"
+                  onChange={(url) => void updateLogo(url)}
+                />
+                {data.retailer.logo_url ? (
+                  <button className="btn btn-ghost btn-small" onClick={() => void updateLogo(null)}>
+                    Remove Logo
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Additional Contacts</span><strong>{data.retailer.secondary_contacts ?? "No extra contacts added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>SOPs</span><strong>{data.retailer.sop_notes ?? "No SOP notes added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Shipping Requirements</span><strong>{data.retailer.shipping_requirements ?? "No shipping requirements added."}</strong></div>
