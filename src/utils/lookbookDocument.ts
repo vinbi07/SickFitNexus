@@ -231,7 +231,7 @@ export function buildLookbookDocumentHtml(params: {
             </div>
           </div>
           <hr class="lb-divider" />
-          <h2 class="lb-section-title">${escapeHtml(params.accountName)} Product Lineup</h2>
+          <h2 class="lb-section-title">Product Lineup</h2>
           <div class="lb-grid">${cardsMarkup}</div>
           <div class="lb-footer">
             <span>Compression Socks &middot; Built for the Grind</span>
