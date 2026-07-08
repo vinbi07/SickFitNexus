@@ -35,6 +35,9 @@ type ShopifyVariantNode = {
       }>;
     };
   } | null;
+  image: {
+    url: string;
+  } | null;
   product: {
     id: string;
     title: string;
@@ -81,6 +84,9 @@ const SHOPIFY_VARIANTS_QUERY = `
           title
           price
           inventoryQuantity
+          image {
+            url
+          }
           inventoryItem {
             id
             sku
@@ -483,7 +489,7 @@ async function syncVariant(
     current_inventory: totalInventory,
     safety_stock: existingProduct?.safety_stock ?? 0,
     weight: formattedWeight ?? existingProduct?.weight ?? null,
-    image_url: variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
+    image_url: variant.image?.url ?? variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
     no_bundles: existingProduct?.no_bundles ?? false,
     shopify_product_id: variant.product.id,
     shopify_variant_id: variant.id,
