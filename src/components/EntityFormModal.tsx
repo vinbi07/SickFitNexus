@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { FileUploadCell } from "@/components/orders/FileUploadCell";
+import type { UploadFolder } from "@/services/storageService";
 import { getErrorMessage } from "@/utils/errors";
 
 export function EntityFormModal<T extends Record<string, unknown>>({
@@ -21,6 +22,7 @@ export function EntityFormModal<T extends Record<string, unknown>>({
     min?: number;
     step?: number;
     options?: Array<{ label: string; value: string }>;
+    folder?: UploadFolder;
   }>;
   onSave: (values: T) => Promise<void>;
   onClose: () => void;
@@ -103,7 +105,7 @@ export function EntityFormModal<T extends Record<string, unknown>>({
                 <FileUploadCell
                   className="mfr-upload-cell--product"
                   value={values[field.key] ? String(values[field.key]) : null}
-                  folder="products"
+                  folder={field.folder ?? "products"}
                   accept="image/*"
                   label={field.label}
                   onChange={(url) =>

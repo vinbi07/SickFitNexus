@@ -156,7 +156,7 @@ export function RetailersPage() {
             { key: "supplier_id", label: "Supplier ID" },
             { key: "activation_id", label: "Activation ID" },
             { key: "retailer_group", label: "Parent / Group" },
-            { key: "logo_url", label: "Retailer Logo URL" },
+            { key: "logo_url", label: "Retailer Logo", type: "image", folder: "retailer-logos" },
             { key: "brand_accent_color", label: "Brand Accent Color" },
             { key: "primary_contact_name", label: "Primary Contact" },
             { key: "primary_contact_email", label: "Email" },

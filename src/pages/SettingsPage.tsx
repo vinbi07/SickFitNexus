@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { PageHeader } from "@/components/PageHeader";
+import { FileUploadCell } from "@/components/orders/FileUploadCell";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { supportService } from "@/services/supportService";
 import type { AppSettings } from "@/types/domain";
@@ -66,13 +67,27 @@ export function SettingsPage() {
               />
             </div>
             <div className="field field-wide">
-              <label>Logo URL</label>
-              <input
-                value={formValues.logo_url ?? DEFAULT_LOGO_URL}
-                onChange={(event) =>
-                  setFormValues((current) => ({ ...(current ?? {}), logo_url: event.target.value }))
-                }
-              />
+              <label>Logo</label>
+              <div className="image-field">
+                <FileUploadCell
+                  className="mfr-upload-cell--product"
+                  value={formValues.logo_url ?? DEFAULT_LOGO_URL}
+                  folder="branding"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  label="Logo"
+                  onChange={(url) =>
+                    setFormValues((current) => ({ ...(current ?? {}), logo_url: url }))
+                  }
+                />
+                <input
+                  type="text"
+                  placeholder="Or paste an image URL"
+                  value={formValues.logo_url ?? DEFAULT_LOGO_URL}
+                  onChange={(event) =>
+                    setFormValues((current) => ({ ...(current ?? {}), logo_url: event.target.value }))
+                  }
+                />
+              </div>
             </div>
             <div className="field field-half">
               <label>Primary Color</label>

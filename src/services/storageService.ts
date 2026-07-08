@@ -2,7 +2,7 @@ import { assertSupabase } from "@/lib/supabase";
 
 const BUCKET = "manufacturer-files";
 
-export type UploadFolder = "mockups" | "artwork" | "retailer-logos" | "products";
+export type UploadFolder = "mockups" | "artwork" | "retailer-logos" | "products" | "wins" | "branding";
 
 export async function uploadManufacturerFile(
   file: File,

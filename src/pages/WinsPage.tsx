@@ -97,7 +97,7 @@ export function WinsPage() {
           fields={[
             { key: "title", label: "Title", required: true },
             { key: "created_by", label: "Created By" },
-            { key: "image_url", label: "Image URL" },
+            { key: "image_url", label: "Image", type: "image", folder: "wins" },
             { key: "description", label: "Description", type: "textarea" },
           ]}
           onSave={async (values) => {
