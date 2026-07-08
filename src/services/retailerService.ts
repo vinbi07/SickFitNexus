@@ -27,6 +27,21 @@ function toRetailerWritePayload(payload: Partial<Retailer>): Partial<Retailer> {
     supplier_id: payload.supplier_id,
     activation_id: payload.activation_id,
     shipping_requirements: payload.shipping_requirements,
+    billing_company_name: payload.billing_company_name,
+    billing_contact_name: payload.billing_contact_name,
+    billing_street: payload.billing_street,
+    billing_city: payload.billing_city,
+    billing_state: payload.billing_state,
+    billing_zip: payload.billing_zip,
+    billing_phone: payload.billing_phone,
+    billing_email: payload.billing_email,
+    shipping_company_name: payload.shipping_company_name,
+    shipping_attention: payload.shipping_attention,
+    shipping_street: payload.shipping_street,
+    shipping_city: payload.shipping_city,
+    shipping_state: payload.shipping_state,
+    shipping_zip: payload.shipping_zip,
+    shipping_phone: payload.shipping_phone,
     sop_notes: payload.sop_notes,
     parent_retailer_id: payload.parent_retailer_id,
     retailer_group: payload.retailer_group,
@@ -78,6 +93,28 @@ export const retailerService = {
 
   updateLogo: (id: string, logoUrl: string | null) =>
     updateTable<Retailer>("retailers", id, { logo_url: logoUrl }),
+
+  updateAddresses: (
+    id: string,
+    payload: Pick<
+      Retailer,
+      | "billing_company_name"
+      | "billing_contact_name"
+      | "billing_street"
+      | "billing_city"
+      | "billing_state"
+      | "billing_zip"
+      | "billing_phone"
+      | "billing_email"
+      | "shipping_company_name"
+      | "shipping_attention"
+      | "shipping_street"
+      | "shipping_city"
+      | "shipping_state"
+      | "shipping_zip"
+      | "shipping_phone"
+    >,
+  ) => updateTable<Retailer>("retailers", id, payload),
 
   async getSnapshots() {
     const supabase = assertSupabase();

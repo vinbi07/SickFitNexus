@@ -1,0 +1,16 @@
+alter table public.retailers
+  add column if not exists billing_company_name text,
+  add column if not exists billing_contact_name text,
+  add column if not exists billing_street text,
+  add column if not exists billing_city text,
+  add column if not exists billing_state text,
+  add column if not exists billing_zip text,
+  add column if not exists billing_phone text,
+  add column if not exists billing_email text,
+  add column if not exists shipping_company_name text,
+  add column if not exists shipping_attention text,
+  add column if not exists shipping_street text,
+  add column if not exists shipping_city text,
+  add column if not exists shipping_state text,
+  add column if not exists shipping_zip text,
+  add column if not exists shipping_phone text;

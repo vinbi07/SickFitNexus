@@ -729,10 +729,24 @@ export function PurchaseOrderBuilderPage() {
     const location =
       builderData.locations.find((entry) => entry.retailer_id === retailerId) ??
       null;
-    const billToAddress = splitAddressParts(buyer?.billing_address);
-    const shipToAddress = splitAddressParts(
-      location?.address ?? buyer?.shipping_address,
-    );
+    const billToAddress = buyer?.billing_address
+      ? splitAddressParts(buyer.billing_address)
+      : {
+          street: retailer?.billing_street ?? "",
+          city: retailer?.billing_city ?? "",
+          state: retailer?.billing_state ?? "",
+          zip: retailer?.billing_zip ?? "",
+        };
+    const shipToAddress = location?.address
+      ? splitAddressParts(location.address)
+      : buyer?.shipping_address
+        ? splitAddressParts(buyer.shipping_address)
+        : {
+            street: retailer?.shipping_street ?? "",
+            city: retailer?.shipping_city ?? "",
+            state: retailer?.shipping_state ?? "",
+            zip: retailer?.shipping_zip ?? "",
+          };
 
     setPurchaseOrder((current) => {
       if (!current) return current;
@@ -742,9 +756,13 @@ export function PurchaseOrderBuilderPage() {
         buyer_id: buyer?.id ?? "",
         location_id: location?.id ?? "",
         bill_to_company_name:
-          buyer?.company_name ?? retailer?.name ?? current.bill_to_company_name,
+          buyer?.company_name ??
+          retailer?.billing_company_name ??
+          retailer?.name ??
+          current.bill_to_company_name,
         bill_to_contact_name:
           buyer?.buyer_name ??
+          retailer?.billing_contact_name ??
           retailer?.primary_contact_name ??
           current.bill_to_contact_name,
         bill_to_street: billToAddress.street || current.bill_to_street,
@@ -753,16 +771,22 @@ export function PurchaseOrderBuilderPage() {
         bill_to_zip: billToAddress.zip || current.bill_to_zip,
         bill_to_phone:
           buyer?.phone ??
+          retailer?.billing_phone ??
           retailer?.primary_contact_phone ??
           current.bill_to_phone,
         bill_to_email:
           buyer?.buyer_email ??
+          retailer?.billing_email ??
           retailer?.primary_contact_email ??
           current.bill_to_email,
         ship_to_company_name:
-          location?.name ?? retailer?.name ?? current.ship_to_company_name,
+          location?.name ??
+          retailer?.shipping_company_name ??
+          retailer?.name ??
+          current.ship_to_company_name,
         ship_to_attention:
           buyer?.buyer_name ??
+          retailer?.shipping_attention ??
           retailer?.primary_contact_name ??
           current.ship_to_attention,
         ship_to_street: shipToAddress.street || current.ship_to_street,
@@ -771,6 +795,7 @@ export function PurchaseOrderBuilderPage() {
         ship_to_zip: shipToAddress.zip || current.ship_to_zip,
         ship_to_phone:
           buyer?.phone ??
+          retailer?.shipping_phone ??
           retailer?.primary_contact_phone ??
           current.ship_to_phone,
         payment_terms_snapshot:

@@ -17,6 +17,32 @@ import type { Buyer } from "@/types/domain";
 import { getErrorMessage } from "@/utils/errors";
 import { formatCurrency, formatDate } from "@/utils/format";
 
+const ADDRESS_FIELD_KEYS = [
+  "billing_company_name",
+  "billing_contact_name",
+  "billing_street",
+  "billing_city",
+  "billing_state",
+  "billing_zip",
+  "billing_phone",
+  "billing_email",
+  "shipping_company_name",
+  "shipping_attention",
+  "shipping_street",
+  "shipping_city",
+  "shipping_state",
+  "shipping_zip",
+  "shipping_phone",
+] as const;
+
+type AddressFieldKey = (typeof ADDRESS_FIELD_KEYS)[number];
+type AddressDraft = Record<AddressFieldKey, string>;
+
+function formatAddressBlock(fields: Array<string | null | undefined>) {
+  const lines = fields.map((value) => (value ?? "").trim()).filter(Boolean);
+  return lines.length ? lines.join("\n") : null;
+}
+
 function formatLookbookEventLabel(eventType: string) {
   switch (eventType) {
     case "opened":
@@ -38,6 +64,8 @@ export function RetailerDetailPage() {
   const [editingBuyer, setEditingBuyer] = useState<Partial<Buyer> | null>(null);
   const [deletingBuyer, setDeletingBuyer] = useState<Buyer | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [addressDraft, setAddressDraft] = useState<AddressDraft | null>(null);
+  const [savingAddresses, setSavingAddresses] = useState(false);
   const { data, loading, error, reload } = useAsyncData(() => retailerService.getProfile(retailerId), [retailerId]);
 
   if (loading) return <LoadingState />;
@@ -52,6 +80,95 @@ export function RetailerDetailPage() {
     } catch (err) {
       console.error("Retailer logo update failed", err);
       setNotice({ tone: "error", message: getErrorMessage(err) });
+    }
+  }
+
+  function startEditingAddresses() {
+    setAddressDraft({
+      billing_company_name: data.retailer.billing_company_name ?? "",
+      billing_contact_name: data.retailer.billing_contact_name ?? "",
+      billing_street: data.retailer.billing_street ?? "",
+      billing_city: data.retailer.billing_city ?? "",
+      billing_state: data.retailer.billing_state ?? "",
+      billing_zip: data.retailer.billing_zip ?? "",
+      billing_phone: data.retailer.billing_phone ?? "",
+      billing_email: data.retailer.billing_email ?? "",
+      shipping_company_name: data.retailer.shipping_company_name ?? "",
+      shipping_attention: data.retailer.shipping_attention ?? "",
+      shipping_street: data.retailer.shipping_street ?? "",
+      shipping_city: data.retailer.shipping_city ?? "",
+      shipping_state: data.retailer.shipping_state ?? "",
+      shipping_zip: data.retailer.shipping_zip ?? "",
+      shipping_phone: data.retailer.shipping_phone ?? "",
+    });
+  }
+
+  function updateAddressField(key: AddressFieldKey, value: string) {
+    setAddressDraft((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function copyBillingToShipping() {
+    setAddressDraft((current) =>
+      current
+        ? {
+            ...current,
+            shipping_company_name: current.billing_company_name,
+            shipping_attention: current.billing_contact_name,
+            shipping_street: current.billing_street,
+            shipping_city: current.billing_city,
+            shipping_state: current.billing_state,
+            shipping_zip: current.billing_zip,
+            shipping_phone: current.billing_phone,
+          }
+        : current,
+    );
+  }
+
+  function copyShippingToBilling() {
+    setAddressDraft((current) =>
+      current
+        ? {
+            ...current,
+            billing_company_name: current.shipping_company_name,
+            billing_contact_name: current.shipping_attention,
+            billing_street: current.shipping_street,
+            billing_city: current.shipping_city,
+            billing_state: current.shipping_state,
+            billing_zip: current.shipping_zip,
+            billing_phone: current.shipping_phone,
+          }
+        : current,
+    );
+  }
+
+  async function saveAddresses() {
+    if (!addressDraft) return;
+    try {
+      setSavingAddresses(true);
+      await retailerService.updateAddresses(retailerId, {
+        billing_company_name: addressDraft.billing_company_name.trim() || null,
+        billing_contact_name: addressDraft.billing_contact_name.trim() || null,
+        billing_street: addressDraft.billing_street.trim() || null,
+        billing_city: addressDraft.billing_city.trim() || null,
+        billing_state: addressDraft.billing_state.trim() || null,
+        billing_zip: addressDraft.billing_zip.trim() || null,
+        billing_phone: addressDraft.billing_phone.trim() || null,
+        billing_email: addressDraft.billing_email.trim() || null,
+        shipping_company_name: addressDraft.shipping_company_name.trim() || null,
+        shipping_attention: addressDraft.shipping_attention.trim() || null,
+        shipping_street: addressDraft.shipping_street.trim() || null,
+        shipping_city: addressDraft.shipping_city.trim() || null,
+        shipping_state: addressDraft.shipping_state.trim() || null,
+        shipping_zip: addressDraft.shipping_zip.trim() || null,
+        shipping_phone: addressDraft.shipping_phone.trim() || null,
+      });
+      await reload();
+      setAddressDraft(null);
+      setNotice({ tone: "success", message: "Retailer addresses updated." });
+    } catch (err) {
+      setNotice({ tone: "error", message: getErrorMessage(err) });
+    } finally {
+      setSavingAddresses(false);
     }
   }
 
@@ -128,6 +245,83 @@ export function RetailerDetailPage() {
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Additional Contacts</span><strong>{data.retailer.secondary_contacts ?? "No extra contacts added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>SOPs</span><strong>{data.retailer.sop_notes ?? "No SOP notes added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Shipping Requirements</span><strong>{data.retailer.shipping_requirements ?? "No shipping requirements added."}</strong></div>
+            <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
+              <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <span>Billing &amp; Shipping Addresses</span>
+                {!addressDraft ? (
+                  <button className="btn btn-ghost btn-small" onClick={startEditingAddresses}>
+                    Edit Addresses
+                  </button>
+                ) : null}
+              </div>
+              {addressDraft ? (
+                <div className="split-grid">
+                  <div className="section-stack">
+                    <strong>Billing</strong>
+                    <input placeholder="Company Name" value={addressDraft.billing_company_name} onChange={(event) => updateAddressField("billing_company_name", event.target.value)} />
+                    <input placeholder="Contact Name" value={addressDraft.billing_contact_name} onChange={(event) => updateAddressField("billing_contact_name", event.target.value)} />
+                    <input placeholder="Street" value={addressDraft.billing_street} onChange={(event) => updateAddressField("billing_street", event.target.value)} />
+                    <input placeholder="City" value={addressDraft.billing_city} onChange={(event) => updateAddressField("billing_city", event.target.value)} />
+                    <input placeholder="State" value={addressDraft.billing_state} onChange={(event) => updateAddressField("billing_state", event.target.value)} />
+                    <input placeholder="Zip" value={addressDraft.billing_zip} onChange={(event) => updateAddressField("billing_zip", event.target.value)} />
+                    <input placeholder="Phone" value={addressDraft.billing_phone} onChange={(event) => updateAddressField("billing_phone", event.target.value)} />
+                    <input placeholder="Email" value={addressDraft.billing_email} onChange={(event) => updateAddressField("billing_email", event.target.value)} />
+                    <button className="btn btn-ghost btn-small" onClick={copyBillingToShipping}>
+                      Copy Billing &rarr; Shipping
+                    </button>
+                  </div>
+                  <div className="section-stack">
+                    <strong>Shipping</strong>
+                    <input placeholder="Company Name" value={addressDraft.shipping_company_name} onChange={(event) => updateAddressField("shipping_company_name", event.target.value)} />
+                    <input placeholder="Attention" value={addressDraft.shipping_attention} onChange={(event) => updateAddressField("shipping_attention", event.target.value)} />
+                    <input placeholder="Street" value={addressDraft.shipping_street} onChange={(event) => updateAddressField("shipping_street", event.target.value)} />
+                    <input placeholder="City" value={addressDraft.shipping_city} onChange={(event) => updateAddressField("shipping_city", event.target.value)} />
+                    <input placeholder="State" value={addressDraft.shipping_state} onChange={(event) => updateAddressField("shipping_state", event.target.value)} />
+                    <input placeholder="Zip" value={addressDraft.shipping_zip} onChange={(event) => updateAddressField("shipping_zip", event.target.value)} />
+                    <input placeholder="Phone" value={addressDraft.shipping_phone} onChange={(event) => updateAddressField("shipping_phone", event.target.value)} />
+                    <button className="btn btn-ghost btn-small" onClick={copyShippingToBilling}>
+                      Copy Shipping &rarr; Billing
+                    </button>
+                  </div>
+                  <div className="btn-row" style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn btn-primary btn-small" disabled={savingAddresses} onClick={() => void saveAddresses()}>
+                      {savingAddresses ? "Saving..." : "Save Addresses"}
+                    </button>
+                    <button className="btn btn-ghost btn-small" disabled={savingAddresses} onClick={() => setAddressDraft(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="split-grid">
+                  <div>
+                    <span className="helper-text">Billing</span>
+                    <strong style={{ whiteSpace: "pre-line", display: "block" }}>
+                      {formatAddressBlock([
+                        data.retailer.billing_company_name,
+                        data.retailer.billing_contact_name,
+                        data.retailer.billing_street,
+                        [data.retailer.billing_city, data.retailer.billing_state, data.retailer.billing_zip].filter(Boolean).join(", "),
+                        data.retailer.billing_phone,
+                        data.retailer.billing_email,
+                      ]) ?? "No billing address added."}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="helper-text">Shipping</span>
+                    <strong style={{ whiteSpace: "pre-line", display: "block" }}>
+                      {formatAddressBlock([
+                        data.retailer.shipping_company_name,
+                        data.retailer.shipping_attention,
+                        data.retailer.shipping_street,
+                        [data.retailer.shipping_city, data.retailer.shipping_state, data.retailer.shipping_zip].filter(Boolean).join(", "),
+                        data.retailer.shipping_phone,
+                      ]) ?? "No shipping address added."}
+                    </strong>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.retailer.notes ?? "No notes added."}</strong></div>
           </div>
         </div>
