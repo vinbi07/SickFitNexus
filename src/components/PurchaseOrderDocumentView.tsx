@@ -3,6 +3,7 @@ import {
   buildInvoiceDocumentModel,
   buildPurchaseOrderDocumentModel,
   formatPoCurrency,
+  formatPoRetail,
   getPurchaseOrderDocumentStyles,
   type PurchaseOrderDocumentModel,
 } from "@/utils/purchaseOrderDocument";
@@ -63,8 +64,12 @@ function DocumentModelRenderer({ documentModel }: { documentModel: PurchaseOrder
               <col className="col-qty" />
               <col className="col-money" />
               <col className="col-money" />
-              <col className="col-money" />
-              <col className="col-money-wide" />
+              {documentModel.hasRetail && (
+                <>
+                  <col className="col-money" />
+                  <col className="col-money-wide" />
+                </>
+              )}
             </colgroup>
             <thead>
               <tr>
@@ -76,8 +81,12 @@ function DocumentModelRenderer({ documentModel }: { documentModel: PurchaseOrder
                 <th className="r">Qty</th>
                 <th className="r">Unit Cost</th>
                 <th className="r">Ext. Cost</th>
-                <th className="r"><strong>Suggested</strong> <strong>Retail</strong></th>
-                <th className="r">Ext. Retail</th>
+                {documentModel.hasRetail && (
+                  <>
+                    <th className="r"><strong>Suggested</strong> <strong>Retail</strong></th>
+                    <th className="r">Ext. Retail</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -91,8 +100,12 @@ function DocumentModelRenderer({ documentModel }: { documentModel: PurchaseOrder
                   <td className="r">{line.quantity}</td>
                   <td className="r">{formatPoCurrency(line.unitCost)}</td>
                   <td className="r">{formatPoCurrency(line.extendedCost)}</td>
-                  <td className="r">{formatPoCurrency(line.unitRetail)}</td>
-                  <td className="r">{formatPoCurrency(line.extendedRetail)}</td>
+                  {documentModel.hasRetail && (
+                    <>
+                      <td className="r">{formatPoRetail(line.unitRetail)}</td>
+                      <td className="r">{formatPoRetail(line.extendedRetail)}</td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -102,7 +115,9 @@ function DocumentModelRenderer({ documentModel }: { documentModel: PurchaseOrder
           <div><div className="lab">Total Units</div><div className="val">{documentModel.totalUnits}</div></div>
           <div><div className="lab">Total Gross Cost</div><div className="val">{formatPoCurrency(documentModel.totalGrossCost)}</div></div>
           <div><div className="lab">Total Cost</div><div className="val">{formatPoCurrency(documentModel.totalCost)}</div></div>
-          <div><div className="lab">Total Suggested Retail</div><div className="val accent">{formatPoCurrency(documentModel.totalRetail)}</div></div>
+          {documentModel.hasRetail && (
+            <div><div className="lab">Total Suggested Retail</div><div className="val accent">{formatPoCurrency(documentModel.totalRetail)}</div></div>
+          )}
         </div>
         <div className="po-notes">
           <div className="lab">Notes / Special Instructions</div>

@@ -31,6 +31,7 @@ export type PurchaseOrderDocumentModel = {
   buyerName: string;
   approverName: string;
   lines: PurchaseOrderDocumentLine[];
+  hasRetail: boolean;
   totalUnits: number;
   totalGrossCost: number;
   totalCost: number;
@@ -55,6 +56,10 @@ export function formatPoCurrency(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number.isFinite(value) ? value : 0);
+}
+
+export function formatPoRetail(value: number) {
+  return value > 0 ? formatPoCurrency(value) : "N/A";
 }
 
 function compactLines(...values: Array<string | null | undefined>) {
@@ -98,6 +103,7 @@ export function buildPurchaseOrderDocumentModel(
     unitRetail: Number(item.unit_retail ?? 0),
     extendedRetail: Number(item.extended_retail ?? 0),
   }));
+  const hasRetail = lineModels.some((item) => item.unitRetail > 0 || item.extendedRetail > 0);
 
   return {
     logoSrc: "/assets/SickFit Logo.png",
@@ -135,6 +141,7 @@ export function buildPurchaseOrderDocumentModel(
     buyerName,
     approverName,
     lines: lineModels,
+    hasRetail,
     totalUnits: Number(purchaseOrder.total_units ?? lineModels.reduce((sum, item) => sum + item.quantity, 0)),
     totalGrossCost: lineModels.reduce((sum, item) => sum + item.extendedCost, 0),
     totalCost: Number(purchaseOrder.subtotal ?? purchaseOrder.total_cost ?? lineModels.reduce((sum, item) => sum + item.extendedCost, 0)),
@@ -352,8 +359,10 @@ export function buildPurchaseOrderDocumentHtml(
       <td class="r">${line.quantity}</td>
       <td class="r">${escapeHtml(formatPoCurrency(line.unitCost))}</td>
       <td class="r">${escapeHtml(formatPoCurrency(line.extendedCost))}</td>
-      <td class="r">${escapeHtml(formatPoCurrency(line.unitRetail))}</td>
-      <td class="r">${escapeHtml(formatPoCurrency(line.extendedRetail))}</td>
+      ${model.hasRetail ? `
+      <td class="r">${escapeHtml(formatPoRetail(line.unitRetail))}</td>
+      <td class="r">${escapeHtml(formatPoRetail(line.extendedRetail))}</td>
+      ` : ""}
     </tr>
   `).join("");
 
@@ -411,8 +420,10 @@ export function buildPurchaseOrderDocumentHtml(
               <col class="col-qty" />
               <col class="col-money" />
               <col class="col-money" />
+              ${model.hasRetail ? `
               <col class="col-money" />
               <col class="col-money-wide" />
+              ` : ""}
             </colgroup>
             <thead>
               <tr>
@@ -424,8 +435,10 @@ export function buildPurchaseOrderDocumentHtml(
                 <th class="r">Qty</th>
                 <th class="r">Unit Cost</th>
                 <th class="r">Ext. Cost</th>
+                ${model.hasRetail ? `
                 <th class="r"><strong>Suggested</strong> <strong>Retail</strong></th>
                 <th class="r">Ext. Retail</th>
+                ` : ""}
               </tr>
             </thead>
             <tbody>
@@ -437,7 +450,7 @@ export function buildPurchaseOrderDocumentHtml(
           <div><div class="lab">Total Units</div><div class="val">${model.totalUnits}</div></div>
           <div><div class="lab">Total Gross Cost</div><div class="val">${escapeHtml(formatPoCurrency(model.totalGrossCost))}</div></div>
           <div><div class="lab">Total Cost</div><div class="val">${escapeHtml(formatPoCurrency(model.totalCost))}</div></div>
-          <div><div class="lab">Total Suggested Retail</div><div class="val accent">${escapeHtml(formatPoCurrency(model.totalRetail))}</div></div>
+          ${model.hasRetail ? `<div><div class="lab">Total Suggested Retail</div><div class="val accent">${escapeHtml(formatPoCurrency(model.totalRetail))}</div></div>` : ""}
         </div>
         <div class="po-notes">
           <div class="lab">Notes / Special Instructions</div>

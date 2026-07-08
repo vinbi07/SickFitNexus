@@ -2,6 +2,7 @@ import type { PoLineItem, PurchaseOrder } from "@/types/domain";
 import {
   buildManufacturerPoDocumentModel,
   formatPoCurrency,
+  formatPoRetail,
   getPurchaseOrderDocumentStyles,
   type ManufacturerPoDocumentLine,
 } from "@/utils/purchaseOrderDocument";
@@ -34,6 +35,7 @@ const MFR_DOC_COLUMNS: Array<{ key: keyof ManufacturerPoDocumentLine; label: str
 
 function cellValue(line: ManufacturerPoDocumentLine, col: typeof MFR_DOC_COLUMNS[number]): string {
   const raw = line[col.key];
+  if (col.key === "unitRetail" || col.key === "extendedRetail") return formatPoRetail(Number(raw || 0));
   if (col.money) return formatPoCurrency(Number(raw || 0));
   return String(raw ?? "");
 }
@@ -46,6 +48,12 @@ export function ManufacturerPoDocumentView({
   lineItems: PoLineItem[];
 }) {
   const model = buildManufacturerPoDocumentModel(purchaseOrder, lineItems);
+  const hasRetail = model.lines.some(
+    (line) => Number(line.unitRetail || 0) > 0 || Number(line.extendedRetail || 0) > 0,
+  );
+  const columns = hasRetail
+    ? MFR_DOC_COLUMNS
+    : MFR_DOC_COLUMNS.filter((col) => col.key !== "unitRetail" && col.key !== "extendedRetail");
 
   return (
     <div className="po-wrap">
@@ -78,7 +86,7 @@ export function ManufacturerPoDocumentView({
           <table className="po-table mfr-doc-table">
             <thead>
               <tr>
-                {MFR_DOC_COLUMNS.map((col) => (
+                {columns.map((col) => (
                   <th key={col.key} className={col.numeric ? "r" : undefined}>{col.label}</th>
                 ))}
               </tr>
@@ -86,7 +94,7 @@ export function ManufacturerPoDocumentView({
             <tbody>
               {model.lines.map((line) => (
                 <tr key={line.index}>
-                  {MFR_DOC_COLUMNS.map((col) => (
+                  {columns.map((col) => (
                     <td key={col.key} className={col.numeric ? "r" : undefined}>{cellValue(line, col)}</td>
                   ))}
                 </tr>
