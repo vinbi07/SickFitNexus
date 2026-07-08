@@ -84,6 +84,7 @@ export function RetailerDetailPage() {
   }
 
   function startEditingAddresses() {
+    if (!data) return;
     setAddressDraft({
       billing_company_name: data.retailer.billing_company_name ?? "",
       billing_contact_name: data.retailer.billing_contact_name ?? "",
