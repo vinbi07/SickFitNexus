@@ -4,6 +4,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "Delete",
+  cancelLabel = "Cancel",
   tone = "danger",
   busy = false,
   onConfirm,
@@ -12,6 +13,7 @@ export function ConfirmDialog({
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   tone?: "danger" | "neutral";
   busy?: boolean;
   onConfirm: () => Promise<void> | void;
@@ -24,7 +26,7 @@ export function ConfirmDialog({
       actions={
         <>
           <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {cancelLabel}
           </button>
           <button
             className={`btn ${tone === "danger" ? "btn-danger" : "btn-primary"}`}

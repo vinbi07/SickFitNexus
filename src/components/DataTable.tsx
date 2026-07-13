@@ -5,11 +5,13 @@ export function DataTable<T>({
   rows,
   emptyMessage = "No records available.",
   className,
+  onRowClick,
 }: {
   columns: Array<{ key: string; title: string; width?: string; render: (row: T) => ReactNode }>;
   rows: T[];
   emptyMessage?: string;
   className?: string;
+  onRowClick?: (row: T) => void;
 }) {
   if (!rows.length) {
     return <div className="empty-state">{emptyMessage}</div>;
@@ -27,7 +29,11 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={index}>
+            <tr
+              key={index}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={onRowClick ? "row-clickable" : undefined}
+            >
               {columns.map((column) => (
                 <td key={column.key} data-label={column.title}>{column.render(row)}</td>
               ))}

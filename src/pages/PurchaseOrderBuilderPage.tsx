@@ -10,7 +10,10 @@ import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
+import { PurchaseOrderDrawer } from "@/components/PurchaseOrderDrawer";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAuth } from "@/context/AuthContext";
+import { usePurchaseOrderDrawer } from "@/hooks/usePurchaseOrderDrawer";
 import { ManufacturerOrderGrid } from "@/components/orders/ManufacturerOrderGrid";
 import { ManufacturerOrderCheckPanel } from "@/components/orders/ManufacturerOrderCheckPanel";
 import { SockCardDrawPanel } from "@/components/orders/SockCardDrawPanel";
@@ -87,6 +90,46 @@ type BuilderState = {
 
 const DEFAULT_PAYMENT_TERMS = ["Net 15", "Net 30", "Net 45", "Net 60"];
 const AUTOSAVE_PREFIX = "sickfit-po-builder";
+
+function applyGeneralInfoUpdate(
+  current: BuilderState,
+  updated: PurchaseOrder,
+): BuilderState {
+  return {
+    ...current,
+    po_number: updated.po_number,
+    po_type: updated.po_type,
+    vendor_id: updated.vendor_id ?? "",
+    retailer_id: updated.retailer_id ?? "",
+    buyer_id: updated.buyer_id ?? "",
+    location_id: updated.location_id ?? "",
+    order_date: updated.order_date ?? "",
+    start_ship_date: updated.start_ship_date ?? "",
+    ship_complete_date: updated.ship_complete_date ?? "",
+    ship_date: updated.ship_date ?? "",
+    expected_delivery_date: updated.expected_delivery_date ?? "",
+    currency_code: updated.currency_code ?? "USD",
+    bill_to_company_name: updated.bill_to_company_name ?? "",
+    bill_to_contact_name: updated.bill_to_contact_name ?? "",
+    bill_to_street: updated.bill_to_street ?? "",
+    bill_to_city: updated.bill_to_city ?? "",
+    bill_to_state: updated.bill_to_state ?? "",
+    bill_to_zip: updated.bill_to_zip ?? "",
+    bill_to_phone: updated.bill_to_phone ?? "",
+    bill_to_email: updated.bill_to_email ?? "",
+    ship_to_company_name: updated.ship_to_company_name ?? "",
+    ship_to_attention: updated.ship_to_attention ?? "",
+    ship_to_street: updated.ship_to_street ?? "",
+    ship_to_city: updated.ship_to_city ?? "",
+    ship_to_state: updated.ship_to_state ?? "",
+    ship_to_zip: updated.ship_to_zip ?? "",
+    ship_to_phone: updated.ship_to_phone ?? "",
+    payment_terms_snapshot: updated.payment_terms_snapshot ?? "",
+    buyer_name_snapshot: updated.buyer_name_snapshot ?? "",
+    approver_name_snapshot: updated.approver_name_snapshot ?? "",
+    notes: updated.notes ?? "",
+  };
+}
 const RECENT_PRODUCTS_KEY = "sickfit-po-recent-products";
 const RECENT_RETAILERS_KEY = "sickfit-po-recent-retailers";
 
@@ -346,6 +389,14 @@ export function PurchaseOrderBuilderPage() {
   const duplicateFromId = searchParams.get("copyFrom") ?? "";
   const isEditMode = Boolean(editId);
   const autosaveKey = `${AUTOSAVE_PREFIX}:${isEditMode ? editId : duplicateFromId || "new"}`;
+  const { user } = useAuth();
+  const {
+    isOpen: drawerOpen,
+    poId: drawerPoId,
+    mode: drawerMode,
+    openDrawer,
+    closeDrawer,
+  } = usePurchaseOrderDrawer();
   const [purchaseOrder, setPurchaseOrder] = useState<BuilderState | null>(null);
   const [manufacturerPaidAt, setManufacturerPaidAt] = useState<string | null>(
     null,
@@ -441,7 +492,7 @@ export function PurchaseOrderBuilderPage() {
     if (data.sourceDetail?.purchaseOrder) {
       const source = data.sourceDetail.purchaseOrder;
       setManufacturerPaidAt(source.invoice_paid_at ?? null);
-      setPurchaseOrder({
+      const nextPurchaseOrder: BuilderState = {
         id: editId ? source.id : undefined,
         po_number: editId ? source.po_number : data.poNumber,
         vendor_id: source.vendor_id ?? "",
@@ -476,7 +527,8 @@ export function PurchaseOrderBuilderPage() {
         buyer_name_snapshot: source.buyer_name_snapshot ?? "",
         approver_name_snapshot: source.approver_name_snapshot ?? "",
         notes: source.notes ?? "",
-      });
+      };
+      setPurchaseOrder(nextPurchaseOrder);
       const sourceLines = data.sourceDetail.lineItems;
       if (source.po_type === "Manufacturer PO") {
         setMfrLines(
@@ -542,6 +594,28 @@ export function PurchaseOrderBuilderPage() {
     );
   const builderData = data;
   const builderPo = purchaseOrder;
+  const cancelHref = builderPo.id
+    ? `/purchase-orders/${builderPo.id}`
+    : "/purchase-orders";
+
+  const quickEditDrawer = (
+    <PurchaseOrderDrawer
+      purchaseOrderId={drawerPoId}
+      open={drawerOpen}
+      mode={drawerMode}
+      canEdit={Boolean(user)}
+      onClose={closeDrawer}
+      onSaved={(updated) =>
+        setPurchaseOrder((current) =>
+          current ? applyGeneralInfoUpdate(current, updated) : current,
+        )
+      }
+      onDeleted={() => navigate("/purchase-orders")}
+      onOpenFullPage={(id) => navigate(`/purchase-orders/${id}`)}
+      onDuplicate={(id) => navigate(`/purchase-orders/new?copyFrom=${id}`)}
+      onConvertedToInvoice={(invoiceId) => navigate(`/invoices/${invoiceId}`)}
+    />
+  );
 
   const recentProductIds = readLocalList(RECENT_PRODUCTS_KEY);
   const recentRetailerIds = readLocalList(RECENT_RETAILERS_KEY);
@@ -1295,16 +1369,17 @@ export function PurchaseOrderBuilderPage() {
           description="Production order for Foshan Lion King — auto-fills specs, tracks sock card draw, generates the Tina document."
           actions={
             <div className="btn-row">
-              <Link
-                className="btn btn-ghost"
-                to={
-                  builderPo.id
-                    ? `/purchase-orders/${builderPo.id}`
-                    : "/purchase-orders"
-                }
-              >
+              <Link className="btn btn-ghost" to={cancelHref}>
                 Cancel
               </Link>
+              {isEditMode ? (
+                <button
+                  className="btn btn-secondary po-edit-btn"
+                  onClick={() => openDrawer(editId, "edit")}
+                >
+                  Edit General Info
+                </button>
+              ) : null}
               <button
                 className="btn btn-secondary"
                 disabled={saving}
@@ -1323,6 +1398,7 @@ export function PurchaseOrderBuilderPage() {
           }
         />
         {error ? <InlineErrorLog error={error} /> : null}
+        {quickEditDrawer}
 
         {/* PO header fields */}
         <div className="panel">
@@ -1583,16 +1659,17 @@ export function PurchaseOrderBuilderPage() {
         description="Fill the real SickFit PO document directly, pull products from the catalog, and keep creation fast enough for live ops."
         actions={
           <div className="btn-row">
-            <Link
-              className="btn btn-ghost"
-              to={
-                builderPo.id
-                  ? `/purchase-orders/${builderPo.id}`
-                  : "/purchase-orders"
-              }
-            >
+            <Link className="btn btn-ghost" to={cancelHref}>
               Cancel
             </Link>
+            {isEditMode ? (
+              <button
+                className="btn btn-secondary po-edit-btn"
+                onClick={() => openDrawer(editId, "edit")}
+              >
+                Edit General Info
+              </button>
+            ) : null}
             <div
               className="field field-half"
               style={{ margin: 0, marginTop: 5 }}
@@ -1641,6 +1718,7 @@ export function PurchaseOrderBuilderPage() {
         }
       />
       {error ? <InlineErrorLog error={error} /> : null}
+      {quickEditDrawer}
       <div className="panel po-builder-preview-panel">
         <div className="panel-header">
           <div>

@@ -7,8 +7,11 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
+import { PurchaseOrderDrawer } from "@/components/PurchaseOrderDrawer";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAuth } from "@/context/AuthContext";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePurchaseOrderDrawer } from "@/hooks/usePurchaseOrderDrawer";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
 import { invoiceService } from "@/services/invoiceService";
 import { retailerService } from "@/services/retailerService";
@@ -44,8 +47,20 @@ const purchaseOrderTypes: PurchaseOrderType[] = [
   "Customer Reorder",
 ];
 
+function closeActionsMenu(event: { currentTarget: HTMLElement }) {
+  event.currentTarget.closest("details")?.removeAttribute("open");
+}
+
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const {
+    isOpen: drawerOpen,
+    poId: drawerPoId,
+    mode: drawerMode,
+    openDrawer,
+    closeDrawer,
+  } = usePurchaseOrderDrawer();
   const [status, setStatus] = useState("");
   const [vendorId, setVendorId] = useState("");
   const [retailerId, setRetailerId] = useState("");
@@ -276,12 +291,16 @@ export function PurchaseOrdersPage() {
       </div>
       <DataTable
         emptyMessage="No purchase orders found. Create a PO to start tracking line items, document previews, and delivery movement."
+        onRowClick={(row) => openDrawer(row.id, "view")}
         columns={[
           {
             key: "po_number",
             title: "Account / PO",
             render: (row) => (
-              <div className="cell-stack">
+              <div
+                className="cell-stack"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <Link className="table-link" to={`/purchase-orders/${row.id}`}>
                   {row.retailers?.name ??
                     row.vendors?.name ??
@@ -351,47 +370,67 @@ export function PurchaseOrdersPage() {
             key: "actions",
             title: "Actions",
             render: (row) => (
-              <div className="btn-row">
-                <Link
+              <div
+                className="btn-row"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
                   className="btn btn-ghost btn-small"
-                  to={`/purchase-orders/${row.id}`}
+                  onClick={() => openDrawer(row.id, "view")}
                 >
                   View
-                </Link>
-                <Link
+                </button>
+                <button
                   className="btn btn-secondary btn-small po-edit-btn"
-                  to={`/purchase-orders/${row.id}/edit`}
+                  onClick={() => openDrawer(row.id, "edit")}
                 >
                   Edit
-                </Link>
-                <button
-                  className="btn btn-secondary btn-small po-edit-btn"
-                  onClick={() =>
-                    navigate(`/purchase-orders/new?copyFrom=${row.id}`)
-                  }
-                >
-                  Duplicate
-                </button>
-                {row.po_type !== "Manufacturer PO" ? (
-                  <Link
-                    className="btn btn-secondary btn-small"
-                    to={`/purchase-orders/${row.id}/preview`}
-                  >
-                    Preview
-                  </Link>
-                ) : null}
-                <button
-                  className="btn btn-secondary btn-small"
-                  onClick={() => handleConvertToInvoice(row)}
-                >
-                  To Invoice
                 </button>
                 <button
-                  className="btn btn-danger btn-small"
+                  className="btn btn-danger btn-small po-edit-btn"
                   onClick={() => setDeleting(row)}
                 >
                   Delete
                 </button>
+                <details className="actions-dropdown">
+                  <summary
+                    className="btn btn-ghost btn-small actions-dropdown-icon"
+                    aria-label="More actions"
+                  >
+                    +
+                  </summary>
+                  <div className="actions-dropdown-menu">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        closeActionsMenu(event);
+                        navigate(`/purchase-orders/new?copyFrom=${row.id}`);
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                    {row.po_type !== "Manufacturer PO" ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          closeActionsMenu(event);
+                          navigate(`/purchase-orders/${row.id}/preview`);
+                        }}
+                      >
+                        Preview
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        closeActionsMenu(event);
+                        handleConvertToInvoice(row);
+                      }}
+                    >
+                      To Invoice
+                    </button>
+                  </div>
+                </details>
               </div>
             ),
           },
@@ -430,6 +469,18 @@ export function PurchaseOrdersPage() {
           }}
         />
       ) : null}
+      <PurchaseOrderDrawer
+        purchaseOrderId={drawerPoId}
+        open={drawerOpen}
+        mode={drawerMode}
+        canEdit={Boolean(user)}
+        onClose={closeDrawer}
+        onSaved={() => void reload()}
+        onDeleted={() => void reload()}
+        onOpenFullPage={(id) => navigate(`/purchase-orders/${id}`)}
+        onDuplicate={(id) => navigate(`/purchase-orders/new?copyFrom=${id}`)}
+        onConvertedToInvoice={(invoiceId) => navigate(`/invoices/${invoiceId}`)}
+      />
     </div>
   );
 }

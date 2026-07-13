@@ -37,6 +37,18 @@ type DashboardActor = {
   actorLabel: string | null;
 };
 
+const GENERAL_INFO_FIELDS = [
+  "po_type", "vendor_id", "retailer_id", "buyer_id", "location_id", "status",
+  "order_date", "start_ship_date", "ship_complete_date", "expected_delivery_date",
+  "ship_date", "eta_date",
+  "ship_to_company_name", "ship_to_attention", "ship_to_street", "ship_to_city",
+  "ship_to_state", "ship_to_zip", "ship_to_phone", "tracking_number",
+  "bill_to_company_name", "bill_to_contact_name", "bill_to_street", "bill_to_city",
+  "bill_to_state", "bill_to_zip", "bill_to_phone", "bill_to_email",
+  "payment_terms_snapshot", "currency_code",
+  "notes", "internal_notes",
+] as const satisfies ReadonlyArray<keyof PurchaseOrder>;
+
 function attachPurchaseOrderRelations(
   purchaseOrders: PurchaseOrder[],
   vendors: Vendor[],
@@ -708,6 +720,45 @@ export const purchaseOrderService = {
       metadata: { purchaseOrderId: id },
     });
     return data as PurchaseOrder;
+  },
+
+  async updateGeneralInfo(id: string, patch: Partial<PurchaseOrder>) {
+    const supabase = assertSupabase();
+    const { data: beforeRow, error: beforeError } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (beforeError) throw beforeError;
+    const before = beforeRow as PurchaseOrder;
+
+    // Whitelist guard: only ever write these columns, regardless of patch contents —
+    // structurally guarantees line items/totals/ids can never be touched from the PO drawer.
+    const safePayload: Partial<PurchaseOrder> = {};
+    for (const key of GENERAL_INFO_FIELDS) {
+      if (key in patch) (safePayload as Record<string, unknown>)[key] = patch[key];
+    }
+
+    const { data, error } = await supabase
+      .from("purchase_orders")
+      .update(safePayload)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    const updated = data as PurchaseOrder;
+
+    if (safePayload.status && safePayload.status !== before.status) {
+      const actor = await getDashboardActor().catch(() => null);
+      if (actor) await recordStatusHistory(id, before.status, safePayload.status, actor, "Updated from PO drawer.");
+    }
+
+    await activityService.create({
+      event_type: "purchase_order_general_info_updated",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number} general info updated`,
+      description: "Purchase order general information was updated from the quick-edit drawer.",
+      metadata: { purchaseOrderId: id, changedFields: Object.keys(safePayload) },
+    });
+
+    return updated;
   },
 
   async markAsShipped(id: string, shipDate?: string) {
