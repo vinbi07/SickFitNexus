@@ -1,3 +1,4 @@
+import { Menu } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
@@ -27,7 +28,11 @@ const pageContexts = [
   { match: /^\/settings/, title: "Settings", context: "Branding and baseline configuration" },
 ];
 
-export function TopBar() {
+export function TopBar({
+  onOpenMobileNav,
+}: {
+  onOpenMobileNav?: (triggerButton: HTMLButtonElement) => void;
+}) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const pageContext = pageContexts.find((item) => item.match.test(location.pathname)) ?? pageContexts[0];
@@ -35,6 +40,14 @@ export function TopBar() {
   return (
     <div className="topbar">
       <div className="topbar-page">
+        <button
+          type="button"
+          className="mobile-nav-toggle"
+          aria-label="Open navigation menu"
+          onClick={(event) => onOpenMobileNav?.(event.currentTarget)}
+        >
+          <Menu size={20} strokeWidth={2} aria-hidden="true" />
+        </button>
         <img className="topbar-logo" src={DEFAULT_LOGO_URL} alt="SickFit" />
         <div>
           <p className="topbar-kicker">SickFit Nexus</p>

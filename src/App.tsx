@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
@@ -34,58 +34,9 @@ import { LookbookTemplateEditorPage } from "@/pages/LookbookTemplateEditorPage";
 import { LookbookPreviewPage } from "@/pages/LookbookPreviewPage";
 import { PendingQueuePage } from "@/pages/PendingQueuePage";
 import { AppShell } from "@/components/AppShell";
-import { DEFAULT_LOGO_URL } from "@/lib/branding";
+import { Sidebar } from "@/components/Sidebar";
 
 const RAIL_COLLAPSED_KEY = "sickfit-nexus-rail-collapsed";
-
-const navGroups = [
-  {
-    label: "Command",
-    items: [
-      { to: "/", label: "Dashboard", icon: "OC" },
-      { to: "/alerts", label: "Alerts", icon: "AL" },
-      { to: "/reports", label: "Reports", icon: "RP" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { to: "/imports", label: "CSV Imports", icon: "IM" },
-      { to: "/purchase-orders", label: "Purchase Orders", icon: "PO" },
-      { to: "/invoices", label: "Invoices", icon: "IN" },
-      { to: "/pending-queue", label: "Pending Queue", icon: "PQ" },
-      { to: "/inventory", label: "Inventory", icon: "IV" },
-      { to: "/vendors", label: "Vendors", icon: "VN" },
-      { to: "/retailers", label: "Accounts", icon: "AC" },
-      { to: "/compliance", label: "Compliance", icon: "CP" },
-      { to: "/production", label: "Manufacturing", icon: "MF" },
-      { to: "/locations", label: "Locations", icon: "LC" },
-    ],
-  },
-  {
-    label: "Catalog",
-    items: [
-      { to: "/products", label: "Products", icon: "PR" },
-      { to: "/barcodes", label: "Barcodes", icon: "BC" },
-      { to: "/lookbook-templates", label: "Lookbooks", icon: "LB" },
-    ],
-  },
-  {
-    label: "Knowledge",
-    items: [
-      { to: "/sops", label: "SOPs", icon: "SP" },
-      { to: "/wins", label: "Wins", icon: "WN" },
-      { to: "/people", label: "People", icon: "PL" },
-      { to: "/training", label: "Training", icon: "TR" },
-    ],
-  },
-  {
-    label: "Admin",
-    items: [
-      { to: "/settings", label: "Settings", icon: "ST" },
-    ],
-  },
-];
 
 export default function App() {
   const [railCollapsed, setRailCollapsed] = useState(() => {
@@ -108,48 +59,10 @@ export default function App() {
           <AppShell
             railCollapsed={railCollapsed}
             sidebar={
-              <div className="rail-nav">
-                <div className="brand-lockup">
-                  <div className="brand-mark brand-mark-image">
-                    <img src={DEFAULT_LOGO_URL} alt="SickFit" />
-                  </div>
-                  <div className="brand-copy">
-                    <p>SickFit Nexus</p>
-                    <span>Operational Command Center</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="rail-toggle"
-                  aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
-                  title={railCollapsed ? "Expand navigation" : "Collapse navigation"}
-                  onClick={() => setRailCollapsed((current) => !current)}
-                >
-                  <span aria-hidden="true">{railCollapsed ? ">>" : "<<"}</span>
-                  <span className="rail-toggle-label">{railCollapsed ? "Expand" : "Collapse"}</span>
-                </button>
-                <nav className="rail-groups" aria-label="Primary navigation">
-                  {navGroups.map((group) => (
-                    <div className="rail-group" key={group.label}>
-                      <p className="rail-group-label">{group.label}</p>
-                      {group.items.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          to={item.to}
-                          end={item.to === "/"}
-                          title={railCollapsed ? item.label : undefined}
-                          className={({ isActive }) =>
-                            `nav-link${isActive ? " nav-link-active" : ""}`
-                          }
-                        >
-                          <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-                          <span className="nav-label">{item.label}</span>
-                        </NavLink>
-                      ))}
-                    </div>
-                  ))}
-                </nav>
-              </div>
+              <Sidebar
+                railCollapsed={railCollapsed}
+                onToggleRailCollapsed={() => setRailCollapsed((current) => !current)}
+              />
             }
           >
             <Routes>
