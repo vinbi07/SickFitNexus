@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -11,7 +11,9 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardService } from "@/services/dashboardService";
 import { inventoryService } from "@/services/inventoryService";
 import { productionPlanService } from "@/services/productionPlanService";
+import { retailerService } from "@/services/retailerService";
 import { supportService } from "@/services/supportService";
+import { vendorTestProductionPlanService } from "@/services/vendorTestProductionPlanService";
 import { vendorService } from "@/services/vendorService";
 import type { ProductionPlan } from "@/types/domain";
 import { calculateForecastMetric } from "@/utils/forecasting";
@@ -19,14 +21,17 @@ import { formatDate } from "@/utils/format";
 
 export function ProductionPlannerPage() {
   const navigate = useNavigate();
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: ReactNode } | null>(null);
   const [deleting, setDeleting] = useState<ProductionPlan | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingFromReorderQueue, setCreatingFromReorderQueue] = useState(false);
+  const [generatingVendorPlans, setGeneratingVendorPlans] = useState(false);
+  const [selectedRetailerId, setSelectedRetailerId] = useState("");
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       plans: await productionPlanService.list(),
       vendors: await vendorService.list(),
+      retailers: await retailerService.list(),
     }),
     [],
   );
@@ -119,6 +124,45 @@ export function ProductionPlannerPage() {
     }
   };
 
+  const handleGenerateVendorTestPlans = async () => {
+    try {
+      if (!selectedRetailerId) {
+        setNotice({ tone: "error", message: "Select an account before generating a test production plan." });
+        return;
+      }
+
+      setGeneratingVendorPlans(true);
+      const result = await vendorTestProductionPlanService.generate(selectedRetailerId);
+      await reload();
+
+      if (!result.generated.length) {
+        setNotice({
+          tone: "error",
+          message: result.skipped[0]?.reason ?? "No vendor test plan was generated for the selected vendor.",
+        });
+        return;
+      }
+
+      const generated = result.generated[0];
+      const fallbackCount = new Set(result.generated.flatMap((entry) => entry.fallbackLabels)).size;
+      setNotice({
+        tone: "success",
+        message: (
+          <>
+            Account test production plan {generated.action}.
+            {result.protectedPlanCount ? ` ${result.protectedPlanCount} approved/converted test plan(s) for this account were left untouched.` : " "}
+            {fallbackCount ? ` ${fallbackCount} fallback value note(s) were recorded. ` : " "}
+            Open: <Link className="table-link" to={`/production/planner/${generated.plan.id}`}>{generated.plan.name}</Link>
+          </>
+        ),
+      });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to generate vendor test plans." });
+    } finally {
+      setGeneratingVendorPlans(false);
+    }
+  };
+
   const handleDuplicate = async (plan: ProductionPlan) => {
     try {
       const full = await productionPlanService.getById(plan.id);
@@ -163,6 +207,19 @@ export function ProductionPlannerPage() {
             </button>
             <button className="btn btn-secondary" disabled={creatingFromReorderQueue} onClick={() => void handleStartFromReorderQueue()}>
               {creatingFromReorderQueue ? "Building..." : "Start From Reorder Queue"}
+            </button>
+            <select
+              aria-label="Account for test production plan"
+              value={selectedRetailerId}
+              onChange={(event) => setSelectedRetailerId(event.target.value)}
+            >
+              <option value="">Select account</option>
+              {data.retailers.map((retailer) => (
+                <option key={retailer.id} value={retailer.id}>{retailer.name}</option>
+              ))}
+            </select>
+            <button className="btn btn-secondary" disabled={generatingVendorPlans} onClick={() => void handleGenerateVendorTestPlans()}>
+              {generatingVendorPlans ? "Generating..." : "Generate an Account Plan"}
             </button>
             <button className="btn btn-primary" disabled={creating} onClick={() => void handleCreateBlank()}>
               {creating ? "Creating..." : "New Plan"}

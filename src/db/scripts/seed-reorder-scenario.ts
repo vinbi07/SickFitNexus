@@ -81,12 +81,12 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-async function fetchAll<T>(table: string, select: string, extra?: (q: ReturnType<typeof supabase.from>) => typeof q): Promise<T[]> {
+async function fetchAll<T>(table: string, select: string, extra?: (q: any) => any): Promise<T[]> {
   const pageSize = 1000;
   let from = 0;
   const rows: T[] = [];
   for (;;) {
-    let query = supabase.from(table).select(select).range(from, from + pageSize - 1);
+    let query: any = supabase.from(table).select(select).range(from, from + pageSize - 1);
     if (extra) query = extra(query);
     const { data, error } = await query;
     if (error) throw error;
