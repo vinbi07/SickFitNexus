@@ -3,6 +3,7 @@ import { activityService } from "@/services/activityService";
 import { insertTable, listTable, updateTable } from "@/services/baseService";
 import type { Alert, InventoryEvent, PoLineItem, Product, PurchaseOrder, ShopifyOrder, ShopifyOrderLineItem, Vendor } from "@/types/domain";
 import { calculateForecastMetric, calculateVendorDelay } from "@/utils/forecasting";
+import { isGiftCardProductName } from "@/utils/operations";
 
 export interface AlertListItem extends Alert {
   sourceLabel: string;
@@ -198,6 +199,7 @@ export const alertService = {
     const newAlerts: Partial<Alert>[] = [];
 
     for (const product of products) {
+      if (isGiftCardProductName(product.name)) continue;
       const productEvents = events.filter((event) => event.product_id === product.id);
       const vendor = vendors[0];
       const metric = calculateForecastMetric(product, productEvents, vendor?.average_delay_days ?? 5);

@@ -17,7 +17,12 @@ import { vendorService } from "@/services/vendorService";
 import type { InventoryEvent, Product } from "@/types/domain";
 import { formatCurrency } from "@/utils/format";
 import { getProductFamilyName, getProductVariantLabel } from "@/utils/lookbook";
-import { getInventoryHealthLabel, getMarginMetrics, isInventoryDanger } from "@/utils/operations";
+import {
+  getInventoryHealthLabel,
+  getMarginMetrics,
+  isHiddenByDefaultProductName,
+  isInventoryDanger,
+} from "@/utils/operations";
 
 type ProductFormValues = Partial<Product> & {
   starting_inventory?: number;
@@ -33,6 +38,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [bundleFilter, setBundleFilter] = useState("");
+  const [showHiddenCategories, setShowHiddenCategories] = useState(false);
   const [sort, setSort] = useState("name");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data, loading, error, reload } = useAsyncData(
@@ -73,7 +79,9 @@ export function ProductsPage() {
         !bundleFilter ||
         (bundleFilter === "no-bundles" && product.no_bundles) ||
         (bundleFilter === "bundles-ok" && !product.no_bundles);
-      return matchesSearch && matchesCategory && matchesBundles;
+      const matchesVisibility =
+        showHiddenCategories || !isHiddenByDefaultProductName(product.name);
+      return matchesSearch && matchesCategory && matchesBundles && matchesVisibility;
     })
     .sort((left, right) => {
       if (sort === "inventory") return right.current_inventory - left.current_inventory;
@@ -139,6 +147,12 @@ export function ProductsPage() {
             <option value="inventory">Sort by inventory</option>
             <option value="margin">Sort by margin</option>
           </select>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowHiddenCategories((current) => !current)}
+          >
+            {showHiddenCategories ? "Hide Bundles & Gift Cards" : "Show Bundles & Gift Cards"}
+          </button>
           <button className="btn btn-secondary" onClick={() => void reload()}>
             Refresh
           </button>

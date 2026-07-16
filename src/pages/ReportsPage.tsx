@@ -8,6 +8,7 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { reportService } from "@/services/reportService";
 import { downloadCsv } from "@/utils/export";
 import { formatCurrency } from "@/utils/format";
+import { isGiftCardProductName } from "@/utils/operations";
 
 export function ReportsPage() {
   const [reportType, setReportType] = useState("po-summary");
@@ -18,7 +19,9 @@ export function ReportsPage() {
 
   const delayedOrders = data.purchaseOrders.filter((po) => po.status === "Delayed");
   const projectedStockouts = data.alerts.filter((alert) => alert.alert_type === "Projected Stockout");
-  const inventoryRisk = data.products.filter((product) => product.current_inventory <= product.safety_stock);
+  const inventoryRisk = data.products.filter(
+    (product) => !isGiftCardProductName(product.name) && product.current_inventory <= product.safety_stock,
+  );
 
   const exportRows =
     reportType === "vendor-performance"

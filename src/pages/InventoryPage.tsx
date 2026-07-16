@@ -25,6 +25,8 @@ import {
   getInventoryRiskStatus,
   getMarginMetrics,
   getOversoldLabel,
+  isGiftCardProductName,
+  isHiddenByDefaultProductName,
   isInventoryDanger,
 } from "@/utils/operations";
 import { getProductVariantLabel } from "@/utils/lookbook";
@@ -54,6 +56,7 @@ export function InventoryPage() {
   const [locationId, setLocationId] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
   const [bundleFilter, setBundleFilter] = useState("");
+  const [showHiddenCategories, setShowHiddenCategories] = useState(false);
   const [sort, setSort] = useState("danger");
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
@@ -110,7 +113,9 @@ export function InventoryPage() {
         !bundleFilter ||
         (bundleFilter === "no-bundles" && Boolean(item.products?.no_bundles)) ||
         (bundleFilter === "bundles-ok" && !item.products?.no_bundles);
-      return matchesSearch && matchesLocation && matchesRisk && matchesBundle;
+      const matchesVisibility =
+        showHiddenCategories || !isHiddenByDefaultProductName(item.products?.name);
+      return matchesSearch && matchesLocation && matchesRisk && matchesBundle && matchesVisibility;
     })
     .sort((left, right) => {
       if (sort === "quantity")
@@ -137,17 +142,20 @@ export function InventoryPage() {
       return leftDanger - rightDanger;
     });
 
-  const totalUnitsOnHand = data.items.reduce(
+  const nonGiftCardItems = data.items.filter(
+    (item) => !isGiftCardProductName(item.products?.name),
+  );
+  const totalUnitsOnHand = nonGiftCardItems.reduce(
     (sum, item) => sum + Number(item.quantity_on_hand ?? 0),
     0,
   );
-  const dangerCount = data.items.filter((item) =>
+  const dangerCount = nonGiftCardItems.filter((item) =>
     isInventoryDanger(item.quantity_on_hand, eventsByProductId.get(item.product_id) ?? []),
   ).length;
   const noBundlesCount = data.items.filter((item) =>
     Boolean(item.products?.no_bundles),
   ).length;
-  const inventoryValue = data.items.reduce(
+  const inventoryValue = nonGiftCardItems.reduce(
     (sum, item) =>
       sum + item.quantity_on_hand * Number(item.products?.unit_cost ?? 0),
     0,
@@ -253,6 +261,12 @@ export function InventoryPage() {
             <option value="incoming">Sort by incoming quantity</option>
             <option value="quantity">Sort by quantity</option>
           </select>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowHiddenCategories((current) => !current)}
+          >
+            {showHiddenCategories ? "Hide Bundles & Gift Cards" : "Show Bundles & Gift Cards"}
+          </button>
           <button className="btn btn-secondary" onClick={() => void reload()}>
             Refresh
           </button>
@@ -337,6 +351,9 @@ export function InventoryPage() {
               key: "status",
               title: "Status",
               render: (row) => {
+                if (isGiftCardProductName(row.products?.name)) {
+                  return <StatusBadge label="Safe" />;
+                }
                 const incoming =
                   reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
                 const tone = getInventoryHealthTone(
@@ -608,6 +625,7 @@ export function InventoryPage() {
               <span>Status</span>
               <strong
                 className={
+                  !isGiftCardProductName(viewing.products?.name) &&
                   isInventoryDanger(
                     viewing.quantity_on_hand,
                     eventsByProductId.get(viewing.product_id) ?? [],
@@ -616,11 +634,13 @@ export function InventoryPage() {
                     : ""
                 }
               >
-                {getInventoryHealthLabel(
-                  viewing.quantity_on_hand,
-                  eventsByProductId.get(viewing.product_id) ?? [],
-                  viewing.products?.safety_stock ?? 0,
-                )}
+                {isGiftCardProductName(viewing.products?.name)
+                  ? "Healthy"
+                  : getInventoryHealthLabel(
+                      viewing.quantity_on_hand,
+                      eventsByProductId.get(viewing.product_id) ?? [],
+                      viewing.products?.safety_stock ?? 0,
+                    )}
               </strong>
             </div>
             <div className="detail-card">

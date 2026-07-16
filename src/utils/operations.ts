@@ -38,6 +38,18 @@ export function getInventoryHealthTone(quantity: number, events: InventoryEvent[
   return "healthy" as const;
 }
 
+export function isBundleProductName(name: string | null | undefined): boolean {
+  return /bundle/i.test(name ?? "");
+}
+
+export function isGiftCardProductName(name: string | null | undefined): boolean {
+  return /gift card/i.test(name ?? "");
+}
+
+export function isHiddenByDefaultProductName(name: string | null | undefined): boolean {
+  return isBundleProductName(name) || isGiftCardProductName(name);
+}
+
 export type InventoryRiskStatus = "Oversold" | "Low Stock" | "Reorder Soon" | "Incoming Shipment" | "Safe";
 
 export function getInventoryRiskStatus(

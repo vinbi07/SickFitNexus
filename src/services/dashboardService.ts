@@ -31,6 +31,7 @@ import {
   getManufacturingOrderStatusLabel,
   getPaymentStatusLabel,
   getShipmentStatus,
+  isGiftCardProductName,
   isInventoryDanger,
 } from "@/utils/operations";
 import { daysBetween } from "@/utils/date";
@@ -176,6 +177,9 @@ export const dashboardService = {
     const shopifyOrderLineItems = (shopifyOrderLineItemsResponse.data ?? []) as ShopifyOrderLineItem[];
     const settings = settingsResponse.data;
     const products = applyCalculatedSafetyStock(rawProducts, vendors, events);
+    const inventoryWarningProducts = products.filter(
+      (product) => !isGiftCardProductName(product.name),
+    );
 
     const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
     const retailerById = new Map(retailers.map((retailer) => [retailer.id, retailer]));
@@ -392,14 +396,18 @@ export const dashboardService = {
       .sort((left, right) => left.currentQuantity - right.currentQuantity);
 
     const reorderNowItems = skuReorderWindows
-      .filter((item) => item.recommendation.toLowerCase().includes("reorder") || item.currentQuantity <= 25)
+      .filter(
+        (item) =>
+          !isGiftCardProductName(item.productName) &&
+          (item.recommendation.toLowerCase().includes("reorder") || item.currentQuantity <= 25),
+      )
       .slice()
       .sort((left, right) => {
         if (left.isOversold !== right.isOversold) return left.isOversold ? -1 : 1;
         return left.currentQuantity - right.currentQuantity;
       });
 
-    const inventoryAlerts = products
+    const inventoryAlerts = inventoryWarningProducts
       .map((product) => {
         const currentQuantity = product.current_inventory;
         const incomingQuantity = incomingByProduct.get(product.id) ?? 0;
@@ -419,7 +427,7 @@ export const dashboardService = {
       .sort((left, right) => left.currentQuantity - right.currentQuantity)
       .slice(0, 8);
 
-    const dangerProducts = products.filter((product) => isInventoryDanger(product.current_inventory, eventsByProductId.get(product.id) ?? []));
+    const dangerProducts = inventoryWarningProducts.filter((product) => isInventoryDanger(product.current_inventory, eventsByProductId.get(product.id) ?? []));
     const riskyProducts90d = skuReorderWindows.filter((item) => item.projectedDaysRemaining !== null && item.projectedDaysRemaining <= 90);
     const openInvoices = activeManufacturerOrders.filter((po) => getInvoiceStatus(po) === "Open");
     const shippedInvoices = activeManufacturerOrders.filter((po) => getInvoiceStatus(po) === "Shipped");
@@ -830,22 +838,22 @@ export const dashboardService = {
     const inventoryStatusBreakdown = [
       {
         label: "Healthy",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "healthy").length,
+        value: inventoryWarningProducts.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "healthy").length,
         color: "#1f8f63",
       },
       {
         label: "Warning",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "warning").length,
+        value: inventoryWarningProducts.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "warning").length,
         color: "#f2a93b",
       },
       {
         label: "Danger",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "danger").length,
+        value: inventoryWarningProducts.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "danger").length,
         color: "#e72027",
       },
       {
         label: "Slow Mover",
-        value: products.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "neutral").length,
+        value: inventoryWarningProducts.filter((product) => getInventoryHealthTone(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock) === "neutral").length,
         color: "#8a8f98",
       },
     ];
@@ -853,10 +861,10 @@ export const dashboardService = {
     return {
       openPoCount: openOrders.length,
       delayedPoCount: purchaseOrders.filter((po) => po.status === "Delayed").length,
-      lowStockCount: products.filter((product) => product.current_inventory <= product.safety_stock).length,
+      lowStockCount: inventoryWarningProducts.filter((product) => product.current_inventory <= product.safety_stock).length,
       projectedStockoutCount: alerts.filter((alert) => alert.alert_type === "Projected Stockout").length,
       vendorRiskCount,
-      inventoryValue: products.reduce((sum, product) => sum + Number(product.current_inventory ?? 0) * Number(product.unit_cost ?? 0), 0),
+      inventoryValue: inventoryWarningProducts.reduce((sum, product) => sum + Number(product.current_inventory ?? 0) * Number(product.unit_cost ?? 0), 0),
       weightedForecastValue,
       activePipelineValue,
       dueIn14DaysCount,
