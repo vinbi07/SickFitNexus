@@ -28,6 +28,9 @@ import { RetailersPage } from "@/pages/RetailersPage";
 import { RetailerDetailPage } from "@/pages/RetailerDetailPage";
 import { CompliancePage } from "@/pages/CompliancePage";
 import { ProductionPage } from "@/pages/ProductionPage";
+import { ProductionPlannerPage } from "@/pages/ProductionPlannerPage";
+import { ProductionPlanDetailPage } from "@/pages/ProductionPlanDetailPage";
+import { ProductionTemplatesPage } from "@/pages/ProductionTemplatesPage";
 import { LookbookOrderPage } from "@/pages/LookbookOrderPage";
 import { LookbookTemplatesPage } from "@/pages/LookbookTemplatesPage";
 import { LookbookTemplateEditorPage } from "@/pages/LookbookTemplateEditorPage";
@@ -83,6 +86,9 @@ export default function App() {
               <Route path="/retailers/:id" element={<RetailerDetailPage />} />
               <Route path="/compliance" element={<CompliancePage />} />
               <Route path="/production" element={<ProductionPage />} />
+              <Route path="/production/planner" element={<ProductionPlannerPage />} />
+              <Route path="/production/planner/:id" element={<ProductionPlanDetailPage />} />
+              <Route path="/production/templates" element={<ProductionTemplatesPage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/products/:id" element={<ProductDetailPage />} />

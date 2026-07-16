@@ -6382,3 +6382,596 @@ textarea {
     text-align: left;
   }
 }
+
+/* Production Planner & Simulator */
+
+.chart-wrap-hero {
+  height: 460px;
+}
+
+.chart-text-summary {
+  margin: 10px 0 0;
+  color: var(--brand-muted);
+  font-size: 0.85rem;
+}
+
+.chart-tooltip {
+  padding: 8px 10px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-surface);
+  box-shadow: var(--brand-card-shadow);
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.warning-text {
+  color: var(--warning, #945f08);
+}
+
+.schedule-blocker-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--danger, #b41f29);
+}
+
+.production-results-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+.production-results-main {
+  min-width: 0;
+}
+
+.production-recommendation-panel {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+@media (max-width: 1080px) {
+  .production-results-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .production-recommendation-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .chart-wrap-hero {
+    height: 320px;
+  }
+
+  .chart-wrap,
+  .chart-wrap-hero {
+    overflow-x: auto;
+  }
+}
+
+/* Tooltip */
+
+.tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border: 1px solid var(--brand-border);
+  border-radius: 50%;
+  background: var(--brand-surface);
+  color: var(--muted, #6b7280);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  cursor: help;
+}
+
+.tooltip-trigger:hover,
+.tooltip-trigger:focus-visible {
+  color: #ffffff;
+  background: var(--brand-accent, #2563eb);
+  border-color: var(--brand-accent, #2563eb);
+}
+
+.tooltip-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #14181f;
+  color: #f4f6fb;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.tooltip-bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #14181f;
+}
+
+.tooltip-right { left: 100%; bottom: auto; top: 50%; transform: translateY(-50%); margin-left: 8px; }
+.tooltip-left { left: auto; right: 100%; bottom: auto; top: 50%; transform: translateY(-50%); margin-right: 8px; }
+.tooltip-bottom { top: calc(100% + 8px); bottom: auto; }
+
+/* Date picker field */
+
+.date-picker-field {
+  position: relative;
+}
+
+.date-picker-trigger {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #ffffff, #fafbfd);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.date-picker-required {
+  color: var(--danger, #b41f29);
+}
+
+.date-picker-popover-portal {
+  position: fixed;
+  z-index: 1000;
+  background: #ffffff;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  color: #0b1220;
+}
+
+.date-picker-clear {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Plan Assumptions wizard */
+
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  padding: 8px 14px 8px 8px;
+  background: var(--brand-surface);
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.wizard-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-border);
+  color: inherit;
+  font-size: 0.72rem;
+}
+
+.wizard-step.is-active {
+  border-color: var(--brand-accent, #2563eb);
+  color: var(--brand-accent, #2563eb);
+}
+
+.wizard-step.is-active .wizard-step-number {
+  background: var(--brand-accent, #2563eb);
+  color: #ffffff;
+}
+
+.wizard-step.is-done .wizard-step-number {
+  background: var(--success, #1a7f4e);
+  color: #ffffff;
+}
+
+.wizard-step-description {
+  margin: 0;
+}
+
+.wizard-step-panel {
+  min-height: 180px;
+}
+
+.wizard-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-direction: row;
+}
+
+.wizard-checkbox-label input {
+  width: auto;
+}
+
+.wizard-nav {
+  justify-content: space-between;
+}
+
+.wizard-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.wizard-review-group {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wizard-review-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wizard-review-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .wizard-steps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wizard-nav {
+    flex-direction: column-reverse;
+  }
+}
+
+/* Product picker combobox */
+
+.product-picker {
+  min-width: fit-content;
+}
+
+.product-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  justify-content: flex-start;
+}
+
+.product-picker-trigger .product-thumb-shell {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.product-thumb-shell-large {
+  width: 88px;
+  height: 88px;
+  border-radius: 14px;
+}
+
+.product-picker-modal-body input {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #ffffff, #fafbfd);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  width: 100%;
+}
+
+.product-picker-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-surface);
+}
+
+.product-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+}
+
+.product-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.product-picker-option.is-highlighted,
+.product-picker-option:hover {
+  background: rgba(231, 32, 39, 0.08);
+}
+
+/* Product plan item rows (Products & Planned Quantities panel) */
+
+.plan-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-item-row {
+  display: grid;
+  grid-template-columns: 120px minmax(140px, 0.9fr) minmax(0, 2.4fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  background: var(--brand-surface);
+}
+
+.plan-item-thumb-shell {
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(17, 17, 17, 0.08), rgba(231, 32, 39, 0.12));
+  border: 1px solid rgba(216, 221, 227, 0.95);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.plan-item-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.plan-item-thumb-fallback {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #7b1820;
+}
+
+.plan-item-name {
+  min-width: 0;
+}
+
+.plan-item-name strong {
+  overflow-wrap: anywhere;
+}
+
+.plan-item-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.plan-item-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-item-field label {
+  display: flex;
+  align-items: center;
+  font-size: 0.76rem;
+  font-family: var(--font-utility);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--brand-muted);
+}
+
+.plan-item-field input {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #ffffff, #fafbfd);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  width: 100%;
+}
+
+.plan-item-est-cost {
+  padding: 8px 0;
+  font-weight: 700;
+}
+
+.plan-item-actions {
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .plan-item-row {
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-areas:
+      "thumb name"
+      "fields fields"
+      "actions actions";
+  }
+
+  .plan-item-thumb-shell {
+    width: 96px;
+    height: 96px;
+    grid-area: thumb;
+  }
+
+  .plan-item-name {
+    grid-area: name;
+    align-self: center;
+  }
+
+  .plan-item-fields {
+    grid-area: fields;
+  }
+
+  .plan-item-actions {
+    grid-area: actions;
+    flex-direction: row;
+  }
+}
+
+/* Save-validation error states */
+
+.field-error {
+  color: var(--danger, #b41f29);
+  font-size: 0.78rem;
+}
+
+.field.has-error input,
+.field.has-error select,
+.field.has-error textarea,
+.date-picker-trigger.has-error {
+  border-color: var(--danger, #b41f29);
+}
+
+.plan-item-field.has-error input {
+  border-color: var(--danger, #b41f29);
+}
+
+.wizard-step-error-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--danger, #b41f29);
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.notice-error-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* Collapsible "Edit Plan Assumptions & Products" section */
+
+.collapsible-section-summary {
+  cursor: pointer;
+  padding: 14px 20px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--brand-radius);
+  background: var(--brand-surface);
+  font-family: var(--font-display);
+  font-weight: 700;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapsible-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-section-summary::before {
+  content: "▸";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.collapsible-section[open] > .collapsible-section-summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible-section[open] > .collapsible-section-summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.collapsible-section-body {
+  padding-top: 14px;
+}
+
+/* Inventory Projection chart legend key */
+
+.chart-legend-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chart-legend-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--brand-muted);
+}
+
+.chart-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}

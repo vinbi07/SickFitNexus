@@ -8,7 +8,8 @@
     "dev:vercel": "vercel dev",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:reorder-scenario": "tsx --tsconfig tsconfig.app.json src/db/scripts/seed-reorder-scenario.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

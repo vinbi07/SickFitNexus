@@ -1,0 +1,1292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SickFit Nexus — Visual Production Planner Implementation Plan</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --surface-2: #f9fafb;
+      --text: #17202a;
+      --muted: #667085;
+      --line: #e4e7ec;
+      --red: #e72027;
+      --red-dark: #ba171d;
+      --green: #16803c;
+      --amber: #b54708;
+      --blue: #175cd3;
+      --purple: #6941c6;
+      --shadow: 0 10px 30px rgba(16, 24, 40, 0.07);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    a { color: inherit; }
+    button { font: inherit; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 268px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      background: #101828;
+      color: #fff;
+      padding: 28px 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--red);
+      font-size: 13px;
+    }
+
+    .nav-label {
+      margin: 22px 10px 8px;
+      color: #98a2b3;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    nav a {
+      display: block;
+      padding: 9px 10px;
+      border-radius: 8px;
+      color: #d0d5dd;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    nav a:hover { background: #1d2939; color: #fff; }
+
+    main { min-width: 0; }
+
+    .hero {
+      padding: 58px clamp(24px, 5vw, 74px) 44px;
+      color: white;
+      background:
+        radial-gradient(circle at 80% 15%, rgba(231, 32, 39, 0.45), transparent 32%),
+        linear-gradient(130deg, #101828 0%, #1d2939 58%, #3b1519 100%);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      color: #f2f4f7;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 980px;
+      margin: 0;
+      font-size: clamp(38px, 5vw, 68px);
+      line-height: 1.02;
+      letter-spacing: -0.055em;
+    }
+
+    .hero p {
+      max-width: 900px;
+      margin: 22px 0 0;
+      color: #d0d5dd;
+      font-size: 18px;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .hero-meta span {
+      padding: 7px 11px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.09);
+      color: #eaecf0;
+      font-size: 13px;
+    }
+
+    .content {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 42px 0 80px;
+    }
+
+    section { scroll-margin-top: 20px; }
+
+    .section-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 56px 0 18px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: clamp(28px, 3vw, 40px);
+      line-height: 1.12;
+      letter-spacing: -0.035em;
+    }
+
+    .section-heading p {
+      max-width: 650px;
+      margin: 7px 0 0;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: #fee4e2;
+      color: #b42318;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .card-pad { padding: 24px; }
+
+    .callout {
+      padding: 24px;
+      border-left: 5px solid var(--red);
+      background: #fff;
+    }
+
+    .callout h3 { margin: 0 0 8px; font-size: 21px; }
+    .callout p { margin: 0; color: var(--muted); }
+
+    .grid-2,
+    .grid-3,
+    .grid-4 {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .kpi {
+      min-height: 150px;
+      padding: 22px;
+    }
+
+    .kpi .num {
+      margin: 8px 0 2px;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .kpi .label { color: var(--muted); font-size: 13px; }
+    .kpi .delta { margin-top: 12px; font-size: 13px; font-weight: 700; }
+    .positive { color: var(--green); }
+    .warning { color: var(--amber); }
+    .danger { color: var(--red-dark); }
+
+    .mock-browser {
+      overflow: hidden;
+      border: 1px solid #d0d5dd;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(16, 24, 40, 0.14);
+    }
+
+    .browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 42px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f9fafb;
+    }
+
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #d0d5dd; }
+
+    .app-frame {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 305px;
+      min-height: 650px;
+    }
+
+    .app-main { padding: 20px; min-width: 0; }
+    .app-side { padding: 20px; border-left: 1px solid var(--line); background: #fcfcfd; }
+
+    .mini-title { margin: 0 0 3px; font-size: 19px; }
+    .mini-sub { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+
+    .mock-kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .mock-kpi {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+    }
+
+    .mock-kpi span { display: block; color: var(--muted); font-size: 9px; }
+    .mock-kpi strong { font-size: 19px; }
+
+    .chart-card {
+      margin-top: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .chart-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 11px;
+    }
+
+    .chart-head strong { font-size: 12px; }
+
+    .chart-svg { display: block; width: 100%; height: auto; }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 12px;
+    }
+
+    .rec {
+      padding: 13px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .rec:last-child { border-bottom: 0; }
+    .rec-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+    .rec p { margin: 5px 0 8px; color: var(--muted); font-size: 11px; }
+    .mini-btn {
+      display: inline-block;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #101828;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .visual-card { padding: 22px; }
+    .visual-card h3 { margin: 0 0 7px; font-size: 18px; }
+    .visual-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .visual-card .tag { display: inline-block; margin-top: 14px; font-size: 12px; font-weight: 700; color: var(--blue); }
+
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .spec-table th,
+    .spec-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    .spec-table th {
+      background: #f9fafb;
+      color: #344054;
+      font-size: 12px;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .spec-table tr:last-child td { border-bottom: 0; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 122px;
+      padding: 16px 13px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fff;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 47%;
+      right: -16px;
+      z-index: 2;
+      width: 22px;
+      color: var(--red);
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .flow-step span {
+      display: inline-grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      margin-bottom: 10px;
+      border-radius: 50%;
+      background: #fee4e2;
+      color: #b42318;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .flow-step strong { display: block; margin-bottom: 5px; font-size: 13px; }
+    .flow-step small { color: var(--muted); }
+
+    .phase {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 24px;
+      padding: 24px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .phase:first-child { border-top: 0; }
+    .phase-no { color: var(--red); font-size: 13px; font-weight: 800; text-transform: uppercase; }
+    .phase h3 { margin: 0 0 7px; font-size: 21px; }
+    .phase p { margin: 0 0 12px; color: var(--muted); }
+
+    ul.compact { margin: 8px 0 0; padding-left: 19px; }
+    ul.compact li { margin: 5px 0; }
+
+    .prompt-card {
+      margin: 18px 0;
+      overflow: hidden;
+      border: 1px solid #344054;
+      border-radius: 14px;
+      background: #101828;
+      box-shadow: var(--shadow);
+    }
+
+    .prompt-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 17px;
+      border-bottom: 1px solid #344054;
+      color: #fff;
+    }
+
+    .prompt-head strong { font-size: 15px; }
+    .copy-btn {
+      padding: 7px 10px;
+      border: 1px solid #667085;
+      border-radius: 7px;
+      background: #1d2939;
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .copy-btn:hover { background: #344054; }
+
+    pre {
+      margin: 0;
+      padding: 20px;
+      overflow: auto;
+      color: #eaecf0;
+      font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+
+    .repo-anchor {
+      padding: 17px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+    .repo-anchor code { color: #b42318; font-size: 12px; }
+    .repo-anchor p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+
+    .checklist {
+      columns: 2;
+      column-gap: 34px;
+      margin: 0;
+      padding-left: 20px;
+    }
+    .checklist li { break-inside: avoid; margin: 0 0 9px; }
+
+    .footer {
+      padding: 32px 24px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    @media (max-width: 1080px) {
+      .shell { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      nav { columns: 2; }
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .flow-step::after { display: none; }
+    }
+
+    @media (max-width: 760px) {
+      aside { display: none; }
+      .content { width: min(100% - 28px, 1180px); }
+      .grid-2, .grid-3, .grid-4, .chart-row { grid-template-columns: 1fr; }
+      .app-frame { grid-template-columns: 1fr; }
+      .app-side { border-left: 0; border-top: 1px solid var(--line); }
+      .mock-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .phase { grid-template-columns: 1fr; gap: 7px; }
+      .flow { grid-template-columns: 1fr; }
+      .checklist { columns: 1; }
+      .section-heading { display: block; }
+      .badge { margin-top: 12px; }
+    }
+
+    @media print {
+      aside { display: none; }
+      .shell { display: block; }
+      .hero { background: #101828 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .prompt-card, .card, .mock-browser { break-inside: avoid; box-shadow: none; }
+      .copy-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="brand"><span class="brand-mark">SF</span> SickFit Nexus Plan</div>
+    <nav>
+      <div class="nav-label">Direction</div>
+      <a href="#decision">Product decision</a>
+      <a href="#experience">Visual experience</a>
+      <a href="#visuals">Required graphs</a>
+      <a href="#workflow">Planner workflow</a>
+      <a href="#rules">Simulation rules</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#phases">Implementation phases</a>
+      <div class="nav-label">Execution</div>
+      <a href="#prompts">IDE prompts</a>
+      <a href="#acceptance">Acceptance criteria</a>
+      <a href="#repo">Repo anchors</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">SickFit Nexus · Production & Restock</div>
+      <h1>Visual Production Planner and Run Simulator</h1>
+      <p>
+        A repository-aware implementation plan for turning the existing Production page into a visual decision-support workspace that shows what to make, how much to make, when it should arrive, what inventory risk remains, and what the team should do next.
+      </p>
+      <div class="hero-meta">
+        <span>React + TypeScript + Vite</span>
+        <span>Supabase Postgres</span>
+        <span>Recharts already installed</span>
+        <span>Non-destructive simulation</span>
+        <span>Reusable production templates</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <section id="decision">
+        <div class="section-heading">
+          <div>
+            <h2>Product decision</h2>
+            <p>The Production Planner should be a decision layer between inventory risk and creation of a Manufacturer PO.</p>
+          </div>
+          <span class="badge">Recommended direction</span>
+        </div>
+
+        <div class="callout card">
+          <h3>Do not make the planner a spreadsheet with prettier numbers.</h3>
+          <p>
+            The primary output must be a visual story: current inventory trajectory, projected stockout, planned production arrival, recovered coverage, manufacturer capacity, cost, and the operational steps needed to execute the run. Tables remain available for detail and editing, but graphs should explain the plan first.
+          </p>
+        </div>
+
+        <div class="grid-3" style="margin-top:18px">
+          <div class="card visual-card">
+            <h3>One shared simulation result</h3>
+            <p>Charts, recommendations, summary cards, and SKU tables must all render from the same versioned result object so totals cannot drift.</p>
+          </div>
+          <div class="card visual-card">
+            <h3>Baseline versus proposed</h3>
+            <p>Every visual should make the difference between “do nothing” and “run this plan” immediately understandable.</p>
+          </div>
+          <div class="card visual-card">
+            <h3>Explainable recommendations</h3>
+            <p>Recommendations should identify the trigger, operational impact, proposed action, and which chart or SKU supports the conclusion.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="experience">
+        <div class="section-heading">
+          <div>
+            <h2>Visual-first planner experience</h2>
+            <p>Suggested desktop layout for the Simulation Results view. The recommendation rail stays visible while the user explores charts and SKU details.</p>
+          </div>
+        </div>
+
+        <div class="mock-browser">
+          <div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="app-frame">
+            <div class="app-main">
+              <h3 class="mini-title">Core Compression Restock — August</h3>
+              <p class="mini-sub">Simulated with current inventory, allocations, open manufacturing orders, 60-day target coverage, and standard vendor lead time.</p>
+
+              <div class="mock-kpis">
+                <div class="mock-kpi"><span>Units proposed</span><strong>4,850</strong></div>
+                <div class="mock-kpi"><span>Estimated cost</span><strong>$18.4k</strong></div>
+                <div class="mock-kpi"><span>Stockouts avoided</span><strong>7</strong></div>
+                <div class="mock-kpi"><span>Capacity used</span><strong>72%</strong></div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-head"><strong>Inventory Projection: Baseline vs Proposed Run</strong><span>Next 90 days</span></div>
+                <svg class="chart-svg" viewBox="0 0 700 245" role="img" aria-label="Example inventory projection chart">
+                  <rect x="0" y="0" width="700" height="245" fill="#fff"/>
+                  <g stroke="#eaecf0" stroke-width="1">
+                    <line x1="54" x2="680" y1="38" y2="38"/><line x1="54" x2="680" y1="88" y2="88"/><line x1="54" x2="680" y1="138" y2="138"/><line x1="54" x2="680" y1="188" y2="188"/>
+                  </g>
+                  <line x1="54" x2="680" y1="164" y2="164" stroke="#f79009" stroke-width="2" stroke-dasharray="5 5"/>
+                  <text x="57" y="158" fill="#b54708" font-size="10">Safety stock</text>
+                  <line x1="410" x2="410" y1="25" y2="205" stroke="#6941c6" stroke-width="2" stroke-dasharray="4 4"/>
+                  <text x="416" y="35" fill="#6941c6" font-size="10">Planned arrival</text>
+                  <path d="M54 54 C145 76, 225 116, 310 154 S430 213, 680 225" fill="none" stroke="#d92d20" stroke-width="4"/>
+                  <path d="M54 54 C145 76, 225 116, 310 154 S370 183, 410 192 C430 105, 520 82, 680 107" fill="none" stroke="#175cd3" stroke-width="4"/>
+                  <circle cx="410" cy="192" r="5" fill="#175cd3"/>
+                  <text x="477" y="225" fill="#667085" font-size="10">Baseline stockout</text>
+                  <text x="500" y="92" fill="#175cd3" font-size="10">With proposed run</text>
+                  <text x="505" y="210" fill="#d92d20" font-size="10">No action</text>
+                  <g fill="#667085" font-size="9">
+                    <text x="48" y="224">Today</text><text x="192" y="224">30 days</text><text x="385" y="224">60 days</text><text x="620" y="224">90 days</text>
+                  </g>
+                </svg>
+              </div>
+
+              <div class="chart-row">
+                <div class="chart-card">
+                  <div class="chart-head"><strong>Coverage Before and After</strong><span>Days of supply</span></div>
+                  <svg class="chart-svg" viewBox="0 0 430 210" role="img" aria-label="Example grouped bar chart">
+                    <g stroke="#eaecf0"><line x1="45" x2="410" y1="175" y2="175"/><line x1="45" x2="410" y1="115" y2="115"/><line x1="45" x2="410" y1="55" y2="55"/></g>
+                    <g fill="#d0d5dd"><rect x="72" y="130" width="24" height="45" rx="4"/><rect x="160" y="146" width="24" height="29" rx="4"/><rect x="248" y="105" width="24" height="70" rx="4"/><rect x="336" y="155" width="24" height="20" rx="4"/></g>
+                    <g fill="#175cd3"><rect x="101" y="67" width="24" height="108" rx="4"/><rect x="189" y="82" width="24" height="93" rx="4"/><rect x="277" y="43" width="24" height="132" rx="4"/><rect x="365" y="92" width="24" height="83" rx="4"/></g>
+                    <g fill="#667085" font-size="9"><text x="73" y="193">Core</text><text x="157" y="193">Sport</text><text x="242" y="193">Medical</text><text x="326" y="193">Custom</text></g>
+                  </svg>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head"><strong>Manufacturer Capacity</strong><span>Week of Aug 10</span></div>
+                  <svg class="chart-svg" viewBox="0 0 330 210" role="img" aria-label="Example capacity chart">
+                    <circle cx="165" cy="104" r="72" fill="none" stroke="#eaecf0" stroke-width="20"/>
+                    <circle cx="165" cy="104" r="72" fill="none" stroke="#e72027" stroke-width="20" stroke-dasharray="326 452" transform="rotate(-90 165 104)" stroke-linecap="round"/>
+                    <text x="165" y="101" text-anchor="middle" font-size="30" font-weight="800" fill="#17202a">72%</text>
+                    <text x="165" y="121" text-anchor="middle" font-size="10" fill="#667085">capacity committed</text>
+                    <text x="165" y="170" text-anchor="middle" font-size="10" fill="#16803c">1,900 units remain</text>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-head"><strong>Production Schedule</strong><span>Milestones and dependencies</span></div>
+                <svg class="chart-svg" viewBox="0 0 700 170" role="img" aria-label="Example production timeline">
+                  <g fill="#667085" font-size="9"><text x="175" y="18">Jul 20</text><text x="285" y="18">Aug 1</text><text x="400" y="18">Aug 15</text><text x="530" y="18">Sep 1</text><text x="635" y="18">Sep 15</text></g>
+                  <g stroke="#eaecf0"><line x1="165" x2="675" y1="25" y2="25"/><line x1="165" x2="675" y1="65" y2="65"/><line x1="165" x2="675" y1="105" y2="105"/><line x1="165" x2="675" y1="145" y2="145"/></g>
+                  <g fill="#344054" font-size="10"><text x="10" y="49">Approval + PO</text><text x="10" y="89">Manufacturing</text><text x="10" y="129">QC + Packaging</text><text x="10" y="165">Freight + Receiving</text></g>
+                  <rect x="178" y="34" width="72" height="20" rx="5" fill="#6941c6"/><rect x="250" y="74" width="236" height="20" rx="5" fill="#175cd3"/><rect x="486" y="114" width="72" height="20" rx="5" fill="#f79009"/><rect x="558" y="150" width="98" height="14" rx="5" fill="#16803c"/>
+                  <line x1="530" y1="25" x2="530" y2="168" stroke="#d92d20" stroke-dasharray="4 4"/><text x="535" y="41" font-size="9" fill="#d92d20">Required arrival</text>
+                </svg>
+              </div>
+            </div>
+
+            <div class="app-side">
+              <div class="chart-head"><strong>Recommended Next Steps</strong><span>5 actions</span></div>
+              <div class="rec">
+                <div class="rec-top"><strong class="danger">Critical</strong><span>7 SKUs</span></div>
+                <p>Move order date forward 18 days. Standard lead time currently creates a stockout gap.</p>
+                <span class="mini-btn">Apply date</span>
+              </div>
+              <div class="rec">
+                <div class="rec-top"><strong class="warning">Capacity</strong><span>+850 units</span></div>
+                <p>The planned run exceeds the selected production lane. Split the run or choose another week.</p>
+                <span class="mini-btn">View options</span>
+              </div>
+              <div class="rec">
+                <div class="rec-top"><strong class="positive">Opportunity</strong><span>3 SKUs</span></div>
+                <p>Reduce slow-moving quantities and reallocate capacity to core compression styles.</p>
+                <span class="mini-btn">Review mix</span>
+              </div>
+              <div class="rec">
+                <div class="rec-top"><strong>Readiness</strong><span>2 blockers</span></div>
+                <p>Artwork and barcode confirmation are still missing for two custom products.</p>
+                <span class="mini-btn">Resolve blockers</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="visuals">
+        <div class="section-heading">
+          <div>
+            <h2>Minimum visual package</h2>
+            <p>These visuals are required for the first complete version. They should not be replaced by a table-only implementation.</p>
+          </div>
+          <span class="badge">Visual acceptance gate</span>
+        </div>
+
+        <div class="grid-3">
+          <div class="card visual-card">
+            <h3>1. Inventory projection timeline</h3>
+            <p>Multi-line or composed chart showing baseline inventory, proposed-plan inventory, safety stock, zero-stock threshold, demand, and planned receipt dates.</p>
+            <span class="tag">Primary decision chart</span>
+          </div>
+          <div class="card visual-card">
+            <h3>2. Before vs after coverage</h3>
+            <p>Grouped bar chart comparing days of supply before the run and after the run by SKU, family, category, or selected group.</p>
+            <span class="tag">Shows improvement</span>
+          </div>
+          <div class="card visual-card">
+            <h3>3. Production schedule timeline</h3>
+            <p>Gantt-style visual for approval, purchase order, manufacturing, quality check, packaging, freight, and receiving milestones.</p>
+            <span class="tag">Shows feasibility</span>
+          </div>
+          <div class="card visual-card">
+            <h3>4. Capacity utilization</h3>
+            <p>Stacked bar or progress/gauge view of available, previously committed, newly proposed, and remaining capacity by manufacturer and week.</p>
+            <span class="tag">Shows constraints</span>
+          </div>
+          <div class="card visual-card">
+            <h3>5. SKU risk matrix</h3>
+            <p>Heatmap or sortable matrix plotting stockout urgency against business impact. Clicking a cell filters the SKU table and recommendations.</p>
+            <span class="tag">Shows priorities</span>
+          </div>
+          <div class="card visual-card">
+            <h3>6. Cost and quantity mix</h3>
+            <p>Donut or stacked bar view of planned units and estimated cost by category, product family, or manufacturer.</p>
+            <span class="tag">Shows allocation</span>
+          </div>
+        </div>
+
+        <h3 style="margin-top:28px">Optional second-pass visuals</h3>
+        <div class="grid-3">
+          <div class="card visual-card"><h3>Scenario comparison</h3><p>Compare Base, Conservative, Recommended, and Aggressive plans across cost, stockouts, coverage, and capacity.</p></div>
+          <div class="card visual-card"><h3>Inventory waterfall</h3><p>Explain how on-hand inventory becomes ending inventory after allocations, demand, inbound orders, and the proposed run.</p></div>
+          <div class="card visual-card"><h3>Recommendation impact</h3><p>Show how applying a recommendation changes cost, stockout count, arrival gap, or days of supply before saving the change.</p></div>
+        </div>
+      </section>
+
+      <section id="workflow">
+        <div class="section-heading">
+          <div>
+            <h2>End-to-end planner workflow</h2>
+            <p>The simulator remains non-destructive until a user approves and converts the plan.</p>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="flow-step"><span>1</span><strong>Start plan</strong><small>Blank, template, reorder queue, or duplicate past run.</small></div>
+          <div class="flow-step"><span>2</span><strong>Set goal</strong><small>Restock, launch, seasonal build, emergency, or custom.</small></div>
+          <div class="flow-step"><span>3</span><strong>Choose inputs</strong><small>Horizon, manufacturer, target date, demand, and buffers.</small></div>
+          <div class="flow-step"><span>4</span><strong>Build run</strong><small>Select SKUs, quantities, specs, packaging, and costs.</small></div>
+          <div class="flow-step"><span>5</span><strong>Simulate</strong><small>Generate a versioned, read-only result snapshot.</small></div>
+          <div class="flow-step"><span>6</span><strong>Review visuals</strong><small>Inspect charts, risks, conflicts, recommendations, and detail.</small></div>
+          <div class="flow-step"><span>7</span><strong>Take action</strong><small>Save, revise, approve, split, export, or convert to Manufacturer PO.</small></div>
+        </div>
+      </section>
+
+      <section id="rules">
+        <div class="section-heading">
+          <div>
+            <h2>Simulation rules and outputs</h2>
+            <p>Use deterministic, testable calculations first. Recommendations should be explainable and should not require an AI service for the MVP.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card card-pad">
+            <h3>Core daily projection</h3>
+            <pre style="background:#f9fafb;color:#17202a;border-radius:10px">projectedAvailable[day]
+= startingOnHand
+- startingAllocated
+- confirmedDemandThroughDay
+- forecastDemandThroughDay
++ existingIncomingReceivedByDay
++ proposedProductionReceivedByDay</pre>
+            <p style="color:var(--muted);margin-bottom:0">Calculate this by SKU for every day in the selected horizon, then aggregate for category and portfolio charts.</p>
+          </div>
+          <div class="card card-pad">
+            <h3>Required derived values</h3>
+            <ul class="compact">
+              <li>First date below safety stock</li>
+              <li>First stockout date</li>
+              <li>Number of stockout days</li>
+              <li>Inventory gap before proposed receipt</li>
+              <li>Days of supply before and after</li>
+              <li>Suggested, planned, minimum, and rounded quantities</li>
+              <li>Capacity used and capacity conflict</li>
+              <li>Estimated line and plan cost</li>
+              <li>Slow-moving and overproduction flags</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 style="margin-top:28px">Recommendation rule examples</h3>
+        <table class="spec-table">
+          <thead><tr><th>Trigger</th><th>Recommendation</th><th>Visual connection</th></tr></thead>
+          <tbody>
+            <tr><td>Stockout occurs before planned receipt</td><td>Move order date forward, expedite a portion, split the run, or identify alternate inventory.</td><td>Highlight the red stockout gap on the projection chart and timeline.</td></tr>
+            <tr><td>Ending coverage is below target</td><td>Increase quantity to the next MOQ or case-pack increment.</td><td>Show target coverage line and projected ending coverage bar.</td></tr>
+            <tr><td>Ending coverage is excessively high</td><td>Reduce the run or reallocate capacity to higher-risk SKUs.</td><td>Mark the SKU in the risk matrix as overproduced.</td></tr>
+            <tr><td>Proposed quantity exceeds available capacity</td><td>Choose another production week, another lane, or split manufacturers.</td><td>Show the proposed segment crossing the capacity maximum.</td></tr>
+            <tr><td>Artwork, barcode, card, or spec is incomplete</td><td>Block approval and create a readiness task.</td><td>Add a timeline blocker marker and recommendation card.</td></tr>
+            <tr><td>Existing incoming inventory already covers demand</td><td>Reduce or remove the redundant proposed quantity.</td><td>Show existing receipt and proposed receipt separately on the projection chart.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="architecture">
+        <div class="section-heading">
+          <div>
+            <h2>Recommended architecture</h2>
+            <p>Build the planner around a versioned simulation snapshot so the UI can remain visual, auditable, and internally consistent.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card card-pad">
+            <h3>New pages</h3>
+            <ul class="compact">
+              <li><code>src/pages/ProductionPlannerPage.tsx</code></li>
+              <li><code>src/pages/ProductionPlanDetailPage.tsx</code></li>
+              <li><code>src/pages/ProductionTemplatesPage.tsx</code></li>
+            </ul>
+            <h3>New services and utilities</h3>
+            <ul class="compact">
+              <li><code>src/services/productionPlanService.ts</code></li>
+              <li><code>src/services/productionTemplateService.ts</code></li>
+              <li><code>src/services/productionSimulationService.ts</code></li>
+              <li><code>src/utils/productionSimulation.ts</code></li>
+              <li><code>src/utils/productionRecommendations.ts</code></li>
+            </ul>
+          </div>
+          <div class="card card-pad">
+            <h3>New visual components</h3>
+            <ul class="compact">
+              <li><code>InventoryProjectionChart.tsx</code></li>
+              <li><code>CoverageComparisonChart.tsx</code></li>
+              <li><code>ProductionScheduleChart.tsx</code></li>
+              <li><code>CapacityUtilizationChart.tsx</code></li>
+              <li><code>SkuRiskMatrix.tsx</code></li>
+              <li><code>ProductionMixChart.tsx</code></li>
+              <li><code>SimulationRecommendationPanel.tsx</code></li>
+            </ul>
+            <p style="color:var(--muted)">Reuse existing panel, card, status, tooltip, formatting, and Recharts patterns. Extend the simple chart wrappers only where the planner needs multiple lines, thresholds, reference areas, stacked data, or linked interactions.</p>
+          </div>
+        </div>
+
+        <h3 style="margin-top:28px">Suggested database tables</h3>
+        <table class="spec-table">
+          <thead><tr><th>Table</th><th>Purpose</th><th>Important fields</th></tr></thead>
+          <tbody>
+            <tr><td><code>production_plans</code></td><td>Plan header, assumptions, workflow state, and conversion status.</td><td>name, status, goal, manufacturer_id, horizon, dates, buffers, totals, source, converted_po_id.</td></tr>
+            <tr><td><code>production_plan_items</code></td><td>Editable SKU-level quantities, assumptions, costs, specs, and latest result summary.</td><td>product_id, suggested_quantity, planned_quantity, MOQ, increment, demand override, spec_snapshot.</td></tr>
+            <tr><td><code>production_plan_templates</code></td><td>Reusable production recipe and default assumptions.</td><td>name, purpose, manufacturer, horizon, coverage target, lead-time defaults, active.</td></tr>
+            <tr><td><code>production_plan_template_items</code></td><td>Reusable assortment and quantity rules.</td><td>product_id, fixed quantity, percentage mix, min/max, increment, spec defaults.</td></tr>
+            <tr><td><code>production_simulation_runs</code></td><td>Immutable versioned input/result snapshot for audit and scenario comparison.</td><td>scenario_name, input_snapshot jsonb, result_snapshot jsonb, recommendations jsonb, version.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin-top:28px">Simulation result contract</h3>
+        <div class="card card-pad">
+          <pre style="background:#101828;color:#eaecf0;border-radius:10px">interface ProductionSimulationResult {
+  simulationId: string;
+  simulatedAt: string;
+  horizon: { startDate: string; endDate: string; days: number };
+  summary: {
+    totalUnits: number;
+    estimatedCost: number;
+    stockoutsBefore: number;
+    stockoutsAfter: number;
+    capacityUtilizationPercent: number;
+    targetArrivalDate: string | null;
+    feasibleArrivalDate: string | null;
+  };
+  dailyPortfolioSeries: Array&lt;{
+    date: string;
+    baselineAvailable: number;
+    proposedAvailable: number;
+    safetyStock: number;
+    forecastDemand: number;
+    existingIncoming: number;
+    proposedIncoming: number;
+  }&gt;;
+  skuResults: ProductionSimulationSkuResult[];
+  capacitySeries: CapacityBucketResult[];
+  scheduleMilestones: ProductionMilestone[];
+  costMix: ProductionMixPoint[];
+  riskMatrix: ProductionRiskPoint[];
+  recommendations: ProductionRecommendation[];
+}</pre>
+        </div>
+      </section>
+
+      <section id="phases">
+        <div class="section-heading">
+          <div>
+            <h2>Implementation phases</h2>
+            <p>Each phase should leave the existing Production and Purchase Order workflows functional.</p>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <div class="phase">
+            <div class="phase-no">Phase 1</div>
+            <div><h3>Foundation and schema</h3><p>Add types, migration, CRUD services, routes, and a basic plan list/detail shell. No simulation writes to inventory.</p><ul class="compact"><li>Create plan/template/simulation tables and policies.</li><li>Add domain types and service methods.</li><li>Add navigation while retaining current Manufacturing Orders access.</li><li>Support blank plans and plans created from reorder recommendations.</li></ul></div>
+          </div>
+          <div class="phase">
+            <div class="phase-no">Phase 2</div>
+            <div><h3>Deterministic simulation engine</h3><p>Build pure TypeScript calculations and tests before connecting complex UI.</p><ul class="compact"><li>Daily SKU projections and aggregation.</li><li>Lead time, receipt, safety stock, MOQ, and quantity increment handling.</li><li>Capacity conflict and stockout-gap calculations.</li><li>Rule-based recommendations with traceable reason codes.</li></ul></div>
+          </div>
+          <div class="phase">
+            <div class="phase-no">Phase 3</div>
+            <div><h3>Visual plan builder and results</h3><p>Create the main planner workspace, required charts, linked interactions, tooltips, and recommendation rail.</p><ul class="compact"><li>Baseline versus proposed inventory chart.</li><li>Coverage, schedule, capacity, risk, and mix visuals.</li><li>SKU table as supporting detail below the visuals.</li><li>Responsive and accessible chart fallbacks.</li></ul></div>
+          </div>
+          <div class="phase">
+            <div class="phase-no">Phase 4</div>
+            <div><h3>Templates and scenarios</h3><p>Add reusable production recipes and side-by-side scenario comparison.</p><ul class="compact"><li>Create/edit/duplicate/archive templates.</li><li>Apply a template without locking the plan.</li><li>Save multiple simulation versions.</li><li>Compare cost, coverage, stockouts, and capacity visually.</li></ul></div>
+          </div>
+          <div class="phase">
+            <div class="phase-no">Phase 5</div>
+            <div><h3>Approval and Manufacturer PO conversion</h3><p>Convert only an approved plan, preserving source snapshots and manufacturing specifications.</p><ul class="compact"><li>Readiness checks and blockers.</li><li>Convert one plan to one or more Manufacturer POs.</li><li>Link generated PO back to plan and simulation version.</li><li>Do not create inventory events until existing receive-inventory workflow runs.</li></ul></div>
+          </div>
+          <div class="phase">
+            <div class="phase-no">Phase 6</div>
+            <div><h3>QA, polish, and operational rollout</h3><p>Reconcile every chart with table totals and protect existing Production workflows.</p><ul class="compact"><li>Unit and integration tests.</li><li>Mobile chart behavior and empty states.</li><li>Performance with large SKU sets.</li><li>Audit history, exports, documentation, and seed/demo data.</li></ul></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="prompts">
+        <div class="section-heading">
+          <div>
+            <h2>Copy-ready IDE prompts</h2>
+            <p>Use the master prompt for a full implementation plan, or run the phased prompts in order for smaller, reviewable changes.</p>
+          </div>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Master implementation prompt</strong><button class="copy-btn" data-copy="master">Copy</button></div>
+          <pre id="master">You are working in the existing vinbi07/SickFitNexus React + TypeScript + Vite + Supabase repository.
+
+Build a Production Planner and non-destructive Production Run Simulator by evolving the existing Production & Restock workflow. Do not remove or break current manufacturing orders, receiving, inventory, reorder queue, capacity, purchase order, dashboard, alert, reporting, or lookbook functionality.
+
+PRODUCT GOAL
+Create a decision-support layer between inventory risk and creation of a Manufacturer PO. The planner must tell the team what to manufacture, how much, when to order, when it should arrive, what risk remains, what the run costs, whether manufacturer capacity can support it, and what operational steps should happen next.
+
+VISUAL-FIRST REQUIREMENT
+This feature must not become a table or collection of number cards. Charts are a primary deliverable. Use the repo’s existing Recharts dependency and visual conventions. Summary cards and SKU tables should support the visuals, not replace them.
+
+The completed Simulation Results experience must include at minimum:
+1. Inventory Projection Timeline: baseline versus proposed inventory by date, with safety-stock line, zero-stock threshold, existing incoming receipts, proposed production receipts, target arrival, and stockout-gap highlighting.
+2. Before vs After Coverage: grouped bar chart showing days of supply before and after the plan.
+3. Production Schedule Timeline: Gantt-style milestones for approval, PO creation, production, quality check, packaging, freight, and receiving, including required-arrival and blocker markers.
+4. Manufacturer Capacity Utilization: available, previously committed, newly proposed, and remaining capacity by manufacturer and time bucket.
+5. SKU Risk Matrix: visual prioritization of stockout urgency versus business impact; clicking a point/cell should filter or focus the SKU detail.
+6. Cost and Quantity Mix: planned units and estimated cost by category, product family, or manufacturer.
+
+Every chart, recommendation, total, and table must render from the same versioned ProductionSimulationResult object. Chart values and detail totals must reconcile exactly.
+
+CORE WORKFLOW
+- Start a plan blank, from a production template, from reorder queue recommendations, or by duplicating a prior plan.
+- Select a goal: restock, retailer launch, seasonal build, emergency recovery, or custom.
+- Set planning horizon, manufacturer, production lane/week, planned order date, target arrival, demand method, safety-stock/coverage target, and whether to include allocated inventory and existing incoming orders.
+- Add products/variants and editable planned quantities.
+- Carry manufacturing data already represented in the repo, including design/spec snapshot, sock card, pack pairs, size, construction, cards used, box number, Pantone, barcode requirement, art status/notes, mockup/artwork references, rib/toe/pattern/signature, and foot text.
+- Run a simulation without changing inventory, allocations, purchase orders, or capacity records.
+- Review visual results, SKU detail, readiness blockers, and explainable recommendations.
+- Save multiple simulation versions/scenarios.
+- Approve a plan and convert the selected simulation version into one or more Manufacturer POs.
+- Continue using the existing receive-inventory flow for actual inventory changes.
+
+SIMULATION
+Implement the engine as pure, testable TypeScript functions in src/utils/productionSimulation.ts and recommendation rules in src/utils/productionRecommendations.ts. Reuse and extend existing forecasting and operations helpers where appropriate instead of duplicating logic.
+
+For every SKU and day in the selected horizon calculate:
+projected available = starting on hand - starting allocated - confirmed demand - forecast demand + existing incoming received by that day + proposed production received by that day.
+
+Include:
+- daily baseline and proposed series
+- first date below safety stock
+- first stockout date
+- stockout-day count
+- inventory gap before receipt
+- days of supply before and after
+- suggested and planned production quantity
+- MOQ and quantity-increment rounding
+- estimated cost
+- ending coverage
+- slow-mover and overproduction risk
+- capacity usage/conflict
+- readiness blockers
+
+Recommendations must have structured reason codes, severity, explanation, impact, affected SKUs, suggested action, optional quick action, and ability to dismiss or override with a note. Use deterministic rules for the MVP, not opaque AI output.
+
+DATA MODEL
+Add an idempotent migration for:
+- production_plans
+- production_plan_items
+- production_plan_templates
+- production_plan_template_items
+- production_simulation_runs
+
+Simulation runs must preserve immutable input_snapshot, result_snapshot, recommendations, scenario_name, and simulation_version so historical results remain understandable after inventory changes.
+
+Suggested statuses: Draft, Simulated, Needs Review, Approved, Converted, Cancelled, Archived.
+
+PAGES AND COMPONENTS
+Create or refactor toward:
+- src/pages/ProductionPlannerPage.tsx
+- src/pages/ProductionPlanDetailPage.tsx
+- src/pages/ProductionTemplatesPage.tsx
+- src/services/productionPlanService.ts
+- src/services/productionTemplateService.ts
+- src/services/productionSimulationService.ts
+- src/components/production/InventoryProjectionChart.tsx
+- src/components/production/CoverageComparisonChart.tsx
+- src/components/production/ProductionScheduleChart.tsx
+- src/components/production/CapacityUtilizationChart.tsx
+- src/components/production/SkuRiskMatrix.tsx
+- src/components/production/ProductionMixChart.tsx
+- src/components/production/SimulationRecommendationPanel.tsx
+
+Use existing panel, card, formatting, loading, error, notification, status, and responsive patterns. Existing basic chart cards may be reused or extended, but do not force advanced planner visuals into wrappers that cannot support multiple series, thresholds, reference areas, linked filters, or custom tooltips.
+
+LAYOUT
+Desktop Simulation Results:
+- Page header and scenario controls
+- Four to six concise summary cards
+- Full-width Inventory Projection Timeline as the hero visual
+- Two-column Coverage Comparison and Capacity Utilization
+- Full-width Production Schedule Timeline
+- SKU Risk Matrix and Cost/Quantity Mix
+- Supporting SKU detail table
+- Sticky right-side recommendation/next-step panel when viewport allows
+
+Mobile:
+- Stack all sections
+- Make charts horizontally scrollable only when necessary
+- Provide compact legend and accessible textual summary below each chart
+- Never hide a critical recommendation or result exclusively in hover behavior
+
+TEMPLATES
+A template is a reusable production recipe, not only a saved product list. Store default manufacturer, horizon, arrival logic, coverage target, lead-time buffer, products, fixed quantities or percentage mix, min/max, MOQ/increments, specs, packaging, cost assumptions, milestones, and notes. Applying a template must create editable plan values rather than permanently linking and locking the plan.
+
+CONVERSION
+Only approved plans can convert. Validate manufacturer, dates, products, positive rounded quantities, costs, manufacturing specs, artwork/barcode/card readiness, and selected simulation version. Preserve source production_plan_id and simulation_run_id on the generated Manufacturer PO or an appropriate relationship table. Conversion must not modify on-hand inventory.
+
+TESTING AND ACCEPTANCE
+- Add unit tests for projection math, receipts, demand, stockout gaps, safety stock, MOQ rounding, capacity, and recommendation triggers.
+- Add integration tests for plan creation, simulation persistence, template application, approval, and PO conversion.
+- Build and tests must pass.
+- Empty, loading, error, no-history, missing-vendor, missing-capacity, and missing-date states must be understandable.
+- Charts and tables must reconcile.
+- Color cannot be the only status indicator.
+- Preserve existing Production & Restock and Purchase Order behavior.
+
+Before coding, inspect the current repo and provide a concise implementation map naming the existing files you will reuse and the files you will create or change. Then implement in reviewable phases, verifying build/tests after each phase.</pre>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Phase 1 — Schema, domain types, and plan CRUD</strong><button class="copy-btn" data-copy="p1">Copy</button></div>
+          <pre id="p1">In vinbi07/SickFitNexus, implement Phase 1 of the Production Planner foundation. Do not build the full simulation or charts yet, and do not break the existing /production page.
+
+1. Inspect current migrations, domain types, services, routing, navigation, ProductionPage, purchaseOrderService, inventoryService, capacityService, and baseService patterns.
+2. Add an idempotent Supabase migration for production_plans, production_plan_items, production_plan_templates, production_plan_template_items, and production_simulation_runs, including indexes, updated_at triggers, foreign keys, sensible check constraints, RLS, and policies consistent with the repo’s current MVP access model.
+3. Add TypeScript domain interfaces and status unions.
+4. Add productionPlanService and productionTemplateService CRUD methods.
+5. Add a Production Planner list page and basic plan detail/editor shell.
+6. Allow creating a blank plan and creating a plan prefilled from selected reorder queue items.
+7. Add routes and navigation without removing the existing Manufacturing Orders workflow. A good structure is /production for the planner overview with tabs or clear links to Plans, Simulator, Templates, Manufacturing Orders, and Capacity.
+8. Do not update inventory, allocations, capacity, or purchase orders from plan edits.
+9. Add basic tests for services/utilities that can be tested at this stage.
+10. Run npm test and npm run build, and fix all failures.
+
+Return a concise summary of files changed, schema decisions, and what remains for Phase 2.</pre>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Phase 2 — Simulation engine and recommendations</strong><button class="copy-btn" data-copy="p2">Copy</button></div>
+          <pre id="p2">Implement Phase 2 of the SickFit Nexus Production Planner: the deterministic simulation engine and explainable recommendation engine. Keep it non-destructive and UI-independent.
+
+Create pure TypeScript logic in src/utils/productionSimulation.ts and src/utils/productionRecommendations.ts. Reuse existing forecasting.ts, operations.ts, productionTimeline.ts, date helpers, and domain data where appropriate.
+
+The simulation must accept a normalized input snapshot containing products, inventory, allocations, inventory events/demand history, open customer demand where available, existing active Manufacturer POs and line items, vendor lead time/delay/reliability, capacity buckets/snapshots, plan assumptions, and proposed plan items.
+
+For every SKU and date in the horizon, produce baseline and proposed projected available inventory. Calculate safety-stock crossings, stockout dates, stockout-day count, receipt gaps, days of supply before/after, recommended quantity, MOQ/increment rounded quantity, ending inventory, ending coverage, estimated cost, slow-mover risk, overproduction risk, capacity usage, and readiness blockers.
+
+Return one ProductionSimulationResult contract containing summary, dailyPortfolioSeries, skuResults, capacitySeries, scheduleMilestones, costMix, riskMatrix, and recommendations. This single result will later drive all charts and tables.
+
+Recommendation records must contain id, reasonCode, severity, title, explanation, impactSummary, affectedProductIds/SKUs, suggestedAction, suggestedPatch when safe, and evidence values. Include rules for stockout-before-arrival, below-target ending coverage, excessive coverage, existing inbound coverage, capacity conflict, late required order date, missing artwork/barcode/card/spec readiness, and low-confidence demand history.
+
+Persist a simulation only through productionSimulationService after it completes successfully. Store immutable input and result snapshots with scenario name and version. Running a simulation must not modify inventory, purchase orders, allocations, or capacity.
+
+Add comprehensive Vitest tests for daily projection, demand, dated receipts, existing versus proposed incoming, safety stock, stockout gaps, MOQ/increment rounding, capacity conflict, no-demand-history behavior, and each recommendation rule. Run tests and build.</pre>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Phase 3 — Visual plan builder and graphs</strong><button class="copy-btn" data-copy="p3">Copy</button></div>
+          <pre id="p3">Implement Phase 3 of the SickFit Nexus Production Planner: the visual-first plan builder and simulation results experience.
+
+Use the existing Recharts dependency and current Nexus panel/card/formatting/loading/error patterns. This phase is not complete if it only produces KPIs and tables.
+
+Build these required visual components:
+1. InventoryProjectionChart: baselineAvailable and proposedAvailable lines/areas by date; safety-stock and zero thresholds; markers for existing incoming and proposed receipt dates; target-arrival marker; stockout-gap ReferenceArea; custom tooltip explaining the day’s change.
+2. CoverageComparisonChart: grouped bars for days of supply before and after. Support top-risk SKUs and category/family aggregation.
+3. ProductionScheduleChart: responsive Gantt-like milestone display for approval, PO, production, QC, packaging, freight, and receiving. Show dependencies, required-arrival marker, projected/actual distinction, and blockers.
+4. CapacityUtilizationChart: available, existing committed, proposed, and remaining capacity by manufacturer/week. Make over-capacity visually and textually obvious.
+5. SkuRiskMatrix: urgency versus business impact. Clicking a point/cell filters or focuses the SKU detail table and related recommendations.
+6. ProductionMixChart: cost and unit mix by category/product family/manufacturer.
+
+Desktop layout:
+- header/scenario controls
+- concise summary cards
+- full-width inventory projection hero chart
+- coverage and capacity two-column row
+- full-width schedule timeline
+- risk matrix and production mix row
+- supporting SKU table
+- sticky recommendation panel on the right when space allows
+
+The charts, summary cards, recommendations, and table must all consume the same ProductionSimulationResult. Do not recalculate business logic inside React components.
+
+Add linked interactions:
+- selecting a SKU in a chart focuses it in the table
+- selecting a recommendation highlights relevant chart points/periods
+- changing planned quantities marks the current result stale until re-simulated
+- allow toggling baseline/proposed series and changing chart grouping without changing the saved result
+
+Accessibility and mobile:
+- provide legends, labels, useful tooltips, keyboard-focusable controls, and text summaries
+- do not use color as the only signal
+- never hide critical content only in hover
+- stack on mobile and use intentional horizontal scrolling only for timeline/risk visuals when required
+
+Keep the visual styling consistent with SickFit Nexus. Run tests and build. Include screenshots or a concise visual verification description in your final summary.</pre>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Phase 4 — Templates and scenario comparison</strong><button class="copy-btn" data-copy="p4">Copy</button></div>
+          <pre id="p4">Implement Phase 4 of the SickFit Nexus Production Planner: production templates and scenario comparison.
+
+Production templates must be reusable production recipes. Support create, edit, duplicate, activate/deactivate/archive, preview, and Start Plan actions. A template can include default goal, manufacturer, production lane, planning horizon, planned order/arrival rules, coverage target, lead-time buffer, inclusion of allocations/inbound inventory, product assortment, fixed quantities or percentage mix, min/max, MOQ/increment, specs, sock card/packaging defaults, cost assumptions, milestones, and notes.
+
+Applying a template must copy editable values into a new plan. The plan must not remain locked to future template edits.
+
+Add scenario management to a production plan:
+- save multiple named simulation versions such as Base, Conservative, Recommended, and Aggressive
+- select the active scenario
+- compare scenarios without recomputing them
+- archive old scenarios while preserving audit history
+
+Create a visual Scenario Comparison view using charts and concise summaries for total cost, units, stockouts avoided, ending coverage, arrival gap, capacity utilization, and overproduction risk. Clearly identify tradeoffs and the recommended scenario using deterministic criteria, while allowing a user to choose another version.
+
+Ensure all scenario visual values come from stored simulation result snapshots. Add tests for template application, percentage mix normalization, scenario persistence, and scenario comparison. Run tests and build.</pre>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Phase 5 — Approval and Manufacturer PO conversion</strong><button class="copy-btn" data-copy="p5">Copy</button></div>
+          <pre id="p5">Implement Phase 5 of the SickFit Nexus Production Planner: readiness review, approval, and conversion into Manufacturer POs.
+
+Only allow conversion when:
+- plan status is Approved
+- a simulation version is selected
+- manufacturer and destination are valid
+- planned quantities are positive and rounded according to MOQ/increment rules
+- required dates and cost fields are valid
+- product/manufacturing specifications are present
+- artwork, barcode, sock-card, packaging, and other readiness requirements are satisfied or explicitly overridden with a reason
+- the selected result is not stale relative to plan inputs
+
+Create a readiness checklist UI tied to the Production Schedule and recommendation panel. Block approval when critical items are unresolved. Support documented overrides with actor, reason, and timestamp.
+
+Add a conversion method that uses the existing Purchase Order service patterns to create one or more po_type = "Manufacturer PO" records and their line items. Preserve design/spec snapshot, sock card, pack pairs, size, construction, cards used, box number, Pantone, barcode requirement, art status/notes, mockup/artwork references, rib/toe/pattern/signature, foot text, quantities, costs, dates, vendor, destination, and internal notes.
+
+Preserve the relationship from generated PO(s) back to production_plan_id and simulation_run_id using appropriate columns or a relationship table. Mark the plan Converted only after all related records are created successfully. Make the operation transactional where possible and idempotent so repeat clicks cannot create duplicate POs.
+
+Conversion must not change on-hand inventory. Inventory changes must continue through the existing receive-inventory workflow.
+
+After conversion, show the generated Manufacturing Order links, keep the simulation visuals available for audit, and compare planned versus actual milestone dates as real PO data arrives. Add tests and run build.</pre>
+        </div>
+
+        <div class="prompt-card">
+          <div class="prompt-head"><strong>Phase 6 — QA and visual polish</strong><button class="copy-btn" data-copy="p6">Copy</button></div>
+          <pre id="p6">Perform the final QA and polish pass for the SickFit Nexus Production Planner.
+
+1. Verify every chart, KPI, recommendation, exported value, and table total reconciles to the same stored ProductionSimulationResult.
+2. Add strong empty/loading/error states for no movement history, no vendor, missing lead time, missing capacity, missing date, no products, no inbound orders, and failed simulation persistence.
+3. Validate visual behavior with 1 SKU, 20 SKUs, 200+ SKUs, multiple manufacturers, multiple receipt dates, negative inventory, zero demand, unusually high demand, and over-capacity scenarios.
+4. Improve chart tooltips, legends, labels, threshold annotations, and responsive layouts without overcrowding the screen.
+5. Ensure color is not the only status signal and provide accessible text summaries for every important visual.
+6. Add table/chart cross-filtering, clear-filter actions, and URL-safe selected plan/scenario state where appropriate.
+7. Confirm mobile layouts stack cleanly and that timeline/risk visuals have usable scrolling and sticky labels.
+8. Add audit/activity events for plan creation, simulation, approval, override, conversion, and template use.
+9. Update README and add a concise docs/production-planner.md covering data flow, calculations, chart meanings, status lifecycle, and PO conversion.
+10. Run npm test and npm run build. Fix regressions in existing Production, Inventory, Dashboard, Reports, Purchase Orders, and receiving flows.
+
+Return a final implementation summary, test/build result, known limitations, and recommended future improvements such as weekly capacity calendars, richer seasonality, raw-material/BOM planning, and actual-versus-plan analytics.</pre>
+        </div>
+      </section>
+
+      <section id="acceptance">
+        <div class="section-heading">
+          <div>
+            <h2>Definition of done</h2>
+            <p>The following criteria keep the planner operational, visual, and trustworthy.</p>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <ul class="checklist">
+            <li>A user can create, edit, simulate, save, approve, and convert a production plan.</li>
+            <li>Simulation does not mutate inventory, allocation, capacity, or purchase-order data.</li>
+            <li>The hero inventory chart clearly compares baseline versus proposed outcomes.</li>
+            <li>Safety stock, zero inventory, receipt dates, target arrival, and stockout gaps are visible.</li>
+            <li>Coverage, schedule, capacity, risk, and production mix are shown graphically.</li>
+            <li>Tables support chart detail rather than replacing required visuals.</li>
+            <li>All visual and textual outputs reconcile to one stored simulation result.</li>
+            <li>Recommendations are explainable and show trigger, impact, action, and evidence.</li>
+            <li>Plan edits mark simulation output stale until re-run.</li>
+            <li>Templates create editable plan copies and support manufacturing defaults.</li>
+            <li>Multiple named scenarios can be compared visually.</li>
+            <li>Capacity conflicts and readiness blockers are obvious before approval.</li>
+            <li>Only approved, current simulation versions can convert.</li>
+            <li>PO conversion is idempotent and preserves plan/simulation lineage.</li>
+            <li>Receiving a Manufacturer PO remains the only path that adds real inventory.</li>
+            <li>Charts have accessible labels, legends, summaries, and non-color status cues.</li>
+            <li>Mobile layout remains usable without hiding critical information.</li>
+            <li>Vitest and production build pass.</li>
+            <li>Existing Production, Inventory, PO, Dashboard, and Reports behavior is preserved.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="repo">
+        <div class="section-heading">
+          <div>
+            <h2>Current repository anchors</h2>
+            <p>These existing files make the feature feasible without introducing a new stack.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="repo-anchor"><code>src/pages/ProductionPage.tsx</code><p>Current manufacturing orders, reorder queue, incoming inventory, receiving actions, and manufacturer capacity UI.</p></div>
+          <div class="repo-anchor"><code>src/utils/forecasting.ts</code><p>Average daily usage, projected depletion, reorder points, suggested quantity, safety stock, fill rate, and reliability calculations.</p></div>
+          <div class="repo-anchor"><code>src/utils/operations.ts</code><p>Inventory health, reorder windows, incoming Manufacturer PO quantities, production status, and inventory impact helpers.</p></div>
+          <div class="repo-anchor"><code>src/services/inventoryService.ts</code><p>Inventory items/events, allocation/release/fulfillment, transfers, adjustments, and product inventory synchronization.</p></div>
+          <div class="repo-anchor"><code>src/services/dashboardService.ts</code><p>Existing aggregation of products, inventory events, incoming quantities, reorder windows, and manufacturing snapshot data.</p></div>
+          <div class="repo-anchor"><code>src/types/domain.ts</code><p>Product, inventory, vendor, capacity, Purchase Order, and detailed manufacturing line-item fields.</p></div>
+          <div class="repo-anchor"><code>src/components/MultiLineChartCard.tsx</code><p>Existing Recharts multi-series pattern using ResponsiveContainer, tooltip, legend, and line configuration.</p></div>
+          <div class="repo-anchor"><code>src/components/BarChartCard.tsx</code><p>Existing responsive bar-chart wrapper and visual panel pattern.</p></div>
+          <div class="repo-anchor"><code>src/components/DonutChartCard.tsx</code><p>Existing donut, legend, percentage, tooltip, and chart-card patterns.</p></div>
+          <div class="repo-anchor"><code>package.json</code><p>Recharts is already installed, so the planner should extend the current charting approach instead of adding another library.</p></div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="footer">Prepared for SickFit Nexus · Visual Production Planner and Run Simulator</footer>
+  </main>
+</div>
+
+<script>
+  document.querySelectorAll('[data-copy]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const target = document.getElementById(button.dataset.copy);
+      if (!target) return;
+      const original = button.textContent;
+      try {
+        await navigator.clipboard.writeText(target.innerText);
+        button.textContent = 'Copied';
+      } catch (error) {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand('copy');
+        selection.removeAllRanges();
+        button.textContent = 'Copied';
+      }
+      setTimeout(() => { button.textContent = original; }, 1400);
+    });
+  });
+</script>
+</body>
+</html>

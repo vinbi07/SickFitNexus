@@ -312,4 +312,17 @@ The `shopify-dashboard-sync` function will:
 - fetch up to a year of Shopify orders for dashboard reporting
 - persist Shopify orders into `shopify_orders`
 - persist Shopify order line items into `shopify_order_line_items`
+
+## Production Planner & Simulator
+
+A visual, non-destructive decision-support layer between inventory risk and a Manufacturer PO, built on top of the existing `/production` Manufacturing Orders / Reorder Queue / Capacity workflow (which is unchanged).
+
+1. Run the new migration:
+   [src/db/migrations/028_production_planner.sql](/src/db/migrations/028_production_planner.sql)
+2. Open `Production & Restock` > `Planner & Simulator` in the sidebar (or `/production/planner`) to create a plan blank, from a template, from the SKU reorder queue, or by duplicating a prior plan.
+3. On a plan's detail page, set the horizon/manufacturer/dates/demand method, add products with planned quantities and manufacturing specs, then **Run Simulation**. Simulating never writes to `products`, `inventory_items`, `inventory_events`, `capacity_snapshots`, or `purchase_orders` — it only persists an immutable, versioned result to `production_simulation_runs`.
+4. Review the Simulation Results: inventory projection (baseline vs proposed), before/after coverage, production schedule, manufacturer capacity utilization, SKU risk matrix, and cost/quantity mix — all charts and the SKU table read from the same stored result so totals always reconcile. Save additional named scenarios and compare them side by side.
+5. Once a plan is **Approved** (requires a current, non-stale simulation with zero readiness blockers), **Convert to Manufacturer PO** creates a real `po_type = "Manufacturer PO"` record via the existing Purchase Order service, preserving `source_production_plan_id`/`source_simulation_run_id` lineage. Conversion is idempotent and does not touch on-hand inventory — receiving inventory still goes through the existing Receive Inventory flow on `/production`.
+
+Simulation math (`src/utils/productionSimulation.ts`) and recommendation rules (`src/utils/productionRecommendations.ts`) are pure, Supabase-free functions covered by unit tests in the same directory.
 - write orders and line items in chunks so dashboard sync stays isolated from product sync

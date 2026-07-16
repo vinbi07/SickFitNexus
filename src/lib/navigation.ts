@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   Inbox,
   Scale,
+  CalendarClock,
 } from "lucide-react";
 
 export interface NavLeaf {
@@ -57,6 +58,7 @@ export const NAV_ENTRIES: NavEntry[] = [
       { kind: "leaf", to: "/retailers", label: "Retailers", icon: Store },
       { kind: "leaf", to: "/vendors", label: "Vendors", icon: Boxes },
       { kind: "leaf", to: "/production", label: "Manufacturers", icon: Factory },
+      { kind: "leaf", to: "/production/planner", label: "Planner & Simulator", icon: CalendarClock },
       { kind: "leaf", to: "/imports", label: "CSV Import", icon: FileSpreadsheet },
     ],
   },

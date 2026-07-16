@@ -276,6 +276,8 @@ export interface PurchaseOrder {
   total_cost: number;
   source_file_name: string | null;
   notes: string | null;
+  source_production_plan_id?: string | null;
+  source_simulation_run_id?: string | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
@@ -1128,4 +1130,320 @@ export interface ForecastMetric {
   reorderPoint: number;
   safetyStock: number;
   suggestedReorderQuantity: number;
+}
+
+// ---------------------------------------------------------------------------
+// Production Planner & Simulator
+// ---------------------------------------------------------------------------
+
+export type ProductionPlanGoal = "restock" | "retailer_launch" | "seasonal_build" | "emergency_recovery" | "custom";
+
+export type ProductionPlanStatus =
+  | "Draft"
+  | "Simulated"
+  | "Needs Review"
+  | "Approved"
+  | "Converted"
+  | "Cancelled"
+  | "Archived";
+
+export type ProductionPlanSourceType = "blank" | "template" | "reorder_queue" | "duplicate";
+
+export type DemandMethod = "avg_daily_usage" | "trailing_30d" | "trailing_90d" | "manual_override";
+
+export interface ProductionPlan {
+  id: string;
+  name: string;
+  goal: ProductionPlanGoal;
+  status: ProductionPlanStatus;
+  vendor_id: string | null;
+  location_id: string | null;
+  horizon_start: string;
+  horizon_end: string;
+  planned_order_date: string | null;
+  target_arrival_date: string | null;
+  production_lane: string | null;
+  production_week: string | null;
+  demand_method: DemandMethod;
+  coverage_target_days: number;
+  safety_stock_override: number | null;
+  include_allocated: boolean;
+  include_existing_incoming: boolean;
+  source_type: ProductionPlanSourceType;
+  source_template_id: string | null;
+  source_plan_id: string | null;
+  active_simulation_run_id: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  vendors?: Vendor | null;
+  locations?: Location | null;
+  items?: ProductionPlanItem[];
+}
+
+export interface ProductionPlanItem {
+  id: string;
+  plan_id: string;
+  product_id: string;
+  planned_quantity: number;
+  moq: number | null;
+  order_increment: number | null;
+  unit_cost: number | null;
+  manual_daily_demand: number | null;
+  design_id: string | null;
+  spec_snapshot: Record<string, unknown>;
+  sock_card_id: string | null;
+  pack_pairs: number;
+  sock_size: string | null;
+  construction: string | null;
+  cards_used: number;
+  box_no: string | null;
+  pantone: string | null;
+  barcode_required: boolean;
+  art_status: string | null;
+  art_note: string | null;
+  mockup_file_ref: string | null;
+  artwork_file_ref: string | null;
+  rib_lr: boolean;
+  toe: boolean;
+  pattern: boolean;
+  signature: boolean;
+  foot_text: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  products?: Product | null;
+}
+
+export interface ProductionScheduleMilestoneTemplate {
+  key: ProductionScheduleMilestoneKey;
+  label: string;
+  offset_days_from_order: number;
+}
+
+export interface ProductionPlanTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  default_vendor_id: string | null;
+  default_horizon_days: number;
+  default_lead_time_buffer_days: number;
+  default_coverage_target_days: number;
+  arrival_logic: string | null;
+  cost_assumptions: Record<string, unknown>;
+  milestones: ProductionScheduleMilestoneTemplate[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  vendors?: Vendor | null;
+  items?: ProductionPlanTemplateItem[];
+}
+
+export interface ProductionPlanTemplateItem {
+  id: string;
+  template_id: string;
+  product_id: string;
+  mix_mode: "fixed" | "percent";
+  fixed_quantity: number | null;
+  percent_of_mix: number | null;
+  min_quantity: number | null;
+  max_quantity: number | null;
+  moq: number | null;
+  order_increment: number | null;
+  unit_cost: number | null;
+  spec_snapshot: Record<string, unknown>;
+  pack_pairs: number;
+  sock_size: string | null;
+  construction: string | null;
+  sort_order: number;
+  created_at: string;
+  products?: Product | null;
+}
+
+export interface ProductionSimulationInputSnapshot {
+  plan: ProductionPlan;
+  items: ProductionPlanItem[];
+  vendor: Vendor | null;
+  capacitySnapshots: CapacitySnapshot[];
+  generatedAt: string;
+}
+
+export interface ProductionSimulationRun {
+  id: string;
+  plan_id: string;
+  scenario_name: string;
+  simulation_version: number;
+  input_snapshot: ProductionSimulationInputSnapshot;
+  result_snapshot: ProductionSimulationResult;
+  recommendations: ProductionRecommendation[];
+  is_stale: boolean;
+  created_at: string;
+}
+
+// ---- ProductionSimulationResult: the single shared, versioned contract every
+// chart, summary card, recommendation, and table reads its numbers from. No
+// component may recompute business logic against raw inventory/demand data. ----
+
+export interface ProductionSimulationSummary {
+  totalPlannedUnits: number;
+  totalEstimatedCost: number;
+  skuCount: number;
+  skusWithStockoutRisk: number;
+  skusOverproduced: number;
+  firstStockoutDate: string | null;
+  capacityConflictCount: number;
+  readinessBlockerCount: number;
+  averageEndingCoverageDaysBefore: number;
+  averageEndingCoverageDaysAfter: number;
+}
+
+export interface ProductionDailySeriesPoint {
+  date: string;
+  baselineAvailable: number;
+  proposedAvailable: number;
+  safetyStockLine: number;
+  zeroStockLine: number;
+  existingIncomingReceived: number;
+  proposedProductionReceived: number;
+  isBelowSafetyStockBaseline: boolean;
+  isBelowSafetyStockProposed: boolean;
+  isStockoutBaseline: boolean;
+  isStockoutProposed: boolean;
+}
+
+export interface SkuSimulationResult {
+  productId: string;
+  planItemId: string;
+  sku: string;
+  productName: string;
+  category: string | null;
+  family: string | null;
+
+  dailySeries: ProductionDailySeriesPoint[];
+  startingOnHand: number;
+  startingAllocated: number;
+
+  firstBelowSafetyStockDateBaseline: string | null;
+  firstBelowSafetyStockDateProposed: string | null;
+  firstStockoutDateBaseline: string | null;
+  firstStockoutDateProposed: string | null;
+  stockoutDayCountBaseline: number;
+  stockoutDayCountProposed: number;
+  inventoryGapBeforeReceipt: number;
+
+  daysOfSupplyBefore: number;
+  daysOfSupplyAfter: number;
+
+  suggestedQuantity: number;
+  plannedQuantity: number;
+  moq: number | null;
+  orderIncrement: number | null;
+  roundedQuantity: number;
+  estimatedCost: number;
+
+  endingCoverageDaysBaseline: number;
+  endingCoverageDaysProposed: number;
+
+  isSlowMoverRisk: boolean;
+  isOverproductionRisk: boolean;
+  capacityConflict: boolean;
+
+  urgencyScore: number;
+  impactScore: number;
+}
+
+export interface CapacityUtilizationBucket {
+  manufacturerId: string | null;
+  manufacturerName: string;
+  bucketStart: string;
+  bucketEnd: string;
+  availableUnits: number;
+  previouslyCommittedUnits: number;
+  newlyProposedUnits: number;
+  remainingUnits: number;
+  isOverCapacity: boolean;
+}
+
+export type ProductionScheduleMilestoneKey =
+  | "approval"
+  | "po_creation"
+  | "production"
+  | "quality_check"
+  | "packaging"
+  | "freight"
+  | "receiving";
+
+export interface ProductionScheduleMilestone {
+  key: ProductionScheduleMilestoneKey;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isBlocked: boolean;
+  blockerReasons: string[];
+  isRequiredArrivalMarker: boolean;
+}
+
+export interface ProductionCostMixSlice {
+  groupKey: string;
+  groupLabel: string;
+  plannedUnits: number;
+  estimatedCost: number;
+}
+
+export interface SkuRiskMatrixPoint {
+  productId: string;
+  sku: string;
+  productName: string;
+  urgencyScore: number;
+  impactScore: number;
+  isOverproduced: boolean;
+  isStockoutRisk: boolean;
+}
+
+export type RecommendationReasonCode =
+  | "stockout_before_receipt"
+  | "coverage_below_target"
+  | "coverage_excessively_high"
+  | "capacity_exceeded"
+  | "readiness_blocker"
+  | "existing_incoming_covers_demand";
+
+export type RecommendationSeverity = "info" | "warning" | "critical";
+
+export interface ProductionRecommendationQuickAction {
+  label: string;
+  type: "adjust_quantity" | "move_order_date" | "split_manufacturer" | "reduce_quantity";
+}
+
+export interface ProductionRecommendation {
+  id: string;
+  reasonCode: RecommendationReasonCode;
+  severity: RecommendationSeverity;
+  title: string;
+  explanation: string;
+  impact: string;
+  affectedProductIds: string[];
+  suggestedAction: string;
+  quickAction: ProductionRecommendationQuickAction | null;
+  isDismissed: boolean;
+  dismissNote: string | null;
+}
+
+export interface ProductionSimulationResult {
+  simulationVersion: number;
+  generatedAt: string;
+  planId: string;
+  horizonStart: string;
+  horizonEnd: string;
+  summary: ProductionSimulationSummary;
+  dailyPortfolioSeries: ProductionDailySeriesPoint[];
+  skuResults: SkuSimulationResult[];
+  capacitySeries: CapacityUtilizationBucket[];
+  scheduleMilestones: ProductionScheduleMilestone[];
+  costMix: ProductionCostMixSlice[];
+  riskMatrix: SkuRiskMatrixPoint[];
+  recommendations: ProductionRecommendation[];
 }

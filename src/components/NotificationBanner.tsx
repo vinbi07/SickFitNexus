@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
+
 export function NotificationBanner({
   tone,
   message,
   onClose,
 }: {
   tone: "success" | "error";
-  message: string;
+  message: ReactNode;
   onClose?: () => void;
 }) {
   return (
