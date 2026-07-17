@@ -57,6 +57,7 @@ export function InventoryPage() {
   const [riskFilter, setRiskFilter] = useState("");
   const [bundleFilter, setBundleFilter] = useState("");
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
+  const [showIgnoredProducts, setShowIgnoredProducts] = useState(false);
   const [sort, setSort] = useState("danger");
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
@@ -114,7 +115,8 @@ export function InventoryPage() {
         (bundleFilter === "no-bundles" && Boolean(item.products?.no_bundles)) ||
         (bundleFilter === "bundles-ok" && !item.products?.no_bundles);
       const matchesVisibility =
-        showHiddenCategories || !isHiddenByDefaultProductName(item.products?.name);
+        (showHiddenCategories || !isHiddenByDefaultProductName(item.products?.name)) &&
+        (showIgnoredProducts || !item.products?.ignored);
       return matchesSearch && matchesLocation && matchesRisk && matchesBundle && matchesVisibility;
     })
     .sort((left, right) => {
@@ -143,7 +145,7 @@ export function InventoryPage() {
     });
 
   const nonGiftCardItems = data.items.filter(
-    (item) => !isGiftCardProductName(item.products?.name),
+    (item) => !isGiftCardProductName(item.products?.name) && !item.products?.ignored,
   );
   const totalUnitsOnHand = nonGiftCardItems.reduce(
     (sum, item) => sum + Number(item.quantity_on_hand ?? 0),
@@ -267,6 +269,12 @@ export function InventoryPage() {
           >
             {showHiddenCategories ? "Hide Bundles & Gift Cards" : "Show Bundles & Gift Cards"}
           </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowIgnoredProducts((current) => !current)}
+          >
+            {showIgnoredProducts ? "Hide Ignored" : "Show Ignored"}
+          </button>
           <button className="btn btn-secondary" onClick={() => void reload()}>
             Refresh
           </button>
@@ -282,7 +290,7 @@ export function InventoryPage() {
             {
               key: "product",
               title: "Product",
-              render: (row) => <ProductNameWithMetadata product={row.products} />,
+              render: (row) => <ProductNameWithMetadata product={row.products} large />,
             },
             {
               key: "quantities",

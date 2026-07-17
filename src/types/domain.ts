@@ -139,6 +139,7 @@ export interface Product {
   compliance_docs_required: string[];
   compliance_docs_status: string | null;
   no_bundles: boolean;
+  ignored: boolean;
   shopify_product_id: string | null;
   shopify_variant_id: string | null;
   shopify_handle: string | null;

@@ -7,6 +7,7 @@ type ProductNameWithMetadataProps = {
   fallbackName?: string;
   fallbackSku?: string;
   linkToDetail?: boolean;
+  large?: boolean;
 };
 
 export function ProductNameWithMetadata({
@@ -14,10 +15,11 @@ export function ProductNameWithMetadata({
   fallbackName = "Unknown Product",
   fallbackSku = "No SKU",
   linkToDetail = true,
+  large = false,
 }: ProductNameWithMetadataProps) {
   return (
     <div className="inventory-product-cell">
-      <div className="product-thumb-shell">
+      <div className={large ? "product-thumb-shell product-thumb-shell-large" : "product-thumb-shell"}>
         {product?.image_url ? (
           <img className="product-thumb" src={product.image_url} alt={product.name} />
         ) : (

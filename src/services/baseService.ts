@@ -37,3 +37,16 @@ export async function deleteFromTable(table: string, id: string) {
   const { error } = await supabase.from(table as never).delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function deleteFromTableByIds(table: string, ids: string[]) {
+  const supabase = assertSupabase();
+  const { error } = await supabase.from(table as never).delete().in("id", ids);
+  if (error) throw error;
+}
+
+export async function updateTableByIds<T>(table: string, ids: string[], payload: Partial<T>) {
+  const supabase = assertSupabase();
+  const { data, error } = await supabase.from(table as never).update(payload as never).in("id", ids).select();
+  if (error) throw error;
+  return data;
+}

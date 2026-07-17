@@ -335,7 +335,9 @@ export function ProductionPlanDetailPage() {
     0,
   );
 
-  const availableProducts = (data.products ?? []).filter((product) => !items.some((item) => item.product_id === product.id));
+  const availableProducts = (data.products ?? []).filter(
+    (product) => !product.ignored && !items.some((item) => item.product_id === product.id),
+  );
 
   // Workflow state (status, active scenario) is read from the freshly loaded `data.plan`
   // rather than the editable `draftPlan` mirror, since actions like Approve/Set Active

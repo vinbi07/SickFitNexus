@@ -50,6 +50,30 @@ export function isHiddenByDefaultProductName(name: string | null | undefined): b
   return isBundleProductName(name) || isGiftCardProductName(name);
 }
 
+export const SOCK_TYPES = ["Crew", "Ankle", "Slouch", "Boot", "No Show"] as const;
+export type SockType = (typeof SOCK_TYPES)[number];
+
+export function getSockTypeFromName(name: string | null | undefined): SockType | null {
+  const value = name ?? "";
+  if (/no show/i.test(value)) return "No Show";
+  if (/crew/i.test(value)) return "Crew";
+  if (/ankle/i.test(value)) return "Ankle";
+  if (/slouch/i.test(value)) return "Slouch";
+  if (/boot/i.test(value)) return "Boot";
+  return null;
+}
+
+// Keyword-matched, not "anything without a sock keyword" — most products without a sock
+// keyword are still unlabeled socks (e.g. "Clinical Strength Graduated Compression Socks"),
+// so a negative match would flood the apparel filter with socks instead of isolating apparel.
+export function isApparelProductName(name: string | null | undefined): boolean {
+  return /shorts?|\btee\b|t-shirt|\bshirt\b|windbreaker|\bjacket\b|\bhoodie\b/i.test(name ?? "");
+}
+
+export function isIgnoredProduct(product: Pick<Product, "ignored">): boolean {
+  return Boolean(product.ignored);
+}
+
 export type InventoryRiskStatus = "Oversold" | "Low Stock" | "Reorder Soon" | "Incoming Shipment" | "Safe";
 
 export function getInventoryRiskStatus(

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
@@ -16,12 +17,16 @@ import { supportService } from "@/services/supportService";
 import { vendorService } from "@/services/vendorService";
 import type { InventoryEvent, Product } from "@/types/domain";
 import { formatCurrency } from "@/utils/format";
-import { getProductFamilyName, getProductVariantLabel } from "@/utils/lookbook";
+import { getProductFamilyName, getProductVariantLabel, getUnitsPerPack } from "@/utils/lookbook";
 import {
   getInventoryHealthLabel,
   getMarginMetrics,
+  getSockTypeFromName,
+  isApparelProductName,
+  isBundleProductName,
   isHiddenByDefaultProductName,
   isInventoryDanger,
+  SOCK_TYPES,
 } from "@/utils/operations";
 
 type ProductFormValues = Partial<Product> & {
@@ -29,18 +34,32 @@ type ProductFormValues = Partial<Product> & {
   compliance_docs_required_input?: string;
 };
 
+const NON_SOCK_FILTER_VALUE = "__non_sock__";
+
 export function ProductsPage() {
   const [editing, setEditing] = useState<ProductFormValues | null>(null);
   const [viewing, setViewing] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [busyBulkDelete, setBusyBulkDelete] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [bundleFilter, setBundleFilter] = useState("");
+  const [bundlesOnly, setBundlesOnly] = useState(false);
+  const [ignoredOnly, setIgnoredOnly] = useState(false);
+  const [packSizeFilter, setPackSizeFilter] = useState("");
+  const [sockTypeFilter, setSockTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
+  const [showIgnoredProducts, setShowIgnoredProducts] = useState(false);
   const [sort, setSort] = useState("name");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const [viewOptionsPosition, setViewOptionsPosition] = useState({ top: 0, left: 0 });
+  const viewOptionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const viewOptionsPopoverRef = useRef<HTMLDivElement>(null);
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       products: await supportService.listProducts(),
@@ -49,6 +68,29 @@ export function ProductsPage() {
     }),
     [],
   );
+
+  useEffect(() => {
+    if (!viewOptionsOpen) return;
+    const updatePosition = () => {
+      const rect = viewOptionsTriggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setViewOptionsPosition({ top: rect.bottom + 6, left: rect.left });
+    };
+    updatePosition();
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (viewOptionsTriggerRef.current?.contains(target) || viewOptionsPopoverRef.current?.contains(target)) return;
+      setViewOptionsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [viewOptionsOpen]);
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load products"} />;
@@ -75,19 +117,83 @@ export function ProductsPage() {
         (product.description ?? "").toLowerCase().includes(query) ||
         (product.vendors?.name ?? "").toLowerCase().includes(query);
       const matchesCategory = !category || product.category === category;
-      const matchesBundles =
-        !bundleFilter ||
-        (bundleFilter === "no-bundles" && product.no_bundles) ||
-        (bundleFilter === "bundles-ok" && !product.no_bundles);
+      const matchesBundlesOnly = !bundlesOnly || isBundleProductName(product.name);
+      const matchesIgnoredOnly = !ignoredOnly || product.ignored;
+      const matchesPackSize = !packSizeFilter || getUnitsPerPack(product) === Number(packSizeFilter);
+      const matchesSockType =
+        !sockTypeFilter ||
+        (sockTypeFilter === NON_SOCK_FILTER_VALUE
+          ? isApparelProductName(product.name)
+          : getSockTypeFromName(product.name) === sockTypeFilter);
+      const matchesStatus =
+        !statusFilter ||
+        getInventoryHealthLabel(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock ?? 0) === statusFilter;
       const matchesVisibility =
-        showHiddenCategories || !isHiddenByDefaultProductName(product.name);
-      return matchesSearch && matchesCategory && matchesBundles && matchesVisibility;
+        (showHiddenCategories || bundlesOnly || !isHiddenByDefaultProductName(product.name)) &&
+        (showIgnoredProducts || ignoredOnly || !product.ignored);
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesBundlesOnly &&
+        matchesIgnoredOnly &&
+        matchesPackSize &&
+        matchesSockType &&
+        matchesStatus &&
+        matchesVisibility
+      );
     })
     .sort((left, right) => {
       if (sort === "inventory") return right.current_inventory - left.current_inventory;
       if (sort === "margin") return getMarginMetrics(right.unit_cost, right.unit_price).marginPercent - getMarginMetrics(left.unit_cost, left.unit_price).marginPercent;
       return left.name.localeCompare(right.name);
     });
+
+  const viewOptionsActiveCount = [bundlesOnly, showHiddenCategories, showIgnoredProducts, ignoredOnly].filter(Boolean).length;
+
+  const activeFilters: Array<{ key: string; label: string; onClear: () => void }> = [];
+  if (search.trim()) activeFilters.push({ key: "search", label: `Search: "${search.trim()}"`, onClear: () => setSearch("") });
+  if (category) activeFilters.push({ key: "category", label: `Category: ${category}`, onClear: () => setCategory("") });
+  if (bundlesOnly) activeFilters.push({ key: "bundlesOnly", label: "Bundles Only", onClear: () => setBundlesOnly(false) });
+  if (ignoredOnly) activeFilters.push({ key: "ignoredOnly", label: "Ignored Only", onClear: () => setIgnoredOnly(false) });
+  if (packSizeFilter) {
+    const label = packSizeFilter === "1" ? "1-Pack (Single)" : `${packSizeFilter}-Pack`;
+    activeFilters.push({ key: "packSize", label: `Pack Size: ${label}`, onClear: () => setPackSizeFilter("") });
+  }
+  if (sockTypeFilter) {
+    const label = sockTypeFilter === NON_SOCK_FILTER_VALUE ? "Other / Non-Sock (Apparel)" : sockTypeFilter;
+    activeFilters.push({ key: "sockType", label: `Sock Type: ${label}`, onClear: () => setSockTypeFilter("") });
+  }
+  if (statusFilter) activeFilters.push({ key: "status", label: `Status: ${statusFilter}`, onClear: () => setStatusFilter("") });
+  if (showHiddenCategories) activeFilters.push({ key: "showHidden", label: "Showing Bundles & Gift Cards", onClear: () => setShowHiddenCategories(false) });
+  if (showIgnoredProducts) activeFilters.push({ key: "showIgnored", label: "Showing Ignored", onClear: () => setShowIgnoredProducts(false) });
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setCategory("");
+    setBundlesOnly(false);
+    setIgnoredOnly(false);
+    setPackSizeFilter("");
+    setSockTypeFilter("");
+    setStatusFilter("");
+    setShowHiddenCategories(false);
+    setShowIgnoredProducts(false);
+  };
+
+  const bulkToggles: Array<{ key: keyof Product; onLabel: string; offLabel: string }> = [
+    { key: "ignored", onLabel: "Ignore Selected", offLabel: "Unignore Selected" },
+  ];
+
+  const applyBulkPatch = async (patch: Partial<Product>) => {
+    try {
+      const ids = [...selectedIds];
+      await supportService.bulkUpdateProducts(ids, patch);
+      setSelectedIds(new Set());
+      await reload();
+      setNotice({ tone: "success", message: `Updated ${ids.length} products.` });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to update selected products." });
+    }
+  };
 
   return (
     <div className="section-stack">
@@ -117,7 +223,7 @@ export function ProductsPage() {
             >
               {syncingAll ? "Syncing Shopify..." : "Sync All Shopify"}
             </button>
-            <button className="btn btn-primary" onClick={() => setEditing({ sku: "", name: "", image_url: "", no_bundles: false })}>Add New Product</button>
+            <button className="btn btn-primary" onClick={() => setEditing({ sku: "", name: "", image_url: "", no_bundles: false, ignored: false })}>Add New Product</button>
           </div>
         }
       />
@@ -137,10 +243,30 @@ export function ProductsPage() {
               </option>
             ))}
           </select>
-          <select value={bundleFilter} onChange={(event) => setBundleFilter(event.target.value)}>
-            <option value="">All bundle states</option>
-            <option value="no-bundles">No Bundles</option>
-            <option value="bundles-ok">Bundles Allowed</option>
+          <select value={packSizeFilter} onChange={(event) => setPackSizeFilter(event.target.value)}>
+            <option value="">All Pack Sizes</option>
+            {[1, 2, 3, 6, 10, 12].map((count) => (
+              <option key={count} value={count}>
+                {count === 1 ? "1-Pack (Single)" : `${count}-Pack`}
+              </option>
+            ))}
+          </select>
+          <select value={sockTypeFilter} onChange={(event) => setSockTypeFilter(event.target.value)}>
+            <option value="">All Sock Types</option>
+            {SOCK_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+            <option value={NON_SOCK_FILTER_VALUE}>Other / Non-Sock (Apparel)</option>
+          </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">All Statuses</option>
+            {["Healthy", "Low", "Danger", "Slow Mover"].map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
           </select>
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="name">Sort by name</option>
@@ -148,25 +274,157 @@ export function ProductsPage() {
             <option value="margin">Sort by margin</option>
           </select>
           <button
+            ref={viewOptionsTriggerRef}
+            type="button"
             className="btn btn-secondary"
-            onClick={() => setShowHiddenCategories((current) => !current)}
+            onClick={() => setViewOptionsOpen((current) => !current)}
           >
-            {showHiddenCategories ? "Hide Bundles & Gift Cards" : "Show Bundles & Gift Cards"}
+            View Options{viewOptionsActiveCount > 0 ? ` (${viewOptionsActiveCount})` : ""}
           </button>
-          <button className="btn btn-secondary" onClick={() => void reload()}>
-            Refresh
-          </button>
+          {viewOptionsOpen
+            ? createPortal(
+                <div
+                  ref={viewOptionsPopoverRef}
+                  className="date-picker-popover-portal view-options-popover"
+                  style={{ top: viewOptionsPosition.top, left: viewOptionsPosition.left }}
+                >
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={bundlesOnly}
+                      onChange={(event) => setBundlesOnly(event.target.checked)}
+                    />
+                    Show Bundles Only
+                  </label>
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={showHiddenCategories}
+                      onChange={(event) => setShowHiddenCategories(event.target.checked)}
+                    />
+                    Show Bundles &amp; Gift Cards
+                  </label>
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={showIgnoredProducts}
+                      onChange={(event) => setShowIgnoredProducts(event.target.checked)}
+                    />
+                    Show Ignored
+                  </label>
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={ignoredOnly}
+                      onChange={(event) => setIgnoredOnly(event.target.checked)}
+                    />
+                    Ignored Only
+                  </label>
+                  <div className="view-options-divider" />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-small"
+                    onClick={() => {
+                      void reload();
+                      setViewOptionsOpen(false);
+                    }}
+                  >
+                    Refresh
+                  </button>
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
       </div>
+      <div className="panel">
+        <div className="btn-row">
+          <span>
+            Showing {filteredProducts.length} of {data.products.length} products
+          </span>
+          {activeFilters.length > 0 ? (
+            <>
+              {activeFilters.map((filter) => (
+                <button key={filter.key} className="btn btn-ghost btn-small" onClick={filter.onClear}>
+                  {filter.label} &times;
+                </button>
+              ))}
+              <button className="btn btn-ghost btn-small" onClick={clearAllFilters}>
+                Clear All Filters
+              </button>
+            </>
+          ) : (
+            <span className="helper-text">No filters applied</span>
+          )}
+        </div>
+      </div>
+      {selectedIds.size > 0 ? (
+        <div className="panel">
+          <div className="btn-row">
+            <span>{selectedIds.size} selected</span>
+            {bulkToggles.map((toggle) => (
+              <button
+                key={`${toggle.key}-on`}
+                className="btn btn-secondary"
+                onClick={() => void applyBulkPatch({ [toggle.key]: true } as Partial<Product>)}
+              >
+                {toggle.onLabel}
+              </button>
+            ))}
+            {bulkToggles.map((toggle) => (
+              <button
+                key={`${toggle.key}-off`}
+                className="btn btn-secondary"
+                onClick={() => void applyBulkPatch({ [toggle.key]: false } as Partial<Product>)}
+              >
+                {toggle.offLabel}
+              </button>
+            ))}
+            <button className="btn btn-danger" onClick={() => setBulkDeleting(true)}>
+              Delete Selected
+            </button>
+            <button className="btn btn-ghost" onClick={() => setSelectedIds(new Set())}>
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      ) : null}
       <DataTable
         emptyMessage="No products yet. Add your first product to start managing catalog and inventory links."
         columns={[
+          {
+            key: "select",
+            title: (
+              <input
+                type="checkbox"
+                checked={filteredProducts.length > 0 && filteredProducts.every((product) => selectedIds.has(product.id))}
+                onChange={(event) =>
+                  setSelectedIds(event.target.checked ? new Set(filteredProducts.map((product) => product.id)) : new Set())
+                }
+              />
+            ),
+            width: "32px",
+            render: (row) => (
+              <input
+                type="checkbox"
+                checked={selectedIds.has(row.id)}
+                onChange={(event) =>
+                  setSelectedIds((current) => {
+                    const next = new Set(current);
+                    if (event.target.checked) next.add(row.id);
+                    else next.delete(row.id);
+                    return next;
+                  })
+                }
+              />
+            ),
+          },
           {
             key: "product",
             title: "Product / SKU",
             render: (row) => (
               <div className="inventory-product-cell">
-                <div className="product-thumb-shell">
+                <div className="product-thumb-shell product-thumb-shell-large">
                   {row.image_url ? <img className="product-thumb" src={row.image_url} alt={row.name} /> : <span className="product-thumb-fallback">{row.sku.slice(0, 2)}</span>}
                 </div>
                 <div className="cell-stack">
@@ -187,6 +445,7 @@ export function ProductsPage() {
                 <strong>{row.vendors?.name ?? "Unassigned"}</strong>
                 <span className="helper-text">Weight {row.weight ?? "N/A"}</span>
                 <span className="helper-text">{row.no_bundles ? "No bundles" : "Bundles allowed"}</span>
+                {row.ignored ? <span className="helper-text">Ignored</span> : null}
               </div>
             ),
           },
@@ -245,6 +504,23 @@ export function ProductsPage() {
                 <button className="btn btn-secondary btn-small" onClick={() => setEditing(row)}>
                   Edit
                 </button>
+                <button
+                  className="btn btn-secondary btn-small"
+                  onClick={async () => {
+                    try {
+                      await supportService.saveProduct({ ...row, ignored: !row.ignored });
+                      await reload();
+                      setNotice({
+                        tone: "success",
+                        message: row.ignored ? `${row.name} is no longer ignored.` : `${row.name} is now ignored.`,
+                      });
+                    } catch (err) {
+                      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to update ignore status." });
+                    }
+                  }}
+                >
+                  {row.ignored ? "Unignore" : "Ignore"}
+                </button>
                 <button className="btn btn-danger btn-small" onClick={() => setDeleting(row)}>
                   Delete
                 </button>
@@ -282,6 +558,7 @@ export function ProductsPage() {
             safety_stock: editing.safety_stock ?? 0,
             image_url: editing.image_url ?? "",
             no_bundles: editing.no_bundles ?? false,
+            ignored: editing.ignored ?? false,
             shopify_handle: editing.shopify_handle ?? "",
             shopify_storefront_url: editing.shopify_storefront_url ?? "",
             shopify_admin_url: editing.shopify_admin_url ?? "",
@@ -308,6 +585,7 @@ export function ProductsPage() {
             { key: "compliance_docs_status", label: "Compliance Status", type: "select", options: [{ label: "Ready", value: "Ready" }, { label: "Missing", value: "Missing" }, { label: "Pending", value: "Pending" }] },
             { key: "image_url", label: "Product Image", type: "image" },
             { key: "no_bundles", label: "No Bundles", type: "checkbox" },
+            { key: "ignored", label: "Ignore Product", type: "checkbox" },
             { key: "shopify_handle", label: "Shopify Handle" },
             { key: "shopify_storefront_url", label: "Shopify Storefront URL" },
             { key: "shopify_admin_url", label: "Shopify Admin URL" },
@@ -340,6 +618,7 @@ export function ProductsPage() {
               compliance_docs_status: values.compliance_docs_status ? String(values.compliance_docs_status) : null,
               image_url: values.image_url ? String(values.image_url) : null,
               no_bundles: Boolean(values.no_bundles),
+              ignored: Boolean(values.ignored),
               shopify_handle: values.shopify_handle ? String(values.shopify_handle) : null,
               shopify_storefront_url: values.shopify_storefront_url ? String(values.shopify_storefront_url) : null,
               shopify_admin_url: values.shopify_admin_url ? String(values.shopify_admin_url) : null,
@@ -381,6 +660,7 @@ export function ProductsPage() {
             <div className="detail-card"><span>Pack Size</span><strong>{viewing.pack_size ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Available</span><strong>{viewing.inventory_available ?? viewing.current_inventory}</strong></div>
             <div className="detail-card"><span>No Bundles</span><strong>{viewing.no_bundles ? "Yes" : "No"}</strong></div>
+            <div className="detail-card"><span>Ignored</span><strong>{viewing.ignored ? "Yes" : "No"}</strong></div>
             <div className="detail-card"><span>Product Image</span><strong>{viewing.image_url ? <a href={viewing.image_url} target="_blank" rel="noreferrer">Open image</a> : "No image yet"}</strong></div>
             <div className="detail-card"><span>Compliance</span><strong>{viewing.compliance_docs_status ?? "N/A"}</strong></div>
             <div className="detail-card"><span>Shopify Sync</span><strong>{viewing.is_shopify_synced ? "Synced" : "Not synced"}</strong></div>
@@ -415,6 +695,31 @@ export function ProductsPage() {
               setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to delete product." });
             } finally {
               setBusyDelete(false);
+            }
+          }}
+        />
+      ) : null}
+      {bulkDeleting ? (
+        <ConfirmDialog
+          title="Delete selected products?"
+          message={`This will permanently remove ${selectedIds.size} products. Continue only if you no longer need these SKUs in the system.`}
+          busy={busyBulkDelete}
+          onClose={() => {
+            if (!busyBulkDelete) setBulkDeleting(false);
+          }}
+          onConfirm={async () => {
+            try {
+              setBusyBulkDelete(true);
+              const ids = [...selectedIds];
+              await supportService.deleteProducts(ids);
+              setBulkDeleting(false);
+              setSelectedIds(new Set());
+              await reload();
+              setNotice({ tone: "success", message: `Deleted ${ids.length} products successfully.` });
+            } catch (err) {
+              setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to delete selected products." });
+            } finally {
+              setBusyBulkDelete(false);
             }
           }}
         />

@@ -1,5 +1,5 @@
 import { assertSupabase } from "@/lib/supabase";
-import { deleteFromTable, insertTable, listTable, updateTable, upsertTable } from "@/services/baseService";
+import { deleteFromTable, deleteFromTableByIds, insertTable, listTable, updateTable, updateTableByIds, upsertTable } from "@/services/baseService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import { getErrorMessage } from "@/utils/errors";
 import type {
@@ -292,6 +292,8 @@ export const supportService = {
   },
   saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),
+  bulkUpdateProducts: (ids: string[], patch: Partial<Product>) => updateTableByIds<Product>("products", ids, patch),
+  deleteProducts: (ids: string[]) => deleteFromTableByIds("products", ids),
   listBarcodes: async () => {
     const supabase = assertSupabase();
     const { data, error } = await supabase

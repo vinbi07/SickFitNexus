@@ -7,7 +7,7 @@ export function DataTable<T>({
   className,
   onRowClick,
 }: {
-  columns: Array<{ key: string; title: string; width?: string; render: (row: T) => ReactNode }>;
+  columns: Array<{ key: string; title: ReactNode; width?: string; render: (row: T) => ReactNode }>;
   rows: T[];
   emptyMessage?: string;
   className?: string;

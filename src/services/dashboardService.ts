@@ -32,6 +32,7 @@ import {
   getPaymentStatusLabel,
   getShipmentStatus,
   isGiftCardProductName,
+  isIgnoredProduct,
   isInventoryDanger,
 } from "@/utils/operations";
 import { daysBetween } from "@/utils/date";
@@ -178,7 +179,7 @@ export const dashboardService = {
     const settings = settingsResponse.data;
     const products = applyCalculatedSafetyStock(rawProducts, vendors, events);
     const inventoryWarningProducts = products.filter(
-      (product) => !isGiftCardProductName(product.name),
+      (product) => !isGiftCardProductName(product.name) && !isIgnoredProduct(product),
     );
 
     const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
@@ -353,6 +354,7 @@ export const dashboardService = {
       .entries();
 
     const skuReorderWindows = products
+      .filter((product) => !isIgnoredProduct(product))
       .map((product) => {
         const incomingQuantity = incomingByProduct.get(product.id) ?? 0;
         const vendorLeadTimeDays = vendorById.get(product.vendor_id ?? "")?.lead_time_days ?? 0;

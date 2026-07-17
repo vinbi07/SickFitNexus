@@ -6563,6 +6563,33 @@ textarea {
   justify-content: center;
 }
 
+.view-options-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.view-options-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.view-options-item:hover {
+  background: rgba(17, 17, 17, 0.04);
+}
+
+.view-options-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--brand-border);
+}
+
 /* Plan Assumptions wizard */
 
 .wizard-steps {
