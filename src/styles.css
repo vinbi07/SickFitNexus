@@ -928,7 +928,7 @@ textarea {
 
 .hover-tooltip-panel {
   position: absolute;
-  z-index: 20;
+  z-index: 1000;
   top: calc(100% + 8px);
   left: 0;
   min-width: 220px;
@@ -6406,6 +6406,8 @@ textarea {
 }
 
 .chart-tooltip {
+  position: relative;
+  z-index: 1000;
   padding: 8px 10px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
@@ -6415,6 +6417,13 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Recharts positions its tooltip wrapper (custom or default content) with an
+   inline style but no z-index, so it can end up stacked below sticky panels
+   and cards elsewhere on the page. Force it above everything. */
+.recharts-tooltip-wrapper {
+  z-index: 1000;
 }
 
 .warning-text {
@@ -6437,6 +6446,14 @@ textarea {
 
 .production-results-main {
   min-width: 0;
+}
+
+/* .panel clips overflow by default (for the now-hidden top accent bar), which
+   also clips any tooltip bubble that pops out past the panel edge (e.g. the
+   info tooltip next to a chart title). Let panels in this layout overflow so
+   tooltips can escape their container. */
+.production-results-layout .panel {
+  overflow: visible;
 }
 
 .production-recommendation-panel {
@@ -6506,7 +6523,7 @@ textarea {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: 1000;
   width: max-content;
   max-width: 240px;
   padding: 8px 10px;
