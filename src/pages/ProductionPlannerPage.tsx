@@ -7,6 +7,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { InfoTooltip } from "@/components/Tooltip";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardService } from "@/services/dashboardService";
 import { inventoryService } from "@/services/inventoryService";
@@ -15,9 +16,11 @@ import { retailerService } from "@/services/retailerService";
 import { supportService } from "@/services/supportService";
 import { vendorTestProductionPlanService } from "@/services/vendorTestProductionPlanService";
 import { vendorService } from "@/services/vendorService";
-import type { ProductionPlan } from "@/types/domain";
+import type { ProductionPlan, ProductionPlanStatus } from "@/types/domain";
 import { calculateForecastMetric } from "@/utils/forecasting";
 import { formatDate } from "@/utils/format";
+
+const PLAN_STATUSES: ProductionPlanStatus[] = ["Draft", "Simulated", "Needs Review", "Approved", "Converted", "Cancelled", "Archived"];
 
 export function ProductionPlannerPage() {
   const navigate = useNavigate();
@@ -27,6 +30,8 @@ export function ProductionPlannerPage() {
   const [creatingFromReorderQueue, setCreatingFromReorderQueue] = useState(false);
   const [generatingVendorPlans, setGeneratingVendorPlans] = useState(false);
   const [selectedRetailerId, setSelectedRetailerId] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ProductionPlanStatus | "">("");
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       plans: await productionPlanService.list(),
@@ -38,6 +43,13 @@ export function ProductionPlannerPage() {
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load production plans"} />;
+
+  const filteredPlans = data.plans.filter((plan) => {
+    if (statusFilter && plan.status !== statusFilter) return false;
+    if (!search.trim()) return true;
+    const needle = search.trim().toLowerCase();
+    return plan.name.toLowerCase().includes(needle) || (plan.vendors?.name ?? "").toLowerCase().includes(needle);
+  });
 
   const handleCreateBlank = async () => {
     try {
@@ -201,37 +213,92 @@ export function ProductionPlannerPage() {
         title="Production Planner"
         description="Build and simulate a proposed production run before committing to a Manufacturer PO. Simulations never change inventory, allocations, capacity, or purchase orders."
         actions={
-          <div className="btn-row">
-            <button className="btn btn-secondary" onClick={() => navigate("/production/templates")}>
-              Manage Templates
-            </button>
-            <button className="btn btn-secondary" disabled={creatingFromReorderQueue} onClick={() => void handleStartFromReorderQueue()}>
-              {creatingFromReorderQueue ? "Building..." : "Start From Reorder Queue"}
-            </button>
-            <select
-              aria-label="Account for test production plan"
-              value={selectedRetailerId}
-              onChange={(event) => setSelectedRetailerId(event.target.value)}
-            >
-              <option value="">Select account</option>
-              {data.retailers.map((retailer) => (
-                <option key={retailer.id} value={retailer.id}>{retailer.name}</option>
-              ))}
-            </select>
-            <button className="btn btn-secondary" disabled={generatingVendorPlans} onClick={() => void handleGenerateVendorTestPlans()}>
-              {generatingVendorPlans ? "Generating..." : "Generate an Account Plan"}
-            </button>
-            <button className="btn btn-primary" disabled={creating} onClick={() => void handleCreateBlank()}>
-              {creating ? "Creating..." : "New Plan"}
-            </button>
+          <div className="section-stack" style={{ alignItems: "flex-end", gap: 10 }}>
+            <div className="btn-row">
+              <button className="btn btn-ghost" onClick={() => navigate("/production/templates")}>
+                Manage Templates
+              </button>
+            </div>
+            <div className="btn-row" style={{ alignItems: "flex-end" }}>
+              <div className="section-stack" style={{ gap: 4 }}>
+                <span className="helper-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  Blank plan
+                  <InfoTooltip content="Start with an empty plan and add products manually." />
+                </span>
+                <button className="btn btn-primary" disabled={creating} onClick={() => void handleCreateBlank()}>
+                  {creating ? "Creating..." : "New Plan"}
+                </button>
+              </div>
+              <div className="section-stack" style={{ gap: 4 }}>
+                <span className="helper-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  From reorder queue
+                  <InfoTooltip content="Auto-fills a plan with every SKU the reorder queue currently flags as needing attention." />
+                </span>
+                <button className="btn btn-secondary" disabled={creatingFromReorderQueue} onClick={() => void handleStartFromReorderQueue()}>
+                  {creatingFromReorderQueue ? "Building..." : "Start From Reorder Queue"}
+                </button>
+              </div>
+              <div className="section-stack" style={{ gap: 4 }}>
+                <span className="helper-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  From an account
+                  <InfoTooltip content="Generates a test production plan matching a specific account's typical order, for you to review before using it." />
+                </span>
+                <div className="btn-row">
+                  <select
+                    aria-label="Account for test production plan"
+                    value={selectedRetailerId}
+                    onChange={(event) => setSelectedRetailerId(event.target.value)}
+                  >
+                    <option value="">Select account</option>
+                    {data.retailers.map((retailer) => (
+                      <option key={retailer.id} value={retailer.id}>{retailer.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={generatingVendorPlans || !selectedRetailerId}
+                    title={!selectedRetailerId ? "Select an account first" : undefined}
+                    onClick={() => void handleGenerateVendorTestPlans()}
+                  >
+                    {generatingVendorPlans ? "Generating..." : "Generate"}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         }
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <div className="panel section-stack">
-        <div className="panel-header"><h3>Plans</h3></div>
+        <div className="panel-header">
+          <h3>Plans</h3>
+          <div className="btn-row">
+            <input
+              type="search"
+              aria-label="Search plans"
+              placeholder="Search by plan name or manufacturer..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              style={{ width: 240 }}
+            />
+            <select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as ProductionPlanStatus | "")}
+            >
+              <option value="">All statuses</option>
+              {PLAN_STATUSES.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <DataTable
-          emptyMessage="No production plans yet. Create a blank plan, or start from a template or the reorder queue."
+          emptyMessage={
+            data.plans.length
+              ? "No plans match your search or filter."
+              : "No production plans yet. Create a blank plan, or start from a template or the reorder queue."
+          }
           columns={[
             {
               key: "name",
@@ -278,7 +345,7 @@ export function ProductionPlannerPage() {
               ),
             },
           ]}
-          rows={data.plans}
+          rows={filteredPlans}
         />
       </div>
       {deleting ? (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DashboardCard } from "@/components/DashboardCard";
 import { DataTable } from "@/components/DataTable";
 // import { EntityFormModal } from "@/components/EntityFormModal"; // Specs editing temporarily disabled — see docs/production-planner-specs-deferred.md
@@ -50,6 +51,7 @@ export function ProductionPlanDetailPage() {
   const [addingProductId, setAddingProductId] = useState("");
   const [planFieldErrors, setPlanFieldErrors] = useState<Partial<Record<keyof ProductionPlan, string>>>({});
   const [itemFieldErrors, setItemFieldErrors] = useState<Record<string, Partial<Record<ItemErrorField, string>>>>({});
+  const [removingItem, setRemovingItem] = useState<DraftItem | null>(null);
   // const [editingSpecItem, setEditingSpecItem] = useState<DraftItem | null>(null); // Specs editing temporarily disabled — see docs/production-planner-specs-deferred.md
 
   const { data, loading, error, reload } = useAsyncData(
@@ -398,7 +400,7 @@ export function ProductionPlanDetailPage() {
                     product={product}
                     onUpdateField={updateItemField}
                     // onEditSpecs={() => setEditingSpecItem(item)} // Specs editing temporarily disabled — see docs/production-planner-specs-deferred.md
-                    onRemove={() => handleRemoveItem(item.product_id)}
+                    onRemove={() => setRemovingItem(item)}
                     fieldErrors={itemFieldErrors[item.product_id]}
                   />
                 );
@@ -666,6 +668,18 @@ export function ProductionPlanDetailPage() {
           {resultsSection}
         </>
       )}
+
+      {removingItem ? (
+        <ConfirmDialog
+          title="Remove product from plan?"
+          message={`This will remove "${(removingItem.products ?? productsById.get(removingItem.product_id))?.name ?? removingItem.product_id}" and its planned quantity from this plan. Nothing outside this plan is affected.`}
+          onClose={() => setRemovingItem(null)}
+          onConfirm={() => {
+            handleRemoveItem(removingItem.product_id);
+            setRemovingItem(null);
+          }}
+        />
+      ) : null}
 
       {/* Specs editing temporarily disabled — see docs/production-planner-specs-deferred.md
       {editingSpecItem ? (
