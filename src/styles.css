@@ -699,7 +699,7 @@ textarea {
 
 .product-actions-cell {
   gap: 8px;
-  max-width: 160px;
+  flex-wrap: nowrap;
 }
 
 .cell-stack {
@@ -3610,7 +3610,6 @@ body {
 .nav-icon {
   width: 26px;
   height: 24px;
-  border: 1px solid #e2e8f0;
   border-radius: 7px;
   display: grid;
   place-items: center;
@@ -3634,17 +3633,28 @@ body {
   border-color: var(--command-line);
 }
 
+.nav-link:hover .nav-icon {
+  color: #0f172a;
+}
+
 .nav-link-active {
   background: #0f172a;
   color: #ffffff;
   border-color: #0f172a;
 }
 
-.nav-link-active .nav-icon {
+.nav-link-active:hover {
+  background: #f5f7fa;
+  color: #0f172a;
+  border-color: #0f172a;
+}
+
+.nav-link-active:hover .nav-icon {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  color: #0f172a;
 }
+
 
 .nav-link-active::before {
   content: "";
@@ -6588,6 +6598,19 @@ textarea {
   height: 1px;
   margin: 4px 0;
   background: var(--brand-border);
+}
+
+.row-actions-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  transform: translateX(-100%);
+}
+
+.row-actions-menu .btn {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 /* Plan Assumptions wizard */

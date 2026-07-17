@@ -55,8 +55,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     label: "Purchase Orders",
     icon: ClipboardList,
     children: [
-      { kind: "leaf", to: "/retailers", label: "Retailers", icon: Store },
-      { kind: "leaf", to: "/vendors", label: "Vendors", icon: Boxes },
+      { kind: "leaf", to: "/retailers", label: "Accounts", icon: Store },
       { kind: "leaf", to: "/production", label: "Manufacturers", icon: Factory },
       { kind: "leaf", to: "/production/planner", label: "Planner & Simulator", icon: CalendarClock },
       { kind: "leaf", to: "/imports", label: "CSV Import", icon: FileSpreadsheet },
@@ -71,8 +70,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     label: "Customers",
     icon: Users,
     children: [
-      { kind: "leaf", to: "/retailers", label: "Companies", icon: Store },
-      { kind: "leaf", to: "/retailers", label: "Retailers", icon: Store },
+      { kind: "leaf", to: "/retailers", label: "Accounts", icon: Store },
       { kind: "leaf", to: "/locations", label: "Locations", icon: MapPin },
     ],
   },

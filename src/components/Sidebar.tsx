@@ -5,7 +5,10 @@ import { NAV_ENTRIES, type NavParent } from "@/lib/navigation";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
 
 function slugify(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 }
 
 function isParentActive(parent: NavParent, pathname: string): boolean {
@@ -41,7 +44,11 @@ export function Sidebar({
       const next = new Set(current);
       let changed = false;
       for (const entry of NAV_ENTRIES) {
-        if (entry.kind === "parent" && isParentActive(entry, location.pathname) && !next.has(entry.label)) {
+        if (
+          entry.kind === "parent" &&
+          isParentActive(entry, location.pathname) &&
+          !next.has(entry.label)
+        ) {
           next.add(entry.label);
           changed = true;
         }
@@ -81,13 +88,18 @@ export function Sidebar({
         onClick={onToggleRailCollapsed}
       >
         <span aria-hidden="true">{railCollapsed ? ">>" : "<<"}</span>
-        <span className="rail-toggle-label">{railCollapsed ? "Expand" : "Collapse"}</span>
+        <span className="rail-toggle-label">
+          {railCollapsed ? "Expand" : "Collapse"}
+        </span>
       </button>
       <nav className="rail-groups" aria-label="Primary navigation">
         {NAV_ENTRIES.map((entry) => {
           if (entry.kind === "section") {
             return (
-              <p className="rail-group-label rail-section-label" key={entry.label}>
+              <p
+                className="rail-group-label rail-section-label"
+                key={entry.label}
+              >
                 {entry.label}
               </p>
             );
@@ -101,7 +113,9 @@ export function Sidebar({
                 to={entry.to}
                 end={entry.to === "/"}
                 title={railCollapsed ? entry.label : undefined}
-                className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}
+                className={({ isActive }) =>
+                  `nav-link${isActive ? " nav-link-active" : ""}`
+                }
               >
                 <span className="nav-icon" aria-hidden="true">
                   <Icon size={15} strokeWidth={2} />
@@ -169,7 +183,9 @@ export function Sidebar({
                         key={`${child.to}-${child.label}`}
                         to={child.to}
                         end={false}
-                        className={({ isActive }) => `nav-link${isActive ? " nav-link-active" : ""}`}
+                        className={({ isActive }) =>
+                          `nav-link${isActive ? " nav-link-active" : ""}`
+                        }
                       >
                         <span className="nav-icon" aria-hidden="true">
                           <ChildIcon size={14} strokeWidth={2} />

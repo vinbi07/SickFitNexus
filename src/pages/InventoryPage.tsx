@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DashboardCard } from "@/components/DashboardCard";
@@ -10,8 +11,10 @@ import { Modal } from "@/components/Modal";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { ProductNameWithMetadata } from "@/components/ProductNameWithMetadata";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { useDropdownPosition } from "@/hooks/useDropdownPosition";
 import { dashboardService } from "@/services/dashboardService";
 import { inventoryService } from "@/services/inventoryService";
 import { supportService } from "@/services/supportService";
@@ -25,11 +28,17 @@ import {
   getInventoryRiskStatus,
   getMarginMetrics,
   getOversoldLabel,
+  getSockTypeFromName,
+  isApparelProductName,
+  isBundleProductName,
   isGiftCardProductName,
   isHiddenByDefaultProductName,
   isInventoryDanger,
+  SOCK_TYPES,
 } from "@/utils/operations";
-import { getProductVariantLabel } from "@/utils/lookbook";
+import { getProductVariantLabel, getUnitsPerPack } from "@/utils/lookbook";
+
+const NON_SOCK_FILTER_VALUE = "__non_sock__";
 
 type InventoryItemFormValues = Partial<InventoryItem>;
 
@@ -54,8 +63,12 @@ export function InventoryPage() {
   });
   const [search, setSearch] = useState("");
   const [locationId, setLocationId] = useState("");
-  const [riskFilter, setRiskFilter] = useState("");
-  const [bundleFilter, setBundleFilter] = useState("");
+  const [category, setCategory] = useState("");
+  const [bundlesOnly, setBundlesOnly] = useState(false);
+  const [ignoredOnly, setIgnoredOnly] = useState(false);
+  const [packSizeFilter, setPackSizeFilter] = useState("");
+  const [sockTypeFilter, setSockTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
   const [showIgnoredProducts, setShowIgnoredProducts] = useState(false);
   const [sort, setSort] = useState("danger");
@@ -63,6 +76,7 @@ export function InventoryPage() {
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  const viewOptions = useDropdownPosition();
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       items: await inventoryService.listItems(),
@@ -90,6 +104,10 @@ export function InventoryPage() {
     eventsByProductId.set(event.product_id, bucket);
   });
 
+  const categories = [
+    ...new Set(data.items.map((item) => item.products?.category).filter(Boolean)),
+  ] as string[];
+
   const filteredItems = data.items
     .filter((item) => {
       const query = search.trim().toLowerCase();
@@ -105,19 +123,37 @@ export function InventoryPage() {
         itemEvents,
         item.products?.safety_stock ?? 0,
       );
-      const matchesRisk =
-        !riskFilter ||
-        (riskFilter === "danger" && label === "Danger") ||
-        (riskFilter === "slow-mover" && label === "Slow Mover") ||
-        (riskFilter === "low" && label === "Low");
-      const matchesBundle =
-        !bundleFilter ||
-        (bundleFilter === "no-bundles" && Boolean(item.products?.no_bundles)) ||
-        (bundleFilter === "bundles-ok" && !item.products?.no_bundles);
+      const matchesCategory =
+        !category || item.products?.category === category;
+      const matchesBundlesOnly =
+        !bundlesOnly || isBundleProductName(item.products?.name);
+      const matchesIgnoredOnly = !ignoredOnly || item.products?.ignored;
+      const matchesPackSize =
+        !packSizeFilter ||
+        (item.products ? getUnitsPerPack(item.products) : null) ===
+          Number(packSizeFilter);
+      const matchesSockType =
+        !sockTypeFilter ||
+        (sockTypeFilter === NON_SOCK_FILTER_VALUE
+          ? isApparelProductName(item.products?.name)
+          : getSockTypeFromName(item.products?.name) === sockTypeFilter);
+      const matchesStatus = !statusFilter || label === statusFilter;
       const matchesVisibility =
-        (showHiddenCategories || !isHiddenByDefaultProductName(item.products?.name)) &&
-        (showIgnoredProducts || !item.products?.ignored);
-      return matchesSearch && matchesLocation && matchesRisk && matchesBundle && matchesVisibility;
+        (showHiddenCategories ||
+          bundlesOnly ||
+          !isHiddenByDefaultProductName(item.products?.name)) &&
+        (showIgnoredProducts || ignoredOnly || !item.products?.ignored);
+      return (
+        matchesSearch &&
+        matchesLocation &&
+        matchesCategory &&
+        matchesBundlesOnly &&
+        matchesIgnoredOnly &&
+        matchesPackSize &&
+        matchesSockType &&
+        matchesStatus &&
+        matchesVisibility
+      );
     })
     .sort((left, right) => {
       if (sort === "quantity")
@@ -144,15 +180,117 @@ export function InventoryPage() {
       return leftDanger - rightDanger;
     });
 
+  const viewOptionsActiveCount = [
+    bundlesOnly,
+    showHiddenCategories,
+    showIgnoredProducts,
+    ignoredOnly,
+  ].filter(Boolean).length;
+
+  const activeFilters: Array<{
+    key: string;
+    label: string;
+    onClear: () => void;
+  }> = [];
+  if (search.trim())
+    activeFilters.push({
+      key: "search",
+      label: `Search: "${search.trim()}"`,
+      onClear: () => setSearch(""),
+    });
+  if (locationId) {
+    const locationName =
+      data.locations.find((location) => location.id === locationId)?.name ??
+      "Selected";
+    activeFilters.push({
+      key: "location",
+      label: `Location: ${locationName}`,
+      onClear: () => setLocationId(""),
+    });
+  }
+  if (category)
+    activeFilters.push({
+      key: "category",
+      label: `Category: ${category}`,
+      onClear: () => setCategory(""),
+    });
+  if (bundlesOnly)
+    activeFilters.push({
+      key: "bundlesOnly",
+      label: "Bundles Only",
+      onClear: () => setBundlesOnly(false),
+    });
+  if (ignoredOnly)
+    activeFilters.push({
+      key: "ignoredOnly",
+      label: "Ignored Only",
+      onClear: () => setIgnoredOnly(false),
+    });
+  if (packSizeFilter) {
+    const label =
+      packSizeFilter === "1" ? "1-Pack (Single)" : `${packSizeFilter}-Pack`;
+    activeFilters.push({
+      key: "packSize",
+      label: `Pack Size: ${label}`,
+      onClear: () => setPackSizeFilter(""),
+    });
+  }
+  if (sockTypeFilter) {
+    const label =
+      sockTypeFilter === NON_SOCK_FILTER_VALUE
+        ? "Other / Non-Sock (Apparel)"
+        : sockTypeFilter;
+    activeFilters.push({
+      key: "sockType",
+      label: `Sock Type: ${label}`,
+      onClear: () => setSockTypeFilter(""),
+    });
+  }
+  if (statusFilter)
+    activeFilters.push({
+      key: "status",
+      label: `Status: ${statusFilter}`,
+      onClear: () => setStatusFilter(""),
+    });
+  if (showHiddenCategories)
+    activeFilters.push({
+      key: "showHidden",
+      label: "Showing Bundles & Gift Cards",
+      onClear: () => setShowHiddenCategories(false),
+    });
+  if (showIgnoredProducts)
+    activeFilters.push({
+      key: "showIgnored",
+      label: "Showing Ignored",
+      onClear: () => setShowIgnoredProducts(false),
+    });
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setLocationId("");
+    setCategory("");
+    setBundlesOnly(false);
+    setIgnoredOnly(false);
+    setPackSizeFilter("");
+    setSockTypeFilter("");
+    setStatusFilter("");
+    setShowHiddenCategories(false);
+    setShowIgnoredProducts(false);
+  };
+
   const nonGiftCardItems = data.items.filter(
-    (item) => !isGiftCardProductName(item.products?.name) && !item.products?.ignored,
+    (item) =>
+      !isGiftCardProductName(item.products?.name) && !item.products?.ignored,
   );
   const totalUnitsOnHand = nonGiftCardItems.reduce(
     (sum, item) => sum + Number(item.quantity_on_hand ?? 0),
     0,
   );
   const dangerCount = nonGiftCardItems.filter((item) =>
-    isInventoryDanger(item.quantity_on_hand, eventsByProductId.get(item.product_id) ?? []),
+    isInventoryDanger(
+      item.quantity_on_hand,
+      eventsByProductId.get(item.product_id) ?? [],
+    ),
   ).length;
   const noBundlesCount = data.items.filter((item) =>
     Boolean(item.products?.no_bundles),
@@ -239,21 +377,51 @@ export function InventoryPage() {
             ))}
           </select>
           <select
-            value={riskFilter}
-            onChange={(event) => setRiskFilter(event.target.value)}
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
           >
-            <option value="">All inventory health</option>
-            <option value="danger">Danger only</option>
-            <option value="slow-mover">Slow mover only</option>
-            <option value="low">Low but not danger</option>
+            <option value="">All categories</option>
+            {categories.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
           </select>
           <select
-            value={bundleFilter}
-            onChange={(event) => setBundleFilter(event.target.value)}
+            value={packSizeFilter}
+            onChange={(event) => setPackSizeFilter(event.target.value)}
           >
-            <option value="">All bundle states</option>
-            <option value="no-bundles">No Bundles</option>
-            <option value="bundles-ok">Bundles Allowed</option>
+            <option value="">All Pack Sizes</option>
+            {[1, 2, 3, 6, 10, 12].map((count) => (
+              <option key={count} value={count}>
+                {count === 1 ? "1-Pack (Single)" : `${count}-Pack`}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sockTypeFilter}
+            onChange={(event) => setSockTypeFilter(event.target.value)}
+          >
+            <option value="">All Sock Types</option>
+            {SOCK_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+            <option value={NON_SOCK_FILTER_VALUE}>
+              Other / Non-Sock (Apparel)
+            </option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="">All Statuses</option>
+            {["Healthy", "Low", "Danger", "Slow Mover"].map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
           </select>
           <select
             value={sort}
@@ -264,20 +432,104 @@ export function InventoryPage() {
             <option value="quantity">Sort by quantity</option>
           </select>
           <button
+            ref={viewOptions.triggerRef}
+            type="button"
             className="btn btn-secondary"
-            onClick={() => setShowHiddenCategories((current) => !current)}
+            onClick={() => viewOptions.setOpen((current) => !current)}
           >
-            {showHiddenCategories ? "Hide Bundles & Gift Cards" : "Show Bundles & Gift Cards"}
+            View Options
+            {viewOptionsActiveCount > 0 ? ` (${viewOptionsActiveCount})` : ""}
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowIgnoredProducts((current) => !current)}
-          >
-            {showIgnoredProducts ? "Hide Ignored" : "Show Ignored"}
-          </button>
-          <button className="btn btn-secondary" onClick={() => void reload()}>
-            Refresh
-          </button>
+          {viewOptions.open
+            ? createPortal(
+                <div
+                  ref={viewOptions.popoverRef}
+                  className="date-picker-popover-portal view-options-popover"
+                  style={{
+                    top: viewOptions.position.top,
+                    left: viewOptions.position.left,
+                  }}
+                >
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={bundlesOnly}
+                      onChange={(event) => setBundlesOnly(event.target.checked)}
+                    />
+                    Show Bundles Only
+                  </label>
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={showHiddenCategories}
+                      onChange={(event) =>
+                        setShowHiddenCategories(event.target.checked)
+                      }
+                    />
+                    Show Bundles &amp; Gift Cards
+                  </label>
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={showIgnoredProducts}
+                      onChange={(event) =>
+                        setShowIgnoredProducts(event.target.checked)
+                      }
+                    />
+                    Show Ignored
+                  </label>
+                  <label className="view-options-item">
+                    <input
+                      type="checkbox"
+                      checked={ignoredOnly}
+                      onChange={(event) => setIgnoredOnly(event.target.checked)}
+                    />
+                    Ignored Only
+                  </label>
+                  <div className="view-options-divider" />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-small"
+                    onClick={() => {
+                      void reload();
+                      viewOptions.setOpen(false);
+                    }}
+                  >
+                    Refresh
+                  </button>
+                </div>,
+                document.body,
+              )
+            : null}
+        </div>
+      </div>
+      <div className="panel">
+        <div className="btn-row">
+          <span>
+            Showing {filteredItems.length} of {data.items.length} inventory
+            records
+          </span>
+          {activeFilters.length > 0 ? (
+            <>
+              {activeFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  className="btn btn-ghost btn-small"
+                  onClick={filter.onClear}
+                >
+                  {filter.label} &times;
+                </button>
+              ))}
+              <button
+                className="btn btn-ghost btn-small"
+                onClick={clearAllFilters}
+              >
+                Clear All Filters
+              </button>
+            </>
+          ) : (
+            <span className="helper-text">No filters applied</span>
+          )}
         </div>
       </div>
       <div className="panel section-stack">
@@ -290,19 +542,26 @@ export function InventoryPage() {
             {
               key: "product",
               title: "Product",
-              render: (row) => <ProductNameWithMetadata product={row.products} large />,
+              render: (row) => (
+                <ProductNameWithMetadata product={row.products} large />
+              ),
             },
             {
               key: "quantities",
               title: "Stock",
               render: (row) => {
                 const incoming =
-                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
-                const committed = Number(row.products?.inventory_allocated ?? 0);
+                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ??
+                  0;
+                const committed = Number(
+                  row.products?.inventory_allocated ?? 0,
+                );
                 const oversoldLabel = getOversoldLabel(row.quantity_on_hand);
                 return (
                   <div className="cell-stack">
-                    <strong>{oversoldLabel ?? `On hand ${row.quantity_on_hand}`}</strong>
+                    <strong>
+                      {oversoldLabel ?? `On hand ${row.quantity_on_hand}`}
+                    </strong>
                     <span className="helper-text">Committed {committed}</span>
                     <span className="helper-text">Incoming {incoming}</span>
                     {/* Committed/Incoming are product-level aggregates, not per-location,
@@ -319,11 +578,18 @@ export function InventoryPage() {
               title: "Available After Incoming",
               render: (row) => {
                 const incoming =
-                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
-                const committed = Number(row.products?.inventory_allocated ?? 0);
+                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ??
+                  0;
+                const committed = Number(
+                  row.products?.inventory_allocated ?? 0,
+                );
                 return (
                   <strong>
-                    {getAvailableAfterIncoming(row.quantity_on_hand, incoming, committed)}
+                    {getAvailableAfterIncoming(
+                      row.quantity_on_hand,
+                      incoming,
+                      committed,
+                    )}
                   </strong>
                 );
               },
@@ -363,7 +629,8 @@ export function InventoryPage() {
                   return <StatusBadge label="Safe" />;
                 }
                 const incoming =
-                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ?? 0;
+                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ??
+                  0;
                 const tone = getInventoryHealthTone(
                   row.quantity_on_hand,
                   eventsByProductId.get(row.product_id) ?? [],
@@ -371,7 +638,11 @@ export function InventoryPage() {
                 );
                 return (
                   <StatusBadge
-                    label={getInventoryRiskStatus(row.quantity_on_hand, tone, incoming)}
+                    label={getInventoryRiskStatus(
+                      row.quantity_on_hand,
+                      tone,
+                      incoming,
+                    )}
                   />
                 );
               },
@@ -399,30 +670,32 @@ export function InventoryPage() {
                     Edit
                   </button>
                   <button
-                    className="btn btn-secondary btn-small po-edit-btn"
-                    onClick={() => setAdjusting(row)}
-                  >
-                    Adjust
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-small"
-                    onClick={() => setTransferring(row)}
-                  >
-                    Transfer
-                  </button>
-                  {/* TODO: deep-link vendor/product once the PO builder supports prefill query params */}
-                  <Link
-                    className="btn btn-secondary btn-small"
-                    to="/purchase-orders/new"
-                  >
-                    Create Manufacturing PO
-                  </Link>
-                  <button
-                    className="btn btn-danger btn-small"
+                    className="btn btn-danger btn-small po-edit-btn"
                     onClick={() => setDeleting(row)}
                   >
                     Delete
                   </button>
+                  <RowActionsMenu>
+                    <button
+                      className="btn btn-secondary btn-small po-edit-btn"
+                      onClick={() => setAdjusting(row)}
+                    >
+                      Adjust
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-small"
+                      onClick={() => setTransferring(row)}
+                    >
+                      Transfer
+                    </button>
+                    {/* TODO: deep-link vendor/product once the PO builder supports prefill query params */}
+                    <Link
+                      className="btn btn-secondary btn-small"
+                      to="/purchase-orders/new"
+                    >
+                      Create Manufacturing PO
+                    </Link>
+                  </RowActionsMenu>
                 </div>
               ),
             },
@@ -586,11 +859,16 @@ export function InventoryPage() {
             </div>
             <div className="detail-card">
               <span>Current Quantity</span>
-              <strong>{getOversoldLabel(viewing.quantity_on_hand) ?? viewing.quantity_on_hand}</strong>
+              <strong>
+                {getOversoldLabel(viewing.quantity_on_hand) ??
+                  viewing.quantity_on_hand}
+              </strong>
             </div>
             <div className="detail-card">
               <span>Committed</span>
-              <strong>{Number(viewing.products?.inventory_allocated ?? 0)}</strong>
+              <strong>
+                {Number(viewing.products?.inventory_allocated ?? 0)}
+              </strong>
             </div>
             <div className="detail-card">
               <span>Incoming Quantity</span>
@@ -604,7 +882,8 @@ export function InventoryPage() {
               <strong>
                 {getAvailableAfterIncoming(
                   viewing.quantity_on_hand,
-                  reorderBySku.get(viewing.products?.sku ?? "")?.incomingQuantity ?? 0,
+                  reorderBySku.get(viewing.products?.sku ?? "")
+                    ?.incomingQuantity ?? 0,
                   Number(viewing.products?.inventory_allocated ?? 0),
                 )}
               </strong>

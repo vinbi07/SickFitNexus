@@ -12,7 +12,6 @@ import { InvoicesPage } from "@/pages/InvoicesPage";
 import { InvoiceDetailPage } from "@/pages/InvoiceDetailPage";
 import { InvoicePreviewPage } from "@/pages/InvoicePreviewPage";
 import { InventoryPage } from "@/pages/InventoryPage";
-import { VendorsPage } from "@/pages/VendorsPage";
 import { AlertsPage } from "@/pages/AlertsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { SopsPage } from "@/pages/SopsPage";
@@ -81,7 +80,6 @@ export default function App() {
               <Route path="/invoices/:id/preview" element={<InvoicePreviewPage />} />
               <Route path="/pending-queue" element={<PendingQueuePage />} />
               <Route path="/inventory" element={<InventoryPage />} />
-              <Route path="/vendors" element={<VendorsPage />} />
               <Route path="/retailers" element={<RetailersPage />} />
               <Route path="/retailers/:id" element={<RetailerDetailPage />} />
               <Route path="/compliance" element={<CompliancePage />} />
