@@ -49,6 +49,7 @@ const baseProduct: Product = {
   compliance_docs_required: [],
   compliance_docs_status: null,
   no_bundles: false,
+  ignored: false,
   shopify_product_id: null,
   shopify_variant_id: null,
   shopify_handle: null,

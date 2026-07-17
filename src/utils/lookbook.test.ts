@@ -42,6 +42,7 @@ const baseProduct: Product = {
   compliance_docs_required: ["W9"],
   compliance_docs_status: "Ready",
   no_bundles: false,
+  ignored: false,
   shopify_product_id: null,
   shopify_variant_id: null,
   shopify_handle: null,
