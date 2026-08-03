@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Home,
+  CalendarDays,
   ClipboardList,
   Store,
   Boxes,
@@ -49,6 +50,7 @@ export type NavEntry = NavLeaf | NavParent | NavSectionLabel;
 
 export const NAV_ENTRIES: NavEntry[] = [
   { kind: "leaf", to: "/", label: "Home", icon: Home },
+  { kind: "leaf", to: "/calendar", label: "Calendar", icon: CalendarDays },
   {
     kind: "parent",
     to: "/purchase-orders",

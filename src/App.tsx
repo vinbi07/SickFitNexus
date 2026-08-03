@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { CalendarPage } from "@/pages/CalendarPage";
 import { CsvImportsPage } from "@/pages/CsvImportsPage";
 import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage";
 import { PurchaseOrderDetailPage } from "@/pages/PurchaseOrderDetailPage";
@@ -69,6 +70,7 @@ export default function App() {
           >
             <Routes>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/imports" element={<CsvImportsPage />} />
               <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
               <Route path="/purchase-orders/new" element={<PurchaseOrderBuilderPage />} />
