@@ -1313,6 +1313,40 @@ textarea {
   margin-bottom: 6px;
 }
 
+/* Compact horizontal stat strip — same label/value pairs as
+   .detail-grid/.detail-card or .card-grid/.metric-card, but wrapping inline
+   instead of stacking into bordered boxes. Used by OrderSummaryCard and by
+   condensed metrics rows (e.g. RetailerDetailPage) that want a short,
+   persistent summary regardless of how many fields/stats they have. */
+
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 10px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat-item span {
+  color: var(--brand-muted);
+  font-size: 0.72rem;
+  font-family: var(--font-utility);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stat-item strong {
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .channel-lane-board {
   display: flex;
   flex-direction: column;
@@ -2131,6 +2165,50 @@ textarea {
   border: 1px solid var(--brand-border);
   border-radius: 8px;
   padding: 10px 12px;
+  min-width: 0;
+}
+
+/* Document wizard line items grid — sized for exactly the wizard's 7 fields
+   (Line, SKU, Description, Qty, Unit Cost, Ext Cost, Actions), not the legacy
+   11-column retailer builder grid above. */
+
+.wizard-line-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.wizard-line-grid-scroll {
+  overflow-x: auto;
+  margin-top: 18px;
+}
+
+.wizard-line-grid-head,
+.wizard-line-grid-row {
+  display: grid;
+  grid-template-columns: 56px minmax(120px, 1fr) minmax(260px, 2.4fr) 90px 130px 130px 100px;
+  gap: 16px;
+  align-items: center;
+}
+
+.wizard-line-grid-head {
+  color: var(--brand-muted);
+  font-size: 0.78rem;
+  font-family: var(--font-utility);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wizard-line-grid-row {
+  padding: 16px;
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #fafbfd);
+}
+
+.wizard-line-grid-row input {
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  padding: 11px 12px;
   min-width: 0;
 }
 
@@ -6728,6 +6806,7 @@ textarea {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
+  margin-top: 8px;
   font-size: 0.86rem;
 }
 

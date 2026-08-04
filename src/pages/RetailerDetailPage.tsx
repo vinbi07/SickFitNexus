@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useState, type ReactNode } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { EntityFormModal } from "@/components/EntityFormModal";
@@ -58,9 +58,29 @@ function formatLookbookEventLabel(eventType: string) {
   }
 }
 
+const ACCOUNT_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "buyers", label: "Buyers" },
+  { id: "engagement", label: "Engagement" },
+  { id: "orders", label: "Orders & Products" },
+] as const;
+
+type AccountTab = (typeof ACCOUNT_TABS)[number]["id"];
+
 export function RetailerDetailPage() {
   const params = useParams();
   const retailerId = params.id ?? "";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: AccountTab = ACCOUNT_TABS.some((tab) => tab.id === searchParams.get("tab"))
+    ? (searchParams.get("tab") as AccountTab)
+    : "overview";
+  const setActiveTab = (tab: AccountTab) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === "overview") next.delete("tab");
+      else next.set("tab", tab);
+      return next;
+    });
   const [editingBuyer, setEditingBuyer] = useState<Partial<Buyer> | null>(null);
   const [deletingBuyer, setDeletingBuyer] = useState<Buyer | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
@@ -181,50 +201,109 @@ export function RetailerDetailPage() {
         description={`${data.retailer.account_number ?? "No account number"} | ${data.retailer.retailer_group ?? "Standalone account"}${data.parentRetailer ? ` | Parent: ${data.parentRetailer.name}` : ""}`}
         actions={<StatusBadge label={data.retailer.status} />}
       />
-      <div className="card-grid">
-        <div className="card metric-card">
-          <span className="metric-label">Open Invoices</span>
-          <strong className="metric-value">{data.openInvoices.length}</strong>
+      <div className="stat-strip">
+        <div className="stat-item">
+          <span>Open Invoices</span>
+          <strong>{data.openInvoices.length}</strong>
         </div>
-        <div className="card metric-card">
-          <span className="metric-label">Shipped Invoices</span>
-          <strong className="metric-value">{data.shippedInvoices.length}</strong>
+        <div className="stat-item">
+          <span>Shipped Invoices</span>
+          <strong>{data.shippedInvoices.length}</strong>
         </div>
-        <div className="card metric-card">
-          <span className="metric-label">In Route</span>
-          <strong className="metric-value">{data.inRouteInvoices.length}</strong>
+        <div className="stat-item">
+          <span>In Route</span>
+          <strong>{data.inRouteInvoices.length}</strong>
         </div>
-        <div className="card metric-card">
-          <span className="metric-label">Recent POs</span>
-          <strong className="metric-value">{data.recentPos.length}</strong>
+        <div className="stat-item">
+          <span>Recent POs</span>
+          <strong>{data.recentPos.length}</strong>
         </div>
-        <div className="card metric-card">
-          <span className="metric-label">Lookbook Views</span>
-          <strong className="metric-value">{data.lookbookAnalytics.totalViews}</strong>
+        <div className="stat-item">
+          <span>Lookbook Views</span>
+          <strong>{data.lookbookAnalytics.totalViews}</strong>
         </div>
-        <div className="card metric-card">
-          <span className="metric-label">Quote Requests</span>
-          <strong className="metric-value">{data.lookbookAnalytics.totalQuoteRequests}</strong>
+        <div className="stat-item">
+          <span>Quote Requests</span>
+          <strong>{data.lookbookAnalytics.totalQuoteRequests}</strong>
         </div>
-        <div className="card metric-card">
-          <span className="metric-label">Buyer Submits</span>
-          <strong className="metric-value">{data.lookbookAnalytics.totalSubmissions}</strong>
+        <div className="stat-item">
+          <span>Buyer Submits</span>
+          <strong>{data.lookbookAnalytics.totalSubmissions}</strong>
         </div>
       </div>
+      <div className="wizard-steps" role="tablist" aria-label="Retailer account sections">
+        {ACCOUNT_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={`wizard-step${activeTab === tab.id ? " is-active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <span className="wizard-step-label">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+      {activeTab === "overview" ? (
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header"><h3>Account Operations</h3></div>
           <div className="detail-grid">
-            <div className="detail-card"><span>Primary Contact</span><strong>{data.retailer.primary_contact_name ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Email</span><strong>{data.retailer.primary_contact_email ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Phone</span><strong>{data.retailer.primary_contact_phone ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Supplier ID</span><strong>{data.retailer.supplier_id ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Activation ID</span><strong>{data.retailer.activation_id ?? "N/A"}</strong></div>
-            <div className="detail-card"><span>Payment Terms</span><strong>{data.retailer.default_payment_terms ?? "Not set"}</strong></div>
-            <div className="detail-card"><span>Order Policy</span><strong>{data.retailer.order_mode_policy}</strong></div>
-            <div className="detail-card"><span>Brand Accent</span><strong>{data.retailer.brand_accent_color ?? "Default red"}</strong></div>
-            <div className="detail-card"><span>Next Reorder Window</span><strong>{data.retailer.next_reorder_start ? `${formatDate(data.retailer.next_reorder_start)} - ${formatDate(data.retailer.next_reorder_end)}` : "Not set"}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Lookbook Intro</span><strong>{data.retailer.lookbook_intro ?? "No custom intro added yet."}</strong></div>
+            {(
+              [
+                { label: "Primary Contact", value: data.retailer.primary_contact_name ?? "N/A", show: Boolean(data.retailer.primary_contact_name) },
+                { label: "Email", value: data.retailer.primary_contact_email ?? "N/A", show: Boolean(data.retailer.primary_contact_email) },
+                { label: "Phone", value: data.retailer.primary_contact_phone ?? "N/A", show: Boolean(data.retailer.primary_contact_phone) },
+                { label: "Supplier ID", value: data.retailer.supplier_id ?? "N/A", show: Boolean(data.retailer.supplier_id) },
+                { label: "Activation ID", value: data.retailer.activation_id ?? "N/A", show: Boolean(data.retailer.activation_id) },
+                { label: "Payment Terms", value: data.retailer.default_payment_terms ?? "Not set", show: Boolean(data.retailer.default_payment_terms) },
+                { label: "Order Policy", value: data.retailer.order_mode_policy, show: true },
+                { label: "Brand Accent", value: data.retailer.brand_accent_color ?? "Default red", show: true },
+                {
+                  label: "Next Reorder Window",
+                  value: data.retailer.next_reorder_start ? `${formatDate(data.retailer.next_reorder_start)} - ${formatDate(data.retailer.next_reorder_end)}` : "Not set",
+                  show: Boolean(data.retailer.next_reorder_start),
+                },
+                {
+                  label: "Lookbook Intro",
+                  value: data.retailer.lookbook_intro ?? "No custom intro added yet.",
+                  show: Boolean(data.retailer.lookbook_intro),
+                  wide: true,
+                },
+                {
+                  label: "Additional Contacts",
+                  value: data.retailer.secondary_contacts ?? "No extra contacts added.",
+                  show: Boolean(data.retailer.secondary_contacts),
+                  wide: true,
+                },
+                {
+                  label: "SOPs",
+                  value: data.retailer.sop_notes ?? "No SOP notes added.",
+                  show: Boolean(data.retailer.sop_notes),
+                  wide: true,
+                },
+                {
+                  label: "Shipping Requirements",
+                  value: data.retailer.shipping_requirements ?? "No shipping requirements added.",
+                  show: Boolean(data.retailer.shipping_requirements),
+                  wide: true,
+                },
+                {
+                  label: "Notes",
+                  value: data.retailer.notes ?? "No notes added.",
+                  show: Boolean(data.retailer.notes),
+                  wide: true,
+                },
+              ] satisfies Array<{ label: string; value: ReactNode; show: boolean; wide?: boolean }>
+            )
+              .filter((field) => field.show)
+              .map((field) => (
+                <div className="detail-card" key={field.label} style={field.wide ? { gridColumn: "1 / -1" } : undefined}>
+                  <span>{field.label}</span>
+                  <strong>{field.value}</strong>
+                </div>
+              ))}
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
               <span>Retailer Logo</span>
               <div className="btn-row" style={{ alignItems: "center" }}>
@@ -243,9 +322,6 @@ export function RetailerDetailPage() {
                 ) : null}
               </div>
             </div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Additional Contacts</span><strong>{data.retailer.secondary_contacts ?? "No extra contacts added."}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>SOPs</span><strong>{data.retailer.sop_notes ?? "No SOP notes added."}</strong></div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Shipping Requirements</span><strong>{data.retailer.shipping_requirements ?? "No shipping requirements added."}</strong></div>
             <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
               <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                 <span>Billing &amp; Shipping Addresses</span>
@@ -323,7 +399,6 @@ export function RetailerDetailPage() {
                 </div>
               )}
             </div>
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}><span>Notes</span><strong>{data.retailer.notes ?? "No notes added."}</strong></div>
           </div>
         </div>
         <div className="panel section-stack">
@@ -351,7 +426,8 @@ export function RetailerDetailPage() {
           ) : null}
         </div>
       </div>
-      <div className="split-grid">
+      ) : null}
+      {activeTab === "buyers" ? (
         <div className="panel section-stack">
           <div className="panel-header">
             <h3>Buyer Access</h3>
@@ -387,7 +463,8 @@ export function RetailerDetailPage() {
             rows={data.buyers}
           />
         </div>
-      </div>
+      ) : null}
+      {activeTab === "engagement" ? (
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header"><h3>Buyer Engagement</h3></div>
@@ -429,6 +506,8 @@ export function RetailerDetailPage() {
           </div>
         </div>
       </div>
+      ) : null}
+      {activeTab === "orders" ? (
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header"><h3>Top SKUs</h3></div>
@@ -459,6 +538,7 @@ export function RetailerDetailPage() {
           />
         </div>
       </div>
+      ) : null}
       {editingBuyer ? (
         <EntityFormModal<Partial<Buyer>>
           title={editingBuyer.id ? "Edit Buyer" : "Add Buyer"}

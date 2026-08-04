@@ -150,7 +150,7 @@ export function PurchaseOrdersPage() {
             <button className="btn btn-secondary" onClick={() => void reload()}>
               Refresh
             </button>
-            <Link className="btn btn-primary" to="/purchase-orders/new">
+            <Link className="btn btn-primary" to="/purchase-orders/new/wizard">
               Add New PO
             </Link>
           </div>

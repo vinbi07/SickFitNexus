@@ -55,7 +55,7 @@ export function TopBar({
         </div>
       </div>
       <div className="topbar-actions">
-        <Link className="btn btn-primary btn-small" to="/purchase-orders/new">New PO</Link>
+        <Link className="btn btn-primary btn-small" to="/purchase-orders/new/wizard">New PO</Link>
         <span
           className={`status-badge ${isSupabaseConfigured ? "status-success" : "status-warning"}`}
         >

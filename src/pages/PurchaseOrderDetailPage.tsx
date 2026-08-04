@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useRef, useState, type ReactNode } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CommentsPanel } from "@/features/comments/CommentsPanel";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -85,11 +85,32 @@ function formatCounterEventMeta(event: PurchaseOrderCounterEvent) {
   return parts.join(" | ");
 }
 
+const DETAIL_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "preview", label: "Document Preview" },
+  { id: "fulfillment", label: "Fulfillment" },
+  { id: "documents", label: "Documents & Comms" },
+  { id: "activity", label: "Activity" },
+] as const;
+
+type DetailTab = (typeof DETAIL_TABS)[number]["id"];
+
 export function PurchaseOrderDetailPage() {
   const params = useParams();
   const navigate = useNavigate();
   const poId = params.id ?? "";
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: DetailTab = DETAIL_TABS.some((tab) => tab.id === searchParams.get("tab"))
+    ? (searchParams.get("tab") as DetailTab)
+    : "overview";
+  const setActiveTab = (tab: DetailTab) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === "overview") next.delete("tab");
+      else next.set("tab", tab);
+      return next;
+    });
   const {
     isOpen: drawerOpen,
     poId: drawerPoId,
@@ -607,6 +628,21 @@ export function PurchaseOrderDetailPage() {
               ]
         }
       />
+      <div className="wizard-steps" role="tablist" aria-label="Purchase order detail sections">
+        {DETAIL_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={`wizard-step${activeTab === tab.id ? " is-active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <span className="wizard-step-label">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+      {activeTab === "preview" ? (
       <div className="panel">
         <div className="panel-header">
           <h3>PO Preview</h3>
@@ -695,122 +731,170 @@ export function PurchaseOrderDetailPage() {
           />
         )}
       </div>
+      ) : null}
+      {activeTab === "overview" ? (
+      <>
       <div className="panel section-stack">
         <div className="panel-header">
           <h3>Lifecycle</h3>
         </div>
         <div className="detail-grid">
-          <div className="detail-card">
-            <span>Retailer</span>
-            <strong>{data.purchaseOrder.retailers?.name ?? "N/A"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Buyer</span>
-            <strong>{data.purchaseOrder.buyers?.buyer_name ?? "N/A"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Vendor</span>
-            <strong>{data.purchaseOrder.vendors?.name ?? "N/A"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Ship Date</span>
-            <strong>{formatDate(data.purchaseOrder.ship_date)}</strong>
-          </div>
-          <div className="detail-card">
-            <span>ETA</span>
-            <strong>
-              {formatDate(
-                data.purchaseOrder.eta_date ??
-                  data.purchaseOrder.expected_delivery_date,
-              )}
-            </strong>
-          </div>
-          <div className="detail-card">
-            <span>Approval</span>
-            <strong>{data.purchaseOrder.approval_status}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Allocation</span>
-            <strong>{data.purchaseOrder.allocation_status}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Invoice Status</span>
-            <strong>{data.purchaseOrder.invoice_status ?? "Open"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Invoice Paid</span>
-            <strong>{formatDate(data.purchaseOrder.invoice_paid_at)}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Shipment Status</span>
-            <strong>
-              {data.purchaseOrder.shipment_status ??
-                data.purchaseOrder.tracking_status ??
-                "None"}
-            </strong>
-          </div>
-          <div className="detail-card">
-            <span>Tracking</span>
-            <strong>{data.purchaseOrder.tracking_number ?? "None"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Source Channel</span>
-            <strong>{data.purchaseOrder.source_channel ?? "N/A"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Generated Form</span>
-            <strong>
-              {data.purchaseOrder.generated_form_url ? (
-                <a
-                  href={data.purchaseOrder.generated_form_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open
-                </a>
-              ) : (
-                "Not generated"
-              )}
-            </strong>
-          </div>
-          <div className="detail-card">
-            <span>Counter Status</span>
-            <strong>{data.purchaseOrder.counter_status}</strong>
-          </div>
-          <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
-            <span>Compliance Snapshot</span>
-            <strong>
-              {String(
-                (
-                  data.purchaseOrder.compliance_snapshot as {
-                    summary?: string;
-                  } | null
-                )?.summary ?? "No compliance snapshot recorded.",
-              )}
-            </strong>
-          </div>
-          <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
-            <span>Hold Reason</span>
-            <strong>
-              {data.purchaseOrder.hold_reason ?? "No hold reason."}
-            </strong>
-          </div>
-          <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
-            <span>Buyer Notes</span>
-            <strong>
-              {data.purchaseOrder.buyer_notes ?? "No buyer notes added."}
-            </strong>
-          </div>
-          <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
-            <span>Internal Notes</span>
-            <strong>
-              {data.purchaseOrder.internal_notes ?? "No internal notes added."}
-            </strong>
-          </div>
-          <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
-            <span>Notes</span>
-            <strong>{data.purchaseOrder.notes ?? "No notes added."}</strong>
-          </div>
+          {(
+            [
+              {
+                label: "Retailer",
+                value: data.purchaseOrder.retailers?.name ?? "N/A",
+                show: Boolean(data.purchaseOrder.retailers?.name),
+              },
+              {
+                label: "Buyer",
+                value: data.purchaseOrder.buyers?.buyer_name ?? "N/A",
+                show: Boolean(data.purchaseOrder.buyers?.buyer_name),
+              },
+              {
+                label: "Vendor",
+                value: data.purchaseOrder.vendors?.name ?? "N/A",
+                show: Boolean(data.purchaseOrder.vendors?.name),
+              },
+              {
+                label: "Ship Date",
+                value: formatDate(data.purchaseOrder.ship_date),
+                show: Boolean(data.purchaseOrder.ship_date),
+              },
+              {
+                label: "ETA",
+                value: formatDate(
+                  data.purchaseOrder.eta_date ??
+                    data.purchaseOrder.expected_delivery_date,
+                ),
+                show: Boolean(
+                  data.purchaseOrder.eta_date ??
+                    data.purchaseOrder.expected_delivery_date,
+                ),
+              },
+              {
+                label: "Approval",
+                value: data.purchaseOrder.approval_status,
+                show: true,
+              },
+              {
+                label: "Allocation",
+                value: data.purchaseOrder.allocation_status,
+                show: true,
+              },
+              {
+                label: "Invoice Status",
+                value: data.purchaseOrder.invoice_status ?? "Open",
+                show: true,
+              },
+              {
+                label: "Invoice Paid",
+                value: formatDate(data.purchaseOrder.invoice_paid_at),
+                show: Boolean(data.purchaseOrder.invoice_paid_at),
+              },
+              {
+                label: "Shipment Status",
+                value:
+                  data.purchaseOrder.shipment_status ??
+                  data.purchaseOrder.tracking_status ??
+                  "None",
+                show: Boolean(
+                  data.purchaseOrder.shipment_status ??
+                    data.purchaseOrder.tracking_status,
+                ),
+              },
+              {
+                label: "Tracking",
+                value: data.purchaseOrder.tracking_number ?? "None",
+                show: Boolean(data.purchaseOrder.tracking_number),
+              },
+              {
+                label: "Source Channel",
+                value: data.purchaseOrder.source_channel ?? "N/A",
+                show: Boolean(data.purchaseOrder.source_channel),
+              },
+              {
+                label: "Generated Form",
+                value: data.purchaseOrder.generated_form_url ? (
+                  <a
+                    href={data.purchaseOrder.generated_form_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open
+                  </a>
+                ) : (
+                  "Not generated"
+                ),
+                show: Boolean(data.purchaseOrder.generated_form_url),
+              },
+              {
+                label: "Counter Status",
+                value: data.purchaseOrder.counter_status,
+                show: true,
+              },
+              {
+                label: "Compliance Snapshot",
+                value: String(
+                  (
+                    data.purchaseOrder.compliance_snapshot as {
+                      summary?: string;
+                    } | null
+                  )?.summary ?? "No compliance snapshot recorded.",
+                ),
+                show: Boolean(
+                  (
+                    data.purchaseOrder.compliance_snapshot as {
+                      summary?: string;
+                    } | null
+                  )?.summary,
+                ),
+                wide: true,
+              },
+              {
+                label: "Hold Reason",
+                value: data.purchaseOrder.hold_reason ?? "No hold reason.",
+                show: Boolean(data.purchaseOrder.hold_reason),
+                wide: true,
+              },
+              {
+                label: "Buyer Notes",
+                value: data.purchaseOrder.buyer_notes ?? "No buyer notes added.",
+                show: Boolean(data.purchaseOrder.buyer_notes),
+                wide: true,
+              },
+              {
+                label: "Internal Notes",
+                value:
+                  data.purchaseOrder.internal_notes ??
+                  "No internal notes added.",
+                show: Boolean(data.purchaseOrder.internal_notes),
+                wide: true,
+              },
+              {
+                label: "Notes",
+                value: data.purchaseOrder.notes ?? "No notes added.",
+                show: Boolean(data.purchaseOrder.notes),
+                wide: true,
+              },
+            ] satisfies Array<{
+              label: string;
+              value: ReactNode;
+              show: boolean;
+              wide?: boolean;
+            }>
+          )
+            .filter((field) => field.show)
+            .map((field) => (
+              <div
+                className="detail-card"
+                key={field.label}
+                style={field.wide ? { gridColumn: "1 / -1" } : undefined}
+              >
+                <span>{field.label}</span>
+                <strong>{field.value}</strong>
+              </div>
+            ))}
         </div>
       </div>
       <div className="panel section-stack">
@@ -914,6 +998,10 @@ export function PurchaseOrderDetailPage() {
           rows={data.lineItems}
         />
       </div>
+      </>
+      ) : null}
+      {activeTab === "fulfillment" ? (
+      <>
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header">
@@ -1052,6 +1140,9 @@ export function PurchaseOrderDetailPage() {
           </div>
         </div>
       </div>
+      </>
+      ) : null}
+      {activeTab === "documents" ? (
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header">
@@ -1264,6 +1355,8 @@ export function PurchaseOrderDetailPage() {
           </div>
         </div>
       </div>
+      ) : null}
+      {activeTab === "activity" ? (
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header">
@@ -1310,6 +1403,7 @@ export function PurchaseOrderDetailPage() {
           onSaved={reload}
         />
       </div>
+      ) : null}
       {receiving ? (
         <ReceiveInventoryModal
           purchaseOrder={data.purchaseOrder}

@@ -26,9 +26,9 @@ export function OrderSummaryCard({ heading, metaLine, statusControl, fields, pri
           {primaryAction}
         </div>
       </div>
-      <div className="detail-grid">
+      <div className="stat-strip">
         {fields.map((field) => (
-          <div className="detail-card" key={field.label}>
+          <div className="stat-item" key={field.label}>
             <span>{field.label}</span>
             <strong>{field.value}</strong>
           </div>

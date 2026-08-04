@@ -9,6 +9,8 @@ import { PurchaseOrdersPage } from "@/pages/PurchaseOrdersPage";
 import { PurchaseOrderDetailPage } from "@/pages/PurchaseOrderDetailPage";
 import { PurchaseOrderBuilderPage } from "@/pages/PurchaseOrderBuilderPage";
 import { PurchaseOrderPreviewPage } from "@/pages/PurchaseOrderPreviewPage";
+import { CreateDocumentPage } from "@/pages/CreateDocumentPage";
+import { PurchaseOrderWizardPage } from "@/pages/PurchaseOrderWizardPage";
 import { InvoicesPage } from "@/pages/InvoicesPage";
 import { InvoiceDetailPage } from "@/pages/InvoiceDetailPage";
 import { InvoicePreviewPage } from "@/pages/InvoicePreviewPage";
@@ -72,8 +74,10 @@ export default function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/imports" element={<CsvImportsPage />} />
+              <Route path="/documents/new" element={<CreateDocumentPage />} />
               <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
               <Route path="/purchase-orders/new" element={<PurchaseOrderBuilderPage />} />
+              <Route path="/purchase-orders/new/wizard" element={<PurchaseOrderWizardPage />} />
               <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
               <Route path="/purchase-orders/:id/edit" element={<PurchaseOrderBuilderPage />} />
               <Route path="/purchase-orders/:id/preview" element={<PurchaseOrderPreviewPage />} />
