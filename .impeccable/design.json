@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-05T19:02:43Z",
+  "title": "Design System: SickFit Nexus",
+  "extensions": {
+    "colorMeta": {
+      "ledger-ink": { "role": "primary", "displayName": "Ledger Ink", "canonical": "#0b1220", "tonalRamp": ["#05070c", "#0b1220", "#101828", "#344054", "#475467", "#667085", "#98a2b3", "#e4e7ec"] },
+      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#eef1f4", "tonalRamp": ["#c7ced8", "#d9dee7", "#e4e7ec", "#eef1f4", "#f2f4f7", "#f7f8fa", "#f9fafb", "#ffffff"] },
+      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#ffffff" },
+      "panel": { "role": "neutral", "displayName": "Panel (translucent)", "canonical": "rgba(255, 255, 255, 0.94)" },
+      "border": { "role": "neutral", "displayName": "Border", "canonical": "#e4e7ec" },
+      "border-strong": { "role": "neutral", "displayName": "Border Strong", "canonical": "#d9dee7" },
+      "muted": { "role": "neutral", "displayName": "Muted Text", "canonical": "#667085" },
+      "ink-soft": { "role": "neutral", "displayName": "Ink Soft", "canonical": "#344054" },
+      "danger": { "role": "danger", "displayName": "Danger", "canonical": "#c0262d", "tonalRamp": ["#5c1215", "#8f1d21", "#c0262d", "#e05a5f", "#f5b7bd", "#fbd8dc", "#fff1f2", "#fff8f8"] },
+      "warning": { "role": "warning", "displayName": "Warning", "canonical": "#b45309", "tonalRamp": ["#5c2a05", "#8a3f07", "#b45309", "#d97706", "#f2a94a", "#fedf89", "#fffaeb", "#fffdf5"] },
+      "success": { "role": "success", "displayName": "Success", "canonical": "#047857", "tonalRamp": ["#02332a", "#035c42", "#047857", "#0f9d6f", "#5cc79a", "#abefc6", "#ecfdf3", "#f6fef9"] },
+      "info": { "role": "info", "displayName": "Info", "canonical": "#1d4ed8", "tonalRamp": ["#0d2a80", "#1435a8", "#1d4ed8", "#3b6ff0", "#7ea3f7", "#b2ccff", "#eff4ff", "#f6f9ff"] },
+      "accent-blue": { "role": "accent", "displayName": "Accent Blue", "canonical": "#2563eb", "tonalRamp": ["#0f2c73", "#1a3fa0", "#2563eb", "#4f83f0", "#8bacf5", "#c2d5fb", "#e8f0fe", "#f5f9ff"] },
+      "flow-teal": { "role": "accent", "displayName": "Flow Teal", "canonical": "#0f766e", "tonalRamp": ["#062f2b", "#0a4b45", "#0f766e", "#159a8f", "#5fc4ba", "#a8e4dd", "#e3f7f5", "#f2fbfa"] }
+    },
+    "typographyMeta": {
+      "metric": { "displayName": "Metric", "purpose": "Dashboard KPI values — the only place type is deliberately large." },
+      "title": { "displayName": "Title", "purpose": "Topbar and page-header h1s." },
+      "body": { "displayName": "Body", "purpose": "Default reading text throughout the app shell." },
+      "label": { "displayName": "Label", "purpose": "Uppercase structural labels: metric labels, section kickers, rail group headers." }
+    },
+    "shadows": [
+      { "name": "ambient", "value": "0 1px 2px rgba(16, 24, 40, 0.04)", "purpose": "Legacy token; not applied to resting surfaces in the current system." },
+      { "name": "strong", "value": "0 8px 24px rgba(16, 24, 40, 0.08)", "purpose": "Transient elevation only: hover lift, KPI-highlight tile, tooltips, dropdowns, modals." }
+    ],
+    "motion": [
+      { "name": "state-transition", "value": "0.16s-0.2s ease", "purpose": "Default transition speed for hover/border/shadow/transform state changes across cards, nav links, and buttons." }
+    ],
+    "breakpoints": [
+      { "name": "sidebar-collapse", "value": "1180px" },
+      { "name": "grid-stack", "value": "900px" },
+      { "name": "mobile", "value": "640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default action button — Ledger Ink fill, no shadow, sharp 4px corners.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">New PO</button>",
+      "css": ".ds-btn { border: none; border-radius: 4px; padding: 7px 10px; min-height: 32px; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 0.78rem; letter-spacing: 0; cursor: pointer; transition: background 0.16s ease; } .ds-btn-primary { background: #0b1220; color: #ffffff; } .ds-btn-primary:hover { background: #344054; } .ds-btn-primary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral action button for non-primary actions.",
+      "html": "<button class=\"ds-btn ds-btn-secondary\">Export</button>",
+      "css": ".ds-btn-secondary { background: #ffffff; color: #344054; border: 1px solid #d9dee7; border-radius: 4px; padding: 7px 10px; min-height: 32px; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 0.78rem; cursor: pointer; transition: background 0.16s ease, border-color 0.16s ease; } .ds-btn-secondary:hover { background: #f9fafb; border-color: #cfd4dc; }"
+    },
+    {
+      "name": "Status Badge — Danger",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "Semantic status chip; swap background/border/text as a triplet for warning/success/info/neutral.",
+      "html": "<span class=\"ds-status ds-status-danger\">On Hold</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid transparent; } .ds-status-danger { background: #fff1f2; color: #c0262d; border-color: #f5b7bd; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat content container — border does the work shadow used to do.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-label\">On-Hand Units</p><p class=\"ds-card-value\">4,208</p></div>",
+      "css": ".ds-card { background: rgba(255, 255, 255, 0.94); border: 1px solid #d9dee7; border-radius: 4px; padding: 14px; } .ds-card-label { margin: 0 0 7px; color: #667085; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; } .ds-card-value { margin: 0; color: #0b1220; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-size: clamp(1.45rem, 1.2vw + 1rem, 2rem); font-weight: 700; line-height: 1.05; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Text input with label — slightly rounder than the 4px system default (unswept legacy radius).",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">SKU</span><input class=\"ds-field-input\" type=\"text\" placeholder=\"SF-1042\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 5px; } .ds-field-label { color: #344054; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-size: 0.76rem; } .ds-field-input { min-height: 34px; padding: 8px 10px; border: 1px solid #d0d5dd; border-radius: 6px; background: #ffffff; color: #101828; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-size: 0.86rem; } .ds-field-input:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "Navigation Link",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Sidebar link, default and active states.",
+      "html": "<div class=\"ds-nav-link ds-nav-link-active\">Purchase Orders</div><div class=\"ds-nav-link\">Inventory</div>",
+      "css": ".ds-nav-link { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 6px 8px; border-radius: 8px; color: #3f4a5d; font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif; font-size: 0.86rem; position: relative; transition: background 0.16s ease, border-color 0.16s ease; } .ds-nav-link:hover { background: #ffffff; border: 1px solid #d9dee7; } .ds-nav-link-active { background: #0f172a; color: #ffffff; } .ds-nav-link-active::before { content: ''; position: absolute; left: -8px; width: 3px; height: 22px; border-radius: 999px; background: #2563eb; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Command Console",
+    "overview": "SickFit Nexus reads like the cockpit of a one-person freight operation, not a storefront. The interface's own CSS history tells the story directly: an earlier pass built a warm, brand-forward look — a red-and-black palette, a serif display face (\"Copernicus\"), a dark gradient sidebar, shadowed cards with a red top-accent stripe. Three later cascade layers, named in the source itself (\"Nexus Rehaul Visual Foundation,\" \"Phase 1B Command Center Rehaul,\" \"Dashboard 2.0 Command Workspace\"), systematically stripped that back: shadows off, corners sharpened to 4px, the sidebar flattened to white, the type swapped to Helvetica, and the near-black #0b1220 became the only color doing real structural work. Red survives only as a semantic danger color and a small logo mark — no longer the brand's visual signature.\n\nThat progression is the design decision, and it should be read as final: this is a solo operator's dense operations tool, and every rehaul moved toward less ornament and tighter density, never back. New surfaces continue that trajectory rather than reintroducing the earlier brand-forward look.\n\nOne inconsistency is worth naming rather than hiding: purchase order and invoice documents (purchaseOrderDocument.ts) still render with the old serif \"Copernicus\" type and a mint-green banner, disconnected from the app shell around them. This is leftover from the pre-rehaul identity, not a deliberate second visual track — treat it as unmigrated debt, not a pattern to extend.",
+    "keyCharacteristics": [
+      "Flat surfaces, thin borders, near-zero shadow — depth comes from a border and a background-shade step, not elevation.",
+      "Near-black \"Ledger Ink\" as the only strong color; every other hue is semantic (danger/warning/success/info) or a small accent (focus blue).",
+      "Sharp 4px corners on nearly everything that holds content; a handful of navigation chrome elements (sidebar rail, brand mark, topbar shell) run slightly softer at 8–10px.",
+      "Helvetica/Arial throughout the app shell — no display serif, no decorative type.",
+      "Letter-spacing reset to 0 almost everywhere; tracking is not part of this system's voice anymore.",
+      "Small, tight components: 30–34px input heights, 32px buttons, 20px status chips. Built for scanning many rows, not for spacious marketing rhythm."
+    ],
+    "rules": [
+      { "name": "The One Ink Rule", "body": "Ledger Ink is the only color allowed to carry primary visual weight (buttons, active states, emphasis). Every other color in the system is either a neutral surface tone or a semantic status signal — never a second \"brand\" color competing with Ledger Ink.", "section": "colors" },
+      { "name": "The Danger Is Not Decoration Rule", "body": "The original brand red (#e72027) is retired as a UI color. Where red appears now, it must be --danger (#c0262d) signaling an actual error or hold state — never used for emphasis, brand flourish, or a call-to-action that isn't destructive.", "section": "colors" },
+      { "name": "The Zero-Tracking Rule", "body": "Outside of uppercase Labels, letter-spacing is 0. The original system's wide 0.01–0.03em body tracking has been removed everywhere the rehaul touched; don't reintroduce it in new components.", "section": "typography" },
+      { "name": "The Shadow-Is-A-State Rule", "body": "A shadow means something is temporarily elevated — hovered, floating, or modal. A resting surface never has one; it has a border instead.", "section": "elevation" },
+      { "name": "The Content-Is-Sharp Rule", "body": "If it holds data or is a control (button, input, badge, table, card), it's 4px. If it's part of the app's fixed frame (sidebar, topbar, brand mark), it can run 8–10px. Don't mix the two registers within one component.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do treat Ledger Ink (#0b1220) as the only non-semantic strong color in the system.",
+      "Do default new surfaces to flat: border + background-shade step, no resting shadow.",
+      "Do use 4px radius for anything that holds data or is directly actionable (cards, tables, buttons, badges, modals).",
+      "Do use Helvetica/Arial for all in-app UI type; reserve the \"Copernicus\" serif for legacy document templates only, and don't extend its use.",
+      "Do keep letter-spacing at 0 outside of small uppercase Labels.",
+      "Do use --danger / --warning / --success / --info token pairs for every status signal; never invent a one-off status color."
+    ],
+    "donts": [
+      "Don't reintroduce the original brand red (#e72027) as a UI accent, button color, or emphasis device — it now means \"danger,\" exclusively.",
+      "Don't add drop shadows to resting cards, panels, or list rows; shadows are reserved for hover lift, dropdowns, tooltips, and modals.",
+      "Don't widen letter-spacing on body or heading text to match the pre-rehaul brand voice — that tracking was deliberately removed.",
+      "Don't copy the purchase-order/invoice document styling (serif type, mint banner) into app-shell UI; it's unmigrated legacy, not a second design track to extend."
+    ]
+  }
+}

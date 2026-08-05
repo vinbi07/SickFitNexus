@@ -1,0 +1,32 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/styles.css"
+        ],
+        "createdAt": "2026-08-05T19:23:16.482Z",
+        "reason": "Functional category/status markers (timeline, calendar chips), not decorative AI-tell; reviewed in /impeccable audit"
+      },
+      {
+        "rule": "overused-font",
+        "value": "helvetica",
+        "createdAt": "2026-08-05T19:23:16.666Z",
+        "reason": "User confirmed Helvetica as the deliberate Command Console typography during /impeccable document"
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "src/styles.css"
+        ],
+        "createdAt": "2026-08-05T19:23:16.851Z",
+        "reason": "Documented Canvas grid texture in DESIGN.md; intentional instrumentation-panel motif for the Command Console"
+      }
+    ]
+  }
+}
