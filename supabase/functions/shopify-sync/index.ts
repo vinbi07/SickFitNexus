@@ -249,23 +249,69 @@ function formatShopifyWeight(
   return `${weight.value} ${normalizedUnit}`;
 }
 
-async function findProductBySku(
+type ProductRow = {
+  id: string;
+  sku: string;
+  shopify_variant_id: string | null;
+  [key: string]: unknown;
+};
+
+type SkuOwner = {
+  id: string | null;
+  shopifyVariantId: string | null;
+};
+
+const LOOKUP_CHUNK_SIZE = 100;
+const INVENTORY_LOOKUP_CHUNK_SIZE = 25;
+const UPSERT_CHUNK_SIZE = 200;
+
+async function selectInChunks<T>(
   supabaseAdmin: SupabaseClient,
-  sku: string,
+  table: string,
+  column: string,
+  values: string[],
+  select = "*",
+  chunkSize = LOOKUP_CHUNK_SIZE,
 ) {
-  const { data, error } = await supabaseAdmin
-    .from("products")
-    .select("*")
-    .eq("sku", sku)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const rows: T[] = [];
+  for (const chunk of chunkArray([...new Set(values)], chunkSize)) {
+    const { data, error } = await supabaseAdmin.from(table).select(select).in(column, chunk);
+    if (error) throw error;
+    rows.push(...((data ?? []) as T[]));
+  }
+  return rows;
 }
 
-async function resolveVariantSku(
+// Rows with an id upsert on the primary key; rows without one upsert on `newRowConflict`
+// so the column default generates the id.
+async function upsertRows<T>(
   supabaseAdmin: SupabaseClient,
+  table: string,
+  rows: Array<Record<string, unknown>>,
+  options: { newRowConflict: string; select?: string },
+) {
+  const saved: T[] = [];
+  const existingRows = rows.filter((row) => row.id);
+  const newRows = rows.filter((row) => !row.id).map(({ id: _id, ...rest }) => rest);
+
+  const runBatches = async (batch: Array<Record<string, unknown>>, onConflict?: string) => {
+    for (const chunk of chunkArray(batch, UPSERT_CHUNK_SIZE)) {
+      const query = supabaseAdmin.from(table).upsert(chunk, onConflict ? { onConflict } : undefined);
+      const { data, error } = options.select ? await query.select(options.select) : await query;
+      if (error) throw error;
+      if (data) saved.push(...(data as T[]));
+    }
+  };
+
+  await runBatches(existingRows);
+  await runBatches(newRows, options.newRowConflict);
+  return saved;
+}
+
+function resolveVariantSku(
   variant: ShopifyVariantNode,
-  existingVariantProduct: Record<string, unknown> | null,
+  existingVariantProduct: ProductRow | null,
+  skuOwners: Map<string, SkuOwner>,
 ) {
   const rawSku = variant.inventoryItem?.sku?.trim() ?? "";
   const variantTail = shortenShopifyGid(variant.id);
@@ -281,13 +327,14 @@ async function resolveVariantSku(
     return fallbackSku;
   }
 
-  const skuMatchedProduct = await findProductBySku(supabaseAdmin, rawSku);
+  const owner = skuOwners.get(rawSku);
 
   if (
-    !skuMatchedProduct ||
-    skuMatchedProduct.shopify_variant_id === variant.id ||
-    skuMatchedProduct.id === existingVariantProduct?.id
+    !owner ||
+    owner.shopifyVariantId === variant.id ||
+    (owner.id !== null && owner.id === existingVariantProduct?.id)
   ) {
+    skuOwners.set(rawSku, { id: existingVariantProduct?.id ?? owner?.id ?? null, shopifyVariantId: variant.id });
     return rawSku;
   }
 
@@ -295,7 +342,7 @@ async function resolveVariantSku(
   logInfo("sync_variant_generated_duplicate_sku", {
     rawSku,
     variantId: variant.id,
-    conflictingVariantId: skuMatchedProduct.shopify_variant_id ?? null,
+    conflictingVariantId: owner.shopifyVariantId,
     generatedSku: fallbackSku,
   });
   return fallbackSku;
@@ -416,155 +463,263 @@ async function fetchShopifyOrders({
   return orders;
 }
 
-async function ensureLocation(
+async function ensureLocations(
   supabaseAdmin: SupabaseClient,
-  locationName: string,
+  locationNames: string[],
 ) {
-  logInfo("ensure_location_start", { locationName });
+  const locationsByName = new Map<string, { id: string }>();
+  const uniqueNames = [...new Set(locationNames)];
+  if (!uniqueNames.length) return locationsByName;
+
   const { data: existing, error: existingError } = await supabaseAdmin
     .from("locations")
-    .select("*")
-    .eq("name", locationName)
-    .maybeSingle();
+    .select("id, name");
   if (existingError) throw existingError;
-  if (existing) {
-    logInfo("ensure_location_existing", { locationName, locationId: existing.id });
-    return existing;
+  for (const location of (existing ?? []) as Array<{ id: string; name: string }>) {
+    if (!locationsByName.has(location.name)) locationsByName.set(location.name, location);
   }
 
-  const { data: created, error: createdError } = await supabaseAdmin
-    .from("locations")
-    .insert({
-      name: locationName,
-      type: "Shopify Fulfillment Location",
-      address: null,
-    })
-    .select("*")
-    .single();
-  if (createdError) throw createdError;
-  logInfo("ensure_location_created", { locationName, locationId: created.id });
-  return created;
-}
-
-async function syncVariant(
-  supabaseAdmin: SupabaseClient,
-  storeDomain: string,
-  variant: ShopifyVariantNode,
-  variantSortOrder: number,
-  anchorProductId: string | null,
-  isAnchorVariant: boolean,
-) {
-  logInfo("sync_variant_start", {
-    productTitle: variant.product.title,
-    rawSku: variant.inventoryItem?.sku?.trim() ?? null,
-    variantId: variant.id,
-  });
-
-  const normalizedVariantTitle = getNormalizedVariantTitle(variant.title);
-  const formattedWeight = formatShopifyWeight(variant.inventoryItem?.measurement?.weight);
-
-  const storefrontUrl = `https://${storeDomain}/products/${variant.product.handle}`;
-  const adminUrl = `https://admin.shopify.com/store/${storeDomain.replace(".myshopify.com", "")}/products/${variant.product.id.split("/").pop()}`;
-  const inventoryLevels = variant.inventoryItem?.inventoryLevels.edges ?? [];
-  const totalInventory = inventoryLevels.reduce((sum, level) => sum + getAvailableQuantity(level.node), 0);
-
-  const { data: existingVariantProduct, error: existingVariantProductError } = await supabaseAdmin
-    .from("products")
-    .select("*")
-    .eq("shopify_variant_id", variant.id)
-    .maybeSingle();
-  if (existingVariantProductError) throw existingVariantProductError;
-  const sku = await resolveVariantSku(supabaseAdmin, variant, existingVariantProduct);
-  const existingProduct = existingVariantProduct ?? await findProductBySku(supabaseAdmin, sku);
-
-  const productPayload = {
-    id: existingProduct?.id,
-    sku,
-    name: variant.product.title,
-    category: existingProduct?.category ?? "Shopify",
-    description: existingProduct?.description ?? `Synced from Shopify product ${variant.product.title}.`,
-    vendor_id: existingProduct?.vendor_id ?? null,
-    unit_cost: Number(variant.inventoryItem?.unitCost?.amount ?? existingProduct?.unit_cost ?? 0),
-    unit_price: Number(variant.price ?? existingProduct?.unit_price ?? 0),
-    current_inventory: totalInventory,
-    safety_stock: existingProduct?.safety_stock ?? 0,
-    weight: formattedWeight ?? existingProduct?.weight ?? null,
-    image_url: variant.image?.url ?? variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
-    no_bundles: existingProduct?.no_bundles ?? false,
-    shopify_product_id: variant.product.id,
-    shopify_variant_id: variant.id,
-    shopify_handle: variant.product.handle,
-    shopify_admin_url: adminUrl,
-    shopify_storefront_url: storefrontUrl,
-    is_shopify_synced: true,
-    last_shopify_sync_at: new Date().toISOString(),
-    ancillary_category: existingProduct?.ancillary_category ?? null,
-    parent_product_id: isAnchorVariant ? null : anchorProductId,
-    variant_title: normalizedVariantTitle,
-    variant_sort_order: normalizedVariantTitle
-      ? Number(existingProduct?.variant_sort_order ?? variantSortOrder)
-      : 0,
-  };
-
-  const { data: savedProduct, error: savedProductError } = await supabaseAdmin
-    .from("products")
-    .upsert(productPayload)
-    .select("*")
-    .single();
-  if (savedProductError) throw savedProductError;
-
-  let inventorySynced = 0;
-  for (const level of inventoryLevels) {
-    const available = getAvailableQuantity(level.node);
-    const location = await ensureLocation(supabaseAdmin, level.node.location.name);
-
-    const { data: existingItem, error: existingItemError } = await supabaseAdmin
-      .from("inventory_items")
-      .select("*")
-      .eq("product_id", savedProduct.id)
-      .eq("location_id", location.id)
-      .maybeSingle();
-    if (existingItemError) throw existingItemError;
-
-    const { error: inventoryError } = await supabaseAdmin
-      .from("inventory_items")
-      .upsert({
-        id: existingItem?.id,
-        product_id: savedProduct.id,
-        location_id: location.id,
-        quantity_on_hand: available,
-        reorder_point: existingItem?.reorder_point ?? 0,
-        target_stock: existingItem?.target_stock ?? 0,
-        inventory_category:
-          existingItem?.inventory_category ??
-          getInventoryCategoryFromAncillaryCategory(savedProduct.ancillary_category),
-        notes: existingItem?.notes ?? "Synced from Shopify inventory levels.",
-      });
-    if (inventoryError) throw inventoryError;
-    inventorySynced += 1;
+  const missingNames = uniqueNames.filter((name) => !locationsByName.has(name));
+  if (missingNames.length) {
+    const { data: created, error: createdError } = await supabaseAdmin
+      .from("locations")
+      .insert(missingNames.map((name) => ({
+        name,
+        type: "Shopify Fulfillment Location",
+        address: null,
+      })))
+      .select("id, name");
+    if (createdError) throw createdError;
+    for (const location of (created ?? []) as Array<{ id: string; name: string }>) {
+      locationsByName.set(location.name, location);
+    }
+    logInfo("ensure_locations_created", { count: missingNames.length });
   }
 
-  logInfo("sync_variant_complete", {
-    sku,
-    productId: savedProduct.id,
-    inventorySynced,
-    parentProductId: productPayload.parent_product_id,
-  });
-  return { productSynced: true, inventorySynced, productId: savedProduct.id as string, sku };
+  return locationsByName;
 }
 
 async function cleanupSyntheticStyleProducts(
   supabaseAdmin: SupabaseClient,
-  shopifyProductId: string,
+  shopifyProductIds: string[],
 ) {
-  const syntheticSku = `STYLE-${shortenShopifyGid(shopifyProductId)}`;
-  const { error } = await supabaseAdmin
-    .from("products")
-    .delete()
-    .eq("shopify_product_id", shopifyProductId)
-    .is("shopify_variant_id", null)
-    .eq("sku", syntheticSku);
-  if (error) throw error;
+  for (const chunk of chunkArray(shopifyProductIds, LOOKUP_CHUNK_SIZE)) {
+    const { error } = await supabaseAdmin
+      .from("products")
+      .delete()
+      .in("shopify_product_id", chunk)
+      .is("shopify_variant_id", null)
+      .in("sku", chunk.map((id) => `STYLE-${shortenShopifyGid(id)}`));
+    if (error) throw error;
+  }
+}
+
+async function syncProductsAndInventory(
+  supabaseAdmin: SupabaseClient,
+  storeDomain: string,
+  variantsByShopifyProductId: Map<string, ShopifyVariantNode[]>,
+) {
+  const productsByShopifyVariantId = new Map<string, { id: string }>();
+  const productsBySku = new Map<string, { id: string }>();
+  const allVariants = [...variantsByShopifyProductId.values()].flat();
+  if (!allVariants.length) {
+    return { productsSynced: 0, inventoryRecordsSynced: 0, productsByShopifyVariantId, productsBySku };
+  }
+
+  // Prefetch existing rows once instead of querying per variant.
+  const existingByVariantId = new Map<string, ProductRow>();
+  for (const row of await selectInChunks<ProductRow>(
+    supabaseAdmin,
+    "products",
+    "shopify_variant_id",
+    allVariants.map((variant) => variant.id),
+  )) {
+    if (row.shopify_variant_id) existingByVariantId.set(row.shopify_variant_id, row);
+  }
+
+  const existingBySku = new Map<string, ProductRow>();
+  const loadProductsBySku = async (skus: string[]) => {
+    const missing = skus.filter((sku) => !existingBySku.has(sku));
+    for (const row of await selectInChunks<ProductRow>(supabaseAdmin, "products", "sku", missing)) {
+      existingBySku.set(row.sku, row);
+    }
+  };
+  await loadProductsBySku(
+    allVariants.map((variant) => variant.inventoryItem?.sku?.trim() ?? "").filter(Boolean),
+  );
+
+  const skuOwners = new Map<string, SkuOwner>();
+  for (const row of existingBySku.values()) {
+    skuOwners.set(row.sku, { id: row.id, shopifyVariantId: row.shopify_variant_id });
+  }
+
+  // Resolve SKUs in the same order the sequential sync used, so duplicate handling is unchanged.
+  const planned: Array<{
+    variant: ShopifyVariantNode;
+    sku: string;
+    isAnchorVariant: boolean;
+    variantSortOrder: number;
+  }> = [];
+  for (const productVariants of variantsByShopifyProductId.values()) {
+    productVariants.forEach((variant, index) => {
+      planned.push({
+        variant,
+        sku: resolveVariantSku(variant, existingByVariantId.get(variant.id) ?? null, skuOwners),
+        isAnchorVariant: index === 0,
+        variantSortOrder: index + 1,
+      });
+    });
+  }
+  await loadProductsBySku(planned.map((entry) => entry.sku));
+
+  const findExistingProduct = (entry: (typeof planned)[number]) =>
+    existingByVariantId.get(entry.variant.id) ?? existingBySku.get(entry.sku) ?? null;
+
+  const buildProductPayload = (
+    entry: (typeof planned)[number],
+    parentProductId: string | null,
+  ) => {
+    const { variant, sku, variantSortOrder } = entry;
+    const existingProduct = findExistingProduct(entry);
+    const normalizedVariantTitle = getNormalizedVariantTitle(variant.title);
+    const inventoryLevels = variant.inventoryItem?.inventoryLevels.edges ?? [];
+    const totalInventory = inventoryLevels.reduce((sum, level) => sum + getAvailableQuantity(level.node), 0);
+
+    return {
+      id: existingProduct?.id,
+      sku,
+      name: variant.product.title,
+      category: existingProduct?.category ?? "Shopify",
+      description: existingProduct?.description ?? `Synced from Shopify product ${variant.product.title}.`,
+      vendor_id: existingProduct?.vendor_id ?? null,
+      unit_cost: Number(variant.inventoryItem?.unitCost?.amount ?? existingProduct?.unit_cost ?? 0),
+      unit_price: Number(variant.price ?? existingProduct?.unit_price ?? 0),
+      current_inventory: totalInventory,
+      safety_stock: existingProduct?.safety_stock ?? 0,
+      weight: formatShopifyWeight(variant.inventoryItem?.measurement?.weight) ?? existingProduct?.weight ?? null,
+      image_url: variant.image?.url ?? variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
+      no_bundles: existingProduct?.no_bundles ?? false,
+      shopify_product_id: variant.product.id,
+      shopify_variant_id: variant.id,
+      shopify_handle: variant.product.handle,
+      shopify_admin_url: `https://admin.shopify.com/store/${storeDomain.replace(".myshopify.com", "")}/products/${variant.product.id.split("/").pop()}`,
+      shopify_storefront_url: `https://${storeDomain}/products/${variant.product.handle}`,
+      is_shopify_synced: true,
+      last_shopify_sync_at: new Date().toISOString(),
+      ancillary_category: existingProduct?.ancillary_category ?? null,
+      parent_product_id: parentProductId,
+      variant_title: normalizedVariantTitle,
+      variant_sort_order: normalizedVariantTitle
+        ? Number(existingProduct?.variant_sort_order ?? variantSortOrder)
+        : 0,
+    };
+  };
+
+  // Anchor variants first so their ids are available as parent_product_id for the rest.
+  const savedProductFields = "id, sku, shopify_variant_id";
+  const anchors = planned.filter((entry) => entry.isAnchorVariant);
+  const savedAnchors = await upsertRows<ProductRow>(
+    supabaseAdmin,
+    "products",
+    anchors.map((entry) => buildProductPayload(entry, null)),
+    { newRowConflict: "sku", select: savedProductFields },
+  );
+  const savedAnchorIdByVariantId = new Map(
+    savedAnchors.map((row) => [row.shopify_variant_id as string, row.id]),
+  );
+  const anchorProductIds = new Map<string, string>();
+  for (const entry of anchors) {
+    const anchorId = savedAnchorIdByVariantId.get(entry.variant.id);
+    if (anchorId) anchorProductIds.set(entry.variant.product.id, anchorId);
+  }
+
+  const children = planned.filter((entry) => !entry.isAnchorVariant);
+  const savedChildren = await upsertRows<ProductRow>(
+    supabaseAdmin,
+    "products",
+    children.map((entry) => buildProductPayload(entry, anchorProductIds.get(entry.variant.product.id) ?? null)),
+    { newRowConflict: "sku", select: savedProductFields },
+  );
+
+  const savedRows = [...savedAnchors, ...savedChildren];
+  for (const row of savedRows) {
+    productsBySku.set(row.sku, { id: row.id });
+    if (row.shopify_variant_id) productsByShopifyVariantId.set(row.shopify_variant_id, { id: row.id });
+  }
+
+  // Inventory levels, batched.
+  const locationsByName = await ensureLocations(
+    supabaseAdmin,
+    allVariants.flatMap((variant) =>
+      (variant.inventoryItem?.inventoryLevels.edges ?? []).map((level) => level.node.location.name)
+    ),
+  );
+
+  type ExistingInventoryItem = {
+    id: string;
+    product_id: string;
+    location_id: string;
+    reorder_point: number | null;
+    target_stock: number | null;
+    inventory_category: string | null;
+    notes: string | null;
+  };
+  const existingItems = new Map<string, ExistingInventoryItem>();
+  for (const item of await selectInChunks<ExistingInventoryItem>(
+    supabaseAdmin,
+    "inventory_items",
+    "product_id",
+    savedRows.map((row) => row.id),
+    "id, product_id, location_id, reorder_point, target_stock, inventory_category, notes",
+    INVENTORY_LOOKUP_CHUNK_SIZE,
+  )) {
+    existingItems.set(`${item.product_id}:${item.location_id}`, item);
+  }
+
+  const inventoryRows = new Map<string, Record<string, unknown>>();
+  for (const entry of planned) {
+    const productId = productsByShopifyVariantId.get(entry.variant.id)?.id;
+    if (!productId) continue;
+    const ancillaryCategory = findExistingProduct(entry)?.ancillary_category as string | null | undefined;
+
+    for (const level of entry.variant.inventoryItem?.inventoryLevels.edges ?? []) {
+      const location = locationsByName.get(level.node.location.name);
+      if (!location) continue;
+      const key = `${productId}:${location.id}`;
+      const existingItem = existingItems.get(key);
+
+      inventoryRows.set(key, {
+        id: existingItem?.id,
+        product_id: productId,
+        location_id: location.id,
+        quantity_on_hand: getAvailableQuantity(level.node),
+        reorder_point: existingItem?.reorder_point ?? 0,
+        target_stock: existingItem?.target_stock ?? 0,
+        inventory_category:
+          existingItem?.inventory_category ??
+          getInventoryCategoryFromAncillaryCategory(ancillaryCategory),
+        notes: existingItem?.notes ?? "Synced from Shopify inventory levels.",
+      });
+    }
+  }
+
+  await upsertRows(supabaseAdmin, "inventory_items", [...inventoryRows.values()], {
+    newRowConflict: "product_id,location_id",
+  });
+
+  const multiVariantProductIds = [...variantsByShopifyProductId.entries()]
+    .filter(([, productVariants]) => productVariants.length > 1)
+    .map(([shopifyProductId]) => shopifyProductId);
+  if (multiVariantProductIds.length) {
+    await cleanupSyntheticStyleProducts(supabaseAdmin, multiVariantProductIds);
+  }
+
+  return {
+    productsSynced: savedRows.length,
+    inventoryRecordsSynced: inventoryRows.size,
+    productsByShopifyVariantId,
+    productsBySku,
+  };
 }
 
 async function syncShopifyOrderUsageEvents({
@@ -627,7 +782,7 @@ async function syncShopifyOrderUsageEvents({
     [] as string[],
   );
 
-  for (const sourceReferenceChunk of chunkArray(sourceReferences, 25)) {
+  for (const sourceReferenceChunk of chunkArray(sourceReferences, 200)) {
     const { data: existingEvents, error: existingEventsError } = await supabaseAdmin
       .from("inventory_events")
       .select("source_reference")
@@ -724,49 +879,19 @@ Deno.serve(async (request) => {
     logInfo("variants_fetched", { count: variants.length });
 
     stage = "sync_products_and_inventory";
-    let productsSynced = 0;
-    let inventoryRecordsSynced = 0;
-    const productsByShopifyVariantId = new Map<string, { id: string }>();
-    const productsBySku = new Map<string, { id: string }>();
     const variantsByShopifyProductId = new Map<string, ShopifyVariantNode[]>();
-
     for (const variant of variants) {
       const current = variantsByShopifyProductId.get(variant.product.id) ?? [];
       current.push(variant);
       variantsByShopifyProductId.set(variant.product.id, current);
     }
 
-    for (const [shopifyProductId, productVariants] of variantsByShopifyProductId.entries()) {
-      let anchorProductId: string | null = null;
-
-      for (let index = 0; index < productVariants.length; index += 1) {
-        const variant = productVariants[index];
-        const isAnchorVariant = index === 0;
-        const result = await syncVariant(
-          supabaseAdmin,
-          storeDomain,
-          variant,
-          index + 1,
-          anchorProductId,
-          isAnchorVariant,
-        );
-        if (result.productSynced) productsSynced += 1;
-        inventoryRecordsSynced += result.inventorySynced;
-        if (result.sku && result.productId) {
-          productsBySku.set(result.sku, { id: result.productId });
-        }
-        if (result.productId) {
-          productsByShopifyVariantId.set(variant.id, { id: result.productId });
-        }
-        if (isAnchorVariant && result.productId) {
-          anchorProductId = result.productId;
-        }
-      }
-
-      if (productVariants.length > 1) {
-        await cleanupSyntheticStyleProducts(supabaseAdmin, shopifyProductId);
-      }
-    }
+    const {
+      productsSynced,
+      inventoryRecordsSynced,
+      productsByShopifyVariantId,
+      productsBySku,
+    } = await syncProductsAndInventory(supabaseAdmin, storeDomain, variantsByShopifyProductId);
     logInfo("products_and_inventory_complete", {
       productsSynced,
       inventoryRecordsSynced,
