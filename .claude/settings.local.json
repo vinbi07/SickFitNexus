@@ -9,7 +9,8 @@
       "Bash(node_modules/.bin/tsc -p tsconfig.app.json --noEmit)",
       "Bash(./node_modules/.bin/tsc.cmd -p tsconfig.app.json --noEmit)",
       "Bash(find \"c:\\\\Users\\\\Vinbi\" -name \"vite\" -maxdepth 6 -type d 2>/dev/null | head -5)",
-      "Read(//c/Users/Vinbi/**)"
+      "Read(//c/Users/Vinbi/**)",
+      "Npx supabase query"
     ]
   },
   "hooks": {

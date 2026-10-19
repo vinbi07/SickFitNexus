@@ -49,6 +49,9 @@ export function InvoicesPage() {
             <button className="btn btn-secondary" onClick={() => void reload()}>
               Refresh
             </button>
+            <Link className="btn btn-primary" to="/purchase-orders/import-pdf">
+              Import PO PDF
+            </Link>
           </div>
         }
       />
@@ -103,7 +106,7 @@ export function InvoicesPage() {
         </div>
       </div>
       <DataTable
-        emptyMessage="No invoices found. Convert a Purchase Order to an Invoice to get started."
+        emptyMessage="No invoices found. Import a PO PDF or convert a Purchase Order to get started."
         columns={[
           {
             key: "invoice_number",

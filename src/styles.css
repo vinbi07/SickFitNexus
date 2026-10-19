@@ -6943,3 +6943,51 @@ textarea {
     font-size: 0.72rem;
   }
 }
+
+/* PO PDF import */
+.po-import-include {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.po-import-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  margin-bottom: 16px;
+}
+
+.po-import-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.po-import-meta .muted {
+  font-size: 0.78rem;
+}
+
+.po-import-unmatched {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.po-import-warnings {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.86rem;
+}
+
+.po-import-warning-stock,
+.po-import-warning-unmatched,
+.po-import-warning-totals {
+  color: #b42318;
+}
+
+.po-import-warning-price {
+  color: #8a5a00;
+}

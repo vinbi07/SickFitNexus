@@ -1,4 +1,7 @@
+import { COMPANY_PROFILE } from "@/config/company";
+import { parseDisplayDate } from "@/utils/format";
 import type { Buyer, Invoice, InvoiceLineItem, PoLineItem, PurchaseOrder, Retailer } from "@/types/domain";
+import { formatTermsLabel } from "@/utils/invoiceTerms";
 
 export type PurchaseOrderDocumentLine = {
   index: number;
@@ -46,7 +49,7 @@ export function formatPoDate(value: string | null | undefined) {
     month: "2-digit",
     day: "2-digit",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(parseDisplayDate(value));
 }
 
 export function formatPoCurrency(value: number) {
@@ -312,6 +315,7 @@ export function getPurchaseOrderDocumentStyles() {
     .mfr-doc-table{table-layout:auto;min-width:1400px;}
     .mfr-doc-table th,.mfr-doc-table td{white-space:nowrap;}
     .mfr-doc-table td.r,.mfr-doc-table th.r{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+    ${getInvoiceDocumentStyles()}
   `.trim();
 }
 
@@ -465,92 +469,114 @@ export function buildPurchaseOrderDocumentHtml(
   `.trim();
 }
 
-// ─── Invoice document helpers ─────────────────────────────────────────────────
-// Maps an Invoice to the shared PurchaseOrderDocumentModel using invoice-specific
-// labels, then reuses all existing rendering logic.
+// ─── Invoice document ─────────────────────────────────────────────────────────
+// Remit-style invoice (company header, bill/ship to, terms and dates, product lines,
+// total, customer PO #). Wrapped in .po-wrap/.po-doc so the shared print styles apply.
 
-function mapInvoiceToPo(invoice: Partial<Invoice>): Partial<PurchaseOrder> {
-  return {
-    po_number: invoice.invoice_number,
-    vendor_id: invoice.vendor_id ?? null,
-    retailer_id: invoice.retailer_id ?? null,
-    buyer_id: invoice.buyer_id ?? null,
-    location_id: invoice.location_id ?? null,
-    order_date: invoice.order_date ?? null,
-    ship_date: invoice.ship_date ?? null,
-    start_ship_date: invoice.start_ship_date ?? null,
-    ship_complete_date: invoice.ship_complete_date ?? null,
-    eta_date: invoice.eta_date ?? null,
-    expected_delivery_date: invoice.expected_delivery_date ?? null,
-    actual_delivery_date: invoice.actual_delivery_date ?? null,
-    submitted_at: invoice.submitted_at ?? null,
-    bill_to_company_name: invoice.bill_to_company_name ?? null,
-    bill_to_contact_name: invoice.bill_to_contact_name ?? null,
-    bill_to_street: invoice.bill_to_street ?? null,
-    bill_to_city: invoice.bill_to_city ?? null,
-    bill_to_state: invoice.bill_to_state ?? null,
-    bill_to_zip: invoice.bill_to_zip ?? null,
-    bill_to_phone: invoice.bill_to_phone ?? null,
-    bill_to_email: invoice.bill_to_email ?? null,
-    ship_to_company_name: invoice.ship_to_company_name ?? null,
-    ship_to_attention: invoice.ship_to_attention ?? null,
-    ship_to_street: invoice.ship_to_street ?? null,
-    ship_to_city: invoice.ship_to_city ?? null,
-    ship_to_state: invoice.ship_to_state ?? null,
-    ship_to_zip: invoice.ship_to_zip ?? null,
-    ship_to_phone: invoice.ship_to_phone ?? null,
-    payment_terms_snapshot: invoice.payment_terms_snapshot ?? null,
-    buyer_name_snapshot: invoice.buyer_name_snapshot ?? null,
-    approver_name_snapshot: invoice.approver_name_snapshot ?? null,
-    subtotal: invoice.subtotal ?? 0,
-    total_cost: invoice.total_cost ?? 0,
-    total_units: invoice.total_units ?? 0,
-    total_retail: invoice.total_retail ?? 0,
-    currency_code: invoice.currency_code ?? "USD",
-    notes: invoice.notes ?? null,
-    buyer_notes: invoice.buyer_notes ?? null,
-    vendors: invoice.vendors,
-    retailers: invoice.retailers,
-    buyers: invoice.buyers,
-    locations: invoice.locations,
-  };
-}
+export type InvoiceDocumentLine = {
+  index: number;
+  productName: string;
+  sku: string;
+  upc: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+};
 
-function mapInvoiceLineItemsToPo(lineItems: Array<Partial<InvoiceLineItem>>): Array<Partial<PoLineItem>> {
-  return lineItems.map((item) => ({
-    id: item.id,
-    sku: item.sku,
-    upc: item.upc ?? null,
-    product_name: item.product_name,
-    variant_label: item.variant_label ?? null,
-    description: item.description ?? null,
-    unit: item.unit,
-    case_pack_quantity: item.case_pack_quantity,
-    case_quantity: item.case_quantity,
-    unit_quantity: item.unit_quantity,
-    quantity_ordered: item.quantity_ordered,
-    unit_cost: item.unit_cost,
-    unit_retail: item.unit_retail,
-    line_total: item.line_total,
-    extended_cost: item.extended_cost,
-    extended_retail: item.extended_retail,
-    sort_order: item.sort_order,
-  }));
-}
+export type InvoiceDocumentModel = {
+  logoSrc: string;
+  companyName: string;
+  companyLines: string[];
+  companyContactLines: string[];
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  terms: string;
+  shipDate: string;
+  customerPoNumber: string;
+  billToLines: string[];
+  shipToLines: string[];
+  lines: InvoiceDocumentLine[];
+  total: number;
+};
 
 export function buildInvoiceDocumentModel(
   invoice: Partial<Invoice>,
   lineItems: Array<Partial<InvoiceLineItem>>,
   buyer?: Buyer | null,
   retailer?: Retailer | null,
-): PurchaseOrderDocumentModel {
-  return buildPurchaseOrderDocumentModel(
-    mapInvoiceToPo(invoice),
-    mapInvoiceLineItemsToPo(lineItems),
-    buyer,
-    retailer,
-    { documentTitle: "Invoice", numberLabel: "Invoice Number" },
-  );
+): InvoiceDocumentModel {
+  const billToName = invoice.bill_to_company_name ?? retailer?.billing_company_name ?? retailer?.name ?? buyer?.company_name ?? "";
+  const cityLine = (city?: string | null, state?: string | null, zip?: string | null) =>
+    [[city, state].filter(Boolean).join(", "), zip].filter(Boolean).join(" ");
+  const lines = lineItems.map((item, index) => {
+    const quantity = Number(item.quantity_ordered ?? item.unit_quantity ?? 0);
+    const rate = Number(item.unit_cost ?? 0);
+    return {
+      index: index + 1,
+      productName: String(item.product_name ?? item.description ?? "Product"),
+      sku: String(item.sku ?? ""),
+      upc: String(item.upc ?? ""),
+      quantity,
+      rate,
+      amount: Number(item.extended_cost ?? item.line_total ?? quantity * rate),
+    };
+  });
+
+  return {
+    logoSrc: COMPANY_PROFILE.logoSrc,
+    companyName: COMPANY_PROFILE.name,
+    companyLines: [...COMPANY_PROFILE.streetLines],
+    companyContactLines: [COMPANY_PROFILE.email, COMPANY_PROFILE.phone, COMPANY_PROFILE.website],
+    invoiceNumber: String(invoice.invoice_number ?? "Pending"),
+    invoiceDate: formatPoDate(invoice.invoice_date ?? invoice.order_date),
+    dueDate: formatPoDate(invoice.due_date),
+    terms: formatTermsLabel(invoice.payment_terms_snapshot ?? retailer?.default_payment_terms),
+    shipDate: formatPoDate(invoice.ship_date ?? invoice.start_ship_date),
+    customerPoNumber: String(invoice.customer_po_number ?? ""),
+    billToLines: compactLines(
+      billToName,
+      invoice.bill_to_contact_name,
+      invoice.bill_to_street,
+      cityLine(invoice.bill_to_city, invoice.bill_to_state, invoice.bill_to_zip),
+    ),
+    shipToLines: compactLines(
+      billToName && billToName !== invoice.ship_to_company_name ? billToName : null,
+      invoice.ship_to_company_name,
+      invoice.ship_to_attention ? `Attn: ${invoice.ship_to_attention}` : null,
+      invoice.ship_to_street,
+      cityLine(invoice.ship_to_city, invoice.ship_to_state, invoice.ship_to_zip),
+    ),
+    lines,
+    total: lines.reduce((sum, line) => sum + line.amount, 0),
+  };
+}
+
+export function getInvoiceDocumentStyles() {
+  return `
+    .inv-doc{font-family:Copernicus,Georgia,serif;color:#222;}
+    .inv-head{display:flex;justify-content:space-between;align-items:flex-start;padding:24px 28px 18px;}
+    .inv-title{font-size:20px;font-weight:700;letter-spacing:.12em;color:#111;margin-bottom:6px;}
+    .inv-company{display:flex;gap:36px;font-size:10.5px;line-height:1.5;color:#444;}
+    .inv-company strong{color:#111;}
+    .inv-logo{width:84px;height:84px;object-fit:contain;}
+    .inv-band{display:grid;grid-template-columns:1fr 1fr;gap:18px 32px;background:#f7f4ec;padding:16px 28px;border-top:0.5px solid #e6e3da;border-bottom:0.5px solid #e6e3da;}
+    .inv-band .lab{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:4px;}
+    .inv-band .row{font-size:11.5px;line-height:1.5;color:#222;}
+    .inv-table{width:100%;border-collapse:collapse;margin:8px 0 0;}
+    .inv-table th{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#666;text-align:left;padding:10px 8px;border-bottom:0.5px solid #d7d0c4;font-weight:600;}
+    .inv-table td{font-size:11px;padding:10px 8px;border-bottom:0.5px solid #eee;vertical-align:top;}
+    .inv-table .n{width:24px;color:#888;}
+    .inv-table .name{font-weight:600;color:#111;}
+    .inv-table .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:#444;line-height:1.6;}
+    .inv-table .r{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;}
+    .inv-foot{display:flex;justify-content:space-between;align-items:flex-end;padding:18px 28px 24px;}
+    .inv-po{font-size:11px;color:#444;}
+    .inv-po strong{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#111;}
+    .inv-total{display:flex;gap:40px;align-items:baseline;border-top:0.5px solid #d7d0c4;padding-top:10px;min-width:240px;justify-content:space-between;}
+    .inv-total .lab{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#666;}
+    .inv-total .val{font-size:18px;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#111;}
+  `.trim();
 }
 
 export function buildInvoiceDocumentHtml(
@@ -559,11 +585,66 @@ export function buildInvoiceDocumentHtml(
   buyer?: Buyer | null,
   retailer?: Retailer | null,
 ): string {
-  return buildPurchaseOrderDocumentHtml(
-    mapInvoiceToPo(invoice),
-    mapInvoiceLineItemsToPo(lineItems),
-    buyer,
-    retailer,
-    { documentTitle: "Invoice", numberLabel: "Invoice Number" },
-  );
+  const model = buildInvoiceDocumentModel(invoice, lineItems, buyer, retailer);
+  const rows = (values: string[]) => values.map((value) => `<div class="row">${escapeHtml(value)}</div>`).join("");
+  const detailRow = (label: string, value: string) => (value ? `<div class="row">${escapeHtml(label)}: ${escapeHtml(value)}</div>` : "");
+  const linesMarkup = model.lines.map((line) => `
+    <tr>
+      <td class="n">${line.index}.</td>
+      <td class="name">${escapeHtml(line.productName)}</td>
+      <td class="code">${escapeHtml(line.sku)}${line.upc ? `<br />UPC: ${escapeHtml(line.upc)}` : ""}</td>
+      <td class="r">${line.quantity}</td>
+      <td class="r">${escapeHtml(formatPoCurrency(line.rate))}</td>
+      <td class="r">${escapeHtml(formatPoCurrency(line.amount))}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="po-wrap">
+      <div class="po-doc inv-doc">
+        <div class="inv-head">
+          <div>
+            <div class="inv-title">INVOICE</div>
+            <div class="inv-company">
+              <div><strong>${escapeHtml(model.companyName)}</strong>${rows(model.companyLines)}</div>
+              <div>${rows(model.companyContactLines)}</div>
+            </div>
+          </div>
+          <img class="inv-logo" src="${escapeHtml(model.logoSrc)}" alt="SickFit logo" />
+        </div>
+        <div class="inv-band">
+          <div><div class="lab">Bill to</div>${rows(model.billToLines)}</div>
+          <div><div class="lab">Ship to</div>${rows(model.shipToLines)}</div>
+          <div><div class="lab">Shipping info</div>${detailRow("Ship date", model.shipDate)}</div>
+          <div>
+            <div class="lab">Invoice details</div>
+            ${detailRow("Invoice no.", model.invoiceNumber)}
+            ${detailRow("Terms", model.terms)}
+            ${detailRow("Invoice date", model.invoiceDate)}
+            ${detailRow("Due date", model.dueDate)}
+          </div>
+        </div>
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product or service</th>
+              <th>Description</th>
+              <th class="r">Qty</th>
+              <th class="r">Rate</th>
+              <th class="r">Amount</th>
+            </tr>
+          </thead>
+          <tbody>${linesMarkup}</tbody>
+        </table>
+        <div class="inv-foot">
+          <div class="inv-po">${model.customerPoNumber ? `PO# <strong>${escapeHtml(model.customerPoNumber)}</strong>` : ""}</div>
+          <div class="inv-total">
+            <span class="lab">Total</span>
+            <span class="val">${escapeHtml(formatPoCurrency(model.total))}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `.trim();
 }

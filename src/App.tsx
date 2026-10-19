@@ -11,6 +11,7 @@ import { PurchaseOrderBuilderPage } from "@/pages/PurchaseOrderBuilderPage";
 import { PurchaseOrderPreviewPage } from "@/pages/PurchaseOrderPreviewPage";
 import { CreateDocumentPage } from "@/pages/CreateDocumentPage";
 import { PurchaseOrderWizardPage } from "@/pages/PurchaseOrderWizardPage";
+import { PoPdfImportPage } from "@/pages/PoPdfImportPage";
 import { InvoicesPage } from "@/pages/InvoicesPage";
 import { InvoiceDetailPage } from "@/pages/InvoiceDetailPage";
 import { InvoicePreviewPage } from "@/pages/InvoicePreviewPage";
@@ -78,6 +79,7 @@ export default function App() {
               <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
               <Route path="/purchase-orders/new" element={<PurchaseOrderBuilderPage />} />
               <Route path="/purchase-orders/new/wizard" element={<PurchaseOrderWizardPage />} />
+              <Route path="/purchase-orders/import-pdf" element={<PoPdfImportPage />} />
               <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
               <Route path="/purchase-orders/:id/edit" element={<PurchaseOrderBuilderPage />} />
               <Route path="/purchase-orders/:id/preview" element={<PurchaseOrderPreviewPage />} />

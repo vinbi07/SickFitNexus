@@ -326,16 +326,34 @@ export function PurchaseOrderDetailPage() {
 
   const handleFulfill = async () => {
     try {
-      await purchaseOrderService.fulfill(poId);
+      const result = await purchaseOrderService.fulfill(poId);
       await reload();
       setNotice({
         tone: "success",
-        message: "PO fulfilled and inventory committed.",
+        message: result.awaitingShopifyLines
+          ? "PO fulfilled. Lower the count in Shopify, then press \"Shopify updated\" on the Fulfillment tab."
+          : "PO fulfilled and inventory committed.",
       });
     } catch (err) {
       setNotice({
         tone: "error",
         message: err instanceof Error ? err.message : "Unable to fulfill PO.",
+      });
+    }
+  };
+
+  const handleShopifyUpdated = async () => {
+    try {
+      await purchaseOrderService.confirmShopifyAdjusted(poId);
+      await reload();
+      setNotice({
+        tone: "success",
+        message: "Shopify count confirmed. The held units have been released.",
+      });
+    } catch (err) {
+      setNotice({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Unable to confirm the Shopify update.",
       });
     }
   };
@@ -1002,6 +1020,36 @@ export function PurchaseOrderDetailPage() {
       ) : null}
       {activeTab === "fulfillment" ? (
       <>
+      {data.reservations.some((reservation) => reservation.status === "Awaiting Shopify") ? (
+        <div className="panel section-stack">
+          <div className="panel-header">
+            <h3>Waiting for Shopify</h3>
+          </div>
+          <p className="modal-message">
+            These units have shipped, but Shopify still counts them. Nexus is holding them so available stock stays
+            correct. Lower the count in Shopify by the amounts below, then press &quot;Shopify updated&quot; so they
+            are not subtracted twice.
+          </p>
+          <ul>
+            {data.reservations
+              .filter((reservation) => reservation.status === "Awaiting Shopify")
+              .map((reservation) => {
+                const line = data.lineItems.find((item) => item.id === reservation.po_line_item_id);
+                return (
+                  <li key={reservation.id}>
+                    {line?.products?.name ?? line?.product_name ?? "Product"}
+                    {line?.sku ? ` (${line.sku})` : ""}: {reservation.reserved_units} units
+                  </li>
+                );
+              })}
+          </ul>
+          <div>
+            <button className="btn btn-primary" onClick={() => void handleShopifyUpdated()}>
+              Shopify updated
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="split-grid">
         <div className="panel section-stack">
           <div className="panel-header">
@@ -1412,12 +1460,14 @@ export function PurchaseOrderDetailPage() {
           onClose={() => setReceiving(false)}
           onConfirm={async (lines) => {
             try {
-              await purchaseOrderService.receiveInventory(poId, lines);
+              const result = await purchaseOrderService.receiveInventory(poId, lines);
               setReceiving(false);
               await reload();
               setNotice({
                 tone: "success",
-                message: "Inventory received successfully.",
+                message: result.unitsToAddInShopify
+                  ? `Receipt recorded. Add ${result.unitsToAddInShopify} units in Shopify. They will show in Nexus on the next Shopify check.`
+                  : "Inventory received successfully.",
               });
             } catch (err) {
               setNotice({

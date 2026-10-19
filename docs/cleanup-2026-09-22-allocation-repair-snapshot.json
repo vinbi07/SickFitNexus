@@ -1,0 +1,48 @@
+﻿{
+    "products":  [
+                     {
+                         "current_inventory":  16,
+                         "id":  "435c185d-3f87-4344-b9f3-48a77fab2974",
+                         "inventory_allocated":  4,
+                         "inventory_available":  12,
+                         "sku":  "CRW-P06-ESS-UNI"
+                     },
+                     {
+                         "current_inventory":  45,
+                         "id":  "98ca0fd8-0470-4f83-b941-532de67b0e31",
+                         "inventory_allocated":  4,
+                         "inventory_available":  41,
+                         "sku":  "CRW-P06-ESS-UNI--50917998657700"
+                     },
+                     {
+                         "current_inventory":  17,
+                         "id":  "4052c7b3-e601-4451-9b69-3ace6c137b26",
+                         "inventory_allocated":  18,
+                         "inventory_available":  0,
+                         "sku":  "SHOPIFY-51071815516324"
+                     },
+                     {
+                         "current_inventory":  13,
+                         "id":  "76b47f2a-c409-451c-ad77-83ba493ba27d",
+                         "inventory_allocated":  12,
+                         "inventory_available":  1,
+                         "sku":  "SHOPIFY-51225652920484"
+                     },
+                     {
+                         "current_inventory":  64,
+                         "id":  "69c0d608-6724-46bd-b9a4-0e126327da35",
+                         "inventory_allocated":  36,
+                         "inventory_available":  28,
+                         "sku":  "SLH-P01-000-UNI--45760437682340"
+                     },
+                     {
+                         "current_inventory":  81,
+                         "id":  "165a9e4f-a88a-49ce-981d-4f8e2db69cf3",
+                         "inventory_allocated":  12,
+                         "inventory_available":  69,
+                         "sku":  "SLH-P01-000-UNI--45760527564964"
+                     }
+                 ],
+    "note":  "products.inventory_allocated/inventory_available before repairing 6 orphaned/stuck allocations. Restore by writing these values back by id.",
+    "taken_at":  "2026-09-22T20:14:28Z"
+}

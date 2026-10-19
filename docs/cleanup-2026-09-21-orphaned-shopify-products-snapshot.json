@@ -1,0 +1,348 @@
+﻿{
+    "products":  [
+                     {
+                         "current_inventory":  4994,
+                         "id":  "67e2246b-03e1-413e-9615-a4c72fc20be3",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50925276233892",
+                         "sku":  "CRW-P02-FNDR-UNI"
+                     },
+                     {
+                         "current_inventory":  4990,
+                         "id":  "a964bb86-ee54-4a91-a254-7e823b1a8f38",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50925280034980",
+                         "sku":  "CRW-P03-FNDR-UNI--50925280034980"
+                     },
+                     {
+                         "current_inventory":  5,
+                         "id":  "1b92d621-e193-4e21-8da8-b85d334f372d",
+                         "ignored":  true,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51220517552292",
+                         "sku":  "CRW-P03-LMTD-UNI"
+                     },
+                     {
+                         "current_inventory":  4992,
+                         "id":  "e4fa359c-6059-4031-9742-47ac7fe2bc7c",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50952452767908",
+                         "sku":  "CRW-P06-FNDR-UNI"
+                     },
+                     {
+                         "current_inventory":  4997,
+                         "id":  "de4de887-3b5b-4b4c-80d4-40f37f5bef27",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50925665222820",
+                         "sku":  "CRW-P06-FNDR-UNI--50925665222820"
+                     },
+                     {
+                         "current_inventory":  81,
+                         "id":  "f0bedcd8-7559-40aa-93c3-7cf0a922aa79",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50952447262884",
+                         "sku":  "CRW-P10-FNDR-UNI"
+                     },
+                     {
+                         "current_inventory":  74,
+                         "id":  "865a0b05-fb20-463c-885e-07f762393c0f",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50952440217764",
+                         "sku":  "CRW-P10-FNDR-UNI--50952440217764"
+                     },
+                     {
+                         "current_inventory":  66,
+                         "id":  "04fbc347-0c41-41b4-b535-670ad4eac41e",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/50767570206884",
+                         "sku":  "SF-SCK-ANK-HNYCMB-1"
+                     },
+                     {
+                         "current_inventory":  22,
+                         "id":  "99e071fe-2d7e-43d8-a67d-d5fe2ddd3e34",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/44630088679588",
+                         "sku":  "SF-SCK-FRISCO-FALL"
+                     },
+                     {
+                         "current_inventory":  27,
+                         "id":  "c8df2645-1933-4c0a-ba88-53e645914fce",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/44630118105252",
+                         "sku":  "SF-SCK-OLV-GRV-FALL"
+                     },
+                     {
+                         "current_inventory":  25,
+                         "id":  "35b7bd11-7e95-45fe-bfc7-6c95183f39dc",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/44595798081700",
+                         "sku":  "SF-SCK-RNY-DAYS"
+                     },
+                     {
+                         "current_inventory":  1,
+                         "id":  "45c6dfb4-4924-4ea9-ba14-207a5ebadea9",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/44384616775844",
+                         "sku":  "SHOPIFY-44384616775844"
+                     },
+                     {
+                         "current_inventory":  0,
+                         "id":  "14e9c1a5-fabe-4243-88f1-d7bc9e555f5e",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/44384618479780",
+                         "sku":  "SHOPIFY-44384618479780"
+                     },
+                     {
+                         "current_inventory":  82,
+                         "id":  "e6ff7f44-104e-4725-ad31-44dceec3a0c7",
+                         "ignored":  true,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51220514373796",
+                         "sku":  "SHOPIFY-51220514373796"
+                     },
+                     {
+                         "current_inventory":  0,
+                         "id":  "8dff9157-e43c-4e0a-a1e6-1cca0e01e20a",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51247684976804",
+                         "sku":  "SHOPIFY-51247684976804"
+                     },
+                     {
+                         "current_inventory":  0,
+                         "id":  "39ddad32-028b-4477-a18a-3ca32ea7d6e2",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51247719186596",
+                         "sku":  "SHOPIFY-51247719186596"
+                     },
+                     {
+                         "current_inventory":  0,
+                         "id":  "4096909a-b38c-471f-b4e3-dfd89649075e",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51247719219364",
+                         "sku":  "SHOPIFY-51247719219364"
+                     },
+                     {
+                         "current_inventory":  0,
+                         "id":  "53c2c131-af00-425c-ae20-b92f9fb5aaef",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51247719252132",
+                         "sku":  "SHOPIFY-51247719252132"
+                     },
+                     {
+                         "current_inventory":  0,
+                         "id":  "0a32e8b5-9816-4b71-ab72-e10f3305285d",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51247719284900",
+                         "sku":  "SHOPIFY-51247719284900"
+                     },
+                     {
+                         "current_inventory":  82,
+                         "id":  "ecc65dbd-39b7-4114-97b7-56aaafd47b8c",
+                         "ignored":  false,
+                         "inventory_allocated":  0,
+                         "inventory_available":  0,
+                         "is_shopify_synced":  true,
+                         "shopify_variant_id":  "gid://shopify/ProductVariant/51198046306468",
+                         "sku":  "SLH-P01-000-UNI"
+                     }
+                 ],
+    "note":  "Values before ignoring orphaned Shopify products. Restore by writing these values back by id.",
+    "taken_at":  "2026-09-21T16:56:56Z",
+    "inventory_items":  [
+                            {
+                                "id":  "ed857171-9640-4bdb-b049-ff75a07d630c",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "67e2246b-03e1-413e-9615-a4c72fc20be3",
+                                "quantity_on_hand":  4994,
+                                "sku":  "CRW-P02-FNDR-UNI"
+                            },
+                            {
+                                "id":  "e77ea289-fc15-45e6-9831-78f9ca881632",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "a964bb86-ee54-4a91-a254-7e823b1a8f38",
+                                "quantity_on_hand":  4990,
+                                "sku":  "CRW-P03-FNDR-UNI--50925280034980"
+                            },
+                            {
+                                "id":  "b6e7a669-d4d1-4373-b391-f5ef5d53aa9c",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "1b92d621-e193-4e21-8da8-b85d334f372d",
+                                "quantity_on_hand":  5,
+                                "sku":  "CRW-P03-LMTD-UNI"
+                            },
+                            {
+                                "id":  "946fde06-8aba-40b4-8572-d172e47b6edc",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "e4fa359c-6059-4031-9742-47ac7fe2bc7c",
+                                "quantity_on_hand":  4992,
+                                "sku":  "CRW-P06-FNDR-UNI"
+                            },
+                            {
+                                "id":  "ba5bd878-a946-4beb-8b88-679dba07101a",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "de4de887-3b5b-4b4c-80d4-40f37f5bef27",
+                                "quantity_on_hand":  4997,
+                                "sku":  "CRW-P06-FNDR-UNI--50925665222820"
+                            },
+                            {
+                                "id":  "cecc54e3-c878-4fa6-b4fd-911e1247e5c3",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "f0bedcd8-7559-40aa-93c3-7cf0a922aa79",
+                                "quantity_on_hand":  81,
+                                "sku":  "CRW-P10-FNDR-UNI"
+                            },
+                            {
+                                "id":  "ac337655-23fd-40c1-80c5-87efbc6e45da",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "865a0b05-fb20-463c-885e-07f762393c0f",
+                                "quantity_on_hand":  74,
+                                "sku":  "CRW-P10-FNDR-UNI--50952440217764"
+                            },
+                            {
+                                "id":  "53357769-22c1-4758-96ba-0b37f0704a08",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "04fbc347-0c41-41b4-b535-670ad4eac41e",
+                                "quantity_on_hand":  66,
+                                "sku":  "SF-SCK-ANK-HNYCMB-1"
+                            },
+                            {
+                                "id":  "b2469621-03c7-4bc0-bef3-b29bade9cbc8",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "99e071fe-2d7e-43d8-a67d-d5fe2ddd3e34",
+                                "quantity_on_hand":  22,
+                                "sku":  "SF-SCK-FRISCO-FALL"
+                            },
+                            {
+                                "id":  "405e124d-371c-41b1-88ad-ab3505dcf44d",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "c8df2645-1933-4c0a-ba88-53e645914fce",
+                                "quantity_on_hand":  27,
+                                "sku":  "SF-SCK-OLV-GRV-FALL"
+                            },
+                            {
+                                "id":  "a93aff37-fa65-4445-a0d8-bf38bc6fdc5a",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "35b7bd11-7e95-45fe-bfc7-6c95183f39dc",
+                                "quantity_on_hand":  25,
+                                "sku":  "SF-SCK-RNY-DAYS"
+                            },
+                            {
+                                "id":  "011bbbe2-3ac8-4c44-b392-5f8adc02659d",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "45c6dfb4-4924-4ea9-ba14-207a5ebadea9",
+                                "quantity_on_hand":  1,
+                                "sku":  "SHOPIFY-44384616775844"
+                            },
+                            {
+                                "id":  "0651ba6a-f3dc-4ac1-89a2-b68cbf2d18f8",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "14e9c1a5-fabe-4243-88f1-d7bc9e555f5e",
+                                "quantity_on_hand":  0,
+                                "sku":  "SHOPIFY-44384618479780"
+                            },
+                            {
+                                "id":  "87b6050d-71f7-4779-9500-88ef39e65757",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "e6ff7f44-104e-4725-ad31-44dceec3a0c7",
+                                "quantity_on_hand":  82,
+                                "sku":  "SHOPIFY-51220514373796"
+                            },
+                            {
+                                "id":  "15f2c48e-7a75-43a4-adc5-226371a749af",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "8dff9157-e43c-4e0a-a1e6-1cca0e01e20a",
+                                "quantity_on_hand":  0,
+                                "sku":  "SHOPIFY-51247684976804"
+                            },
+                            {
+                                "id":  "5bd0b8f6-ced3-4f5b-a816-c37f737ac372",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "39ddad32-028b-4477-a18a-3ca32ea7d6e2",
+                                "quantity_on_hand":  0,
+                                "sku":  "SHOPIFY-51247719186596"
+                            },
+                            {
+                                "id":  "79977785-e08e-44b3-8c0b-c59cb593f889",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "4096909a-b38c-471f-b4e3-dfd89649075e",
+                                "quantity_on_hand":  0,
+                                "sku":  "SHOPIFY-51247719219364"
+                            },
+                            {
+                                "id":  "3062397b-3c2a-409a-b425-51099e9da844",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "53c2c131-af00-425c-ae20-b92f9fb5aaef",
+                                "quantity_on_hand":  0,
+                                "sku":  "SHOPIFY-51247719252132"
+                            },
+                            {
+                                "id":  "2ac424ef-a474-4bad-964e-d431f88dced5",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "0a32e8b5-9816-4b71-ab72-e10f3305285d",
+                                "quantity_on_hand":  0,
+                                "sku":  "SHOPIFY-51247719284900"
+                            },
+                            {
+                                "id":  "fe179794-3444-45e7-9eac-4775f2bcf6ee",
+                                "location_id":  "7239f72d-723e-4fc5-bf1f-0b107ff7c27d",
+                                "product_id":  "ecc65dbd-39b7-4114-97b7-56aaafd47b8c",
+                                "quantity_on_hand":  82,
+                                "sku":  "SLH-P01-000-UNI"
+                            }
+                        ]
+}

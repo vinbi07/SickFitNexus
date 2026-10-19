@@ -2,7 +2,7 @@ import { assertSupabase } from "@/lib/supabase";
 import { activityService } from "@/services/activityService";
 import { deleteFromTable, insertTable, upsertTable } from "@/services/baseService";
 import { dashboardSessionService } from "@/services/dashboardSessionService";
-import { inventoryService } from "@/services/inventoryService";
+import { inventoryService, isShopifyLinked } from "@/services/inventoryService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import {
   buildPurchaseOrderDocumentHtml,
@@ -582,6 +582,9 @@ export const purchaseOrderService = {
   async reject(id: string, reason?: string) {
     const actor = await getDashboardActor();
     const detail = await this.getById(id);
+    if (detail.reservations.some((reservation) => reservation.status === "Awaiting Shopify")) {
+      throw new Error("This order has shipped and is waiting for the Shopify count to be updated. Confirm the Shopify update before cancelling.");
+    }
     await inventoryService.releaseProducts(
       detail.lineItems.reduce<Array<{ productId: string; units: number }>>((accumulator, item) => {
         if (item.product_id) {
@@ -670,7 +673,10 @@ export const purchaseOrderService = {
   async fulfill(id: string) {
     const actor = await getDashboardActor();
     const detail = await this.getById(id);
-    await inventoryService.fulfillProducts(
+    if (detail.purchaseOrder.allocation_status === "Fulfilled") {
+      throw new Error("This order has already been fulfilled.");
+    }
+    const results = await inventoryService.fulfillProducts(
       detail.lineItems.reduce<Array<{ productId: string; units: number; locationId?: string | null; relatedPoId?: string | null }>>((accumulator, item) => {
         if (item.product_id) {
           accumulator.push({
@@ -684,7 +690,15 @@ export const purchaseOrderService = {
       }, []),
     );
 
-    await upsertReservationLedger(id, detail.lineItems, actor, "Committed", "fulfill", "Inventory committed on fulfillment.");
+    const awaitingShopifyProductIds = new Set(results.filter((result) => result.awaitingShopify).map((result) => result.productId));
+    const awaitingItems = detail.lineItems.filter((item) => item.product_id && awaitingShopifyProductIds.has(item.product_id));
+    const committedItems = detail.lineItems.filter((item) => item.product_id && !awaitingShopifyProductIds.has(item.product_id));
+    if (awaitingItems.length) {
+      await upsertReservationLedger(id, awaitingItems, actor, "Awaiting Shopify", "fulfill", "Shipped. Units stay held until the Shopify count is lowered.");
+    }
+    if (committedItems.length) {
+      await upsertReservationLedger(id, committedItems, actor, "Committed", "fulfill", "Inventory committed on fulfillment.");
+    }
     const supabase = assertSupabase();
     await supabase
       .from("purchase_orders")
@@ -694,7 +708,53 @@ export const purchaseOrderService = {
       })
       .eq("id", id);
 
-    await recordStatusHistory(id, detail.purchaseOrder.status, "Fulfilled", actor, "Inventory committed.");
+    await recordStatusHistory(
+      id,
+      detail.purchaseOrder.status,
+      "Fulfilled",
+      actor,
+      awaitingItems.length ? "Shipped. Waiting for the Shopify count to be updated." : "Inventory committed.",
+    );
+    return { awaitingShopifyLines: awaitingItems.length };
+  },
+
+  /**
+   * Call after the Shopify count has been lowered for a shipped order. Releases the hold that kept
+   * available stock correct, so the units are not subtracted twice. Safe to call twice: the status
+   * update claims the reservations first.
+   */
+  async confirmShopifyAdjusted(id: string) {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("inventory_reservations")
+      .update({ status: "Committed", notes: "Shopify count updated. Hold released." })
+      .eq("purchase_order_id", id)
+      .eq("status", "Awaiting Shopify")
+      .select("*");
+    if (error) throw error;
+    const claimed = (data ?? []) as InventoryReservation[];
+    if (!claimed.length) return { releasedLines: 0 };
+
+    const unitsByProduct = new Map<string, number>();
+    for (const reservation of claimed) {
+      unitsByProduct.set(
+        reservation.product_id,
+        (unitsByProduct.get(reservation.product_id) ?? 0) + Number(reservation.reserved_units ?? 0),
+      );
+    }
+    await inventoryService.releaseProducts(
+      [...unitsByProduct.entries()].map(([productId, units]) => ({ productId, units })),
+    );
+
+    await activityService.create({
+      event_type: "purchase_order_shopify_adjusted",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: "Shopify count confirmed for shipped order",
+      description: `Held units released for ${claimed.length} line${claimed.length === 1 ? "" : "s"}.`,
+      metadata: { purchaseOrderId: id },
+    });
+    return { releasedLines: claimed.length };
   },
 
   async markAsPaid(id: string) {
@@ -800,8 +860,64 @@ export const purchaseOrderService = {
       throw new Error("This manufacturing order has already been received or closed.");
     }
 
+    // Shopify owns the count for Shopify-linked products and Nexus never writes to it, so a receipt
+    // is logged but not added to stock. The units show up in Nexus once they are added in Shopify.
+    const productIds = [...new Set(lines.map((line) => line.productId))];
+    const { data: productRows, error: productsError } = await supabase
+      .from("products")
+      .select("id, is_shopify_synced, shopify_variant_id")
+      .in("id", productIds);
+    if (productsError) throw productsError;
+    const shopifyLinkedIds = new Set(
+      ((productRows ?? []) as Array<Pick<Product, "id" | "is_shopify_synced" | "shopify_variant_id">>)
+        .filter(isShopifyLinked)
+        .map((product) => product.id),
+    );
+    const eventDate = new Date().toISOString().slice(0, 10);
+    let unitsToAddInShopify = 0;
+
     for (const line of lines) {
       if (line.quantityToReceive <= 0) continue;
+
+      const { data: lineItemRow, error: lineItemError } = await supabase
+        .from("po_line_items")
+        .select("quantity_ordered, quantity_received")
+        .eq("id", line.lineItemId)
+        .single();
+      if (lineItemError) throw lineItemError;
+      const rawReceived = lineItemRow.quantity_received as number | null;
+      const alreadyReceived = Number(rawReceived ?? 0);
+      // Never apply more than is still outstanding, so the event and the line always agree.
+      const applied = Math.min(line.quantityToReceive, Math.max(Number(lineItemRow.quantity_ordered ?? 0) - alreadyReceived, 0));
+      if (applied <= 0) continue;
+
+      // Claim the receipt first. If another submit changed the line since we read it, skip this line
+      // instead of adding the stock twice.
+      const claimQuery = supabase
+        .from("po_line_items")
+        .update({ quantity_received: alreadyReceived + applied })
+        .eq("id", line.lineItemId);
+      const { data: claimed, error: claimError } = await (
+        rawReceived === null ? claimQuery.is("quantity_received", null) : claimQuery.eq("quantity_received", alreadyReceived)
+      ).select("id");
+      if (claimError) throw claimError;
+      if (!(claimed ?? []).length) continue;
+
+      if (shopifyLinkedIds.has(line.productId)) {
+        await insertTable<InventoryEvent>("inventory_events", {
+          product_id: line.productId,
+          location_id: line.locationId,
+          related_po_id: id,
+          event_type: "PO Received",
+          quantity_change: applied,
+          event_date: eventDate,
+          notes: `Received from Manufacturing Order ${purchaseOrder.po_number}. Add these units in Shopify.`,
+          source_system: "nexus_po_receipt",
+          source_reference: `${id}:${line.lineItemId}:${alreadyReceived + applied}`,
+        });
+        unitsToAddInShopify += applied;
+        continue;
+      }
 
       const { data: existingItem, error: itemError } = await supabase
         .from("inventory_items")
@@ -825,31 +941,35 @@ export const purchaseOrderService = {
         location_id: line.locationId,
         related_po_id: id,
         event_type: "PO Received",
-        quantity_change: line.quantityToReceive,
-        event_date: new Date().toISOString().slice(0, 10),
+        quantity_change: applied,
+        event_date: eventDate,
         notes: `Received from Manufacturing Order ${purchaseOrder.po_number}.`,
       });
-
-      const { data: lineItemRow, error: lineItemError } = await supabase
-        .from("po_line_items")
-        .select("quantity_ordered, quantity_received")
-        .eq("id", line.lineItemId)
-        .single();
-      if (lineItemError) throw lineItemError;
-      const nextReceived = Math.min(
-        Number(lineItemRow.quantity_received ?? 0) + line.quantityToReceive,
-        Number(lineItemRow.quantity_ordered ?? 0),
-      );
-      await supabase.from("po_line_items").update({ quantity_received: nextReceived }).eq("id", line.lineItemId);
     }
 
-    await supabase
-      .from("purchase_orders")
-      .update({ actual_delivery_date: new Date().toISOString().slice(0, 10) })
-      .eq("id", id);
+    const { data: allLines, error: allLinesError } = await supabase
+      .from("po_line_items")
+      .select("quantity_ordered, quantity_received")
+      .eq("purchase_order_id", id);
+    if (allLinesError) throw allLinesError;
+    const fullyReceived = ((allLines ?? []) as Array<{ quantity_ordered: number | null; quantity_received: number | null }>)
+      .every((item) => Number(item.quantity_received ?? 0) >= Number(item.quantity_ordered ?? 0));
+
+    if (fullyReceived) {
+      await supabase
+        .from("purchase_orders")
+        .update({ actual_delivery_date: eventDate })
+        .eq("id", id);
+    }
 
     const actor = await getDashboardActor().catch(() => null);
-    return this.updateStatus(id, "Received", actor ?? undefined, "Inventory received.");
+    const updated = await this.updateStatus(
+      id,
+      fullyReceived ? "Received" : "Partially Received",
+      actor ?? undefined,
+      fullyReceived ? "Inventory received." : "Partial delivery received.",
+    );
+    return { purchaseOrder: updated, unitsToAddInShopify };
   },
 
   async saveComplianceHold(payload: Partial<ComplianceHold>) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { ProductNameWithMetadata } from "@/components/ProductNameWithMetadata";
+import { isShopifyLinked } from "@/services/inventoryService";
 import type { Location, PoLineItem, PurchaseOrder } from "@/types/domain";
 
 type ReceiveInventoryModalProps = {
@@ -15,6 +16,7 @@ export function ReceiveInventoryModal({ purchaseOrder, lineItems, locations, onC
   const receivableLines = lineItems.filter(
     (item) => Number(item.quantity_ordered ?? 0) - Number(item.quantity_received ?? 0) > 0 && item.product_id,
   );
+  const shopifyLines = receivableLines.filter((item) => item.products && isShopifyLinked(item.products));
   const [locationId, setLocationId] = useState(purchaseOrder.location_id ?? "");
   const [quantities, setQuantities] = useState<Record<string, number>>(
     Object.fromEntries(
@@ -66,7 +68,10 @@ export function ReceiveInventoryModal({ purchaseOrder, lineItems, locations, onC
       )}
     >
       <p className="modal-message">
-        This will add the received quantities from this manufacturing order into inventory.
+        This records the received quantities from this manufacturing order.
+        {shopifyLines.length
+          ? " Products sold on Shopify are not added to stock here. Shopify keeps that count, so add those units in Shopify and they will show in Nexus on the next check."
+          : " The quantities are added to the location below."}
       </p>
       <div className="field">
         <label>Receiving Location</label>
@@ -82,6 +87,9 @@ export function ReceiveInventoryModal({ purchaseOrder, lineItems, locations, onC
         {receivableLines.length ? receivableLines.map((item) => (
           <div key={item.id} className="detail-card">
             <ProductNameWithMetadata product={item.products} fallbackName={item.product_name} fallbackSku={item.sku} linkToDetail={false} />
+            {item.products && isShopifyLinked(item.products) ? (
+              <p className="helper-text">Sold on Shopify: add these units in Shopify after receiving.</p>
+            ) : null}
             <div className="form-grid">
               <div className="field field-half">
                 <label>Quantity Ordered</label>

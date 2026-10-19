@@ -299,10 +299,15 @@ export function ProductionPage() {
           onClose={() => setReceiving(null)}
           onConfirm={async (lines) => {
             try {
-              await purchaseOrderService.receiveInventory(receiving.purchaseOrder.id, lines);
+              const result = await purchaseOrderService.receiveInventory(receiving.purchaseOrder.id, lines);
               setReceiving(null);
               await reload();
-              setNotice({ tone: "success", message: "Inventory received successfully." });
+              setNotice({
+                tone: "success",
+                message: result.unitsToAddInShopify
+                  ? `Receipt recorded. Add ${result.unitsToAddInShopify} units in Shopify. They will show in Nexus on the next Shopify check.`
+                  : "Inventory received successfully.",
+              });
             } catch (err) {
               setNotice({ tone: "error", message: err instanceof Error ? err.message : "Unable to receive inventory." });
             }

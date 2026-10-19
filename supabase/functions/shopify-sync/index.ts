@@ -161,6 +161,124 @@ const SHOPIFY_ORDERS_QUERY = `
   }
 `;
 
+const SHOPIFY_VARIANT_LOOKUP_QUERY = `
+  query VariantLookup($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        sku
+        inventoryQuantity
+        product {
+          id
+          title
+          status
+          handle
+        }
+      }
+    }
+  }
+`;
+
+const LOOKUP_MAX_SKUS = 40;
+
+// Read-only diagnostic: for each SKU, compares what Nexus has stored with what Shopify returns, both
+// by the stored variant id and by a fresh SKU search. Writes nothing, to Nexus or to Shopify.
+async function lookupSkus({
+  supabaseAdmin,
+  storeDomain,
+  adminToken,
+  skus,
+}: {
+  supabaseAdmin: SupabaseClient;
+  storeDomain: string;
+  adminToken: string;
+  skus: string[];
+}) {
+  const nexusProducts = await selectInChunks<ProductRow>(
+    supabaseAdmin,
+    "products",
+    "sku",
+    skus,
+    "id, sku, shopify_variant_id, shopify_product_id, current_inventory, last_shopify_sync_at",
+  );
+  const nexusBySku = new Map(nexusProducts.map((row) => [row.sku, row]));
+
+  const variantIds = nexusProducts
+    .map((row) => row.shopify_variant_id)
+    .filter((id): id is string => Boolean(id));
+  const byVariantId = new Map<string, {
+    id: string;
+    sku: string | null;
+    inventoryQuantity: number | null;
+    product: { id: string; title: string; status: string; handle: string };
+  } | null>();
+  if (variantIds.length) {
+    const payload = await fetchShopifyGraphql({
+      storeDomain,
+      adminToken,
+      query: SHOPIFY_VARIANT_LOOKUP_QUERY,
+      variables: { ids: variantIds },
+    });
+    (payload.data.nodes as Array<Record<string, unknown> | null>).forEach((node, index) => {
+      byVariantId.set(variantIds[index], node && node.id ? (node as never) : null);
+    });
+  }
+
+  const skuPayload = await fetchShopifyGraphql({
+    storeDomain,
+    adminToken,
+    query: SHOPIFY_VARIANTS_QUERY,
+    variables: {
+      first: 50,
+      after: null,
+      query: skus.map((sku) => `sku:"${sku.replace(/"/g, "")}"`).join(" OR "),
+    },
+  });
+  const shopifyBySku = new Map<string, ShopifyVariantNode[]>();
+  for (const edge of skuPayload.data.productVariants.edges as Array<{ node: ShopifyVariantNode }>) {
+    const found = edge.node.inventoryItem?.sku?.trim();
+    if (!found) continue;
+    shopifyBySku.set(found, [...(shopifyBySku.get(found) ?? []), edge.node]);
+  }
+
+  return skus.map((sku) => {
+    const nexus = nexusBySku.get(sku) ?? null;
+    const storedVariant = nexus?.shopify_variant_id ? byVariantId.get(nexus.shopify_variant_id) ?? null : null;
+    const bySkuMatches = shopifyBySku.get(sku) ?? [];
+    const verdict = !nexus
+      ? "not_in_nexus"
+      : storedVariant
+        ? `variant_exists_${storedVariant.product.status.toLowerCase()}`
+        : bySkuMatches.length
+          ? "variant_id_gone_but_sku_exists"
+          : "gone_from_shopify";
+    return {
+      sku,
+      verdict,
+      nexus: nexus
+        ? {
+            variantId: nexus.shopify_variant_id,
+            currentInventory: nexus.current_inventory,
+            lastShopifySyncAt: nexus.last_shopify_sync_at,
+          }
+        : null,
+      shopifyByStoredVariantId: storedVariant
+        ? {
+            productTitle: storedVariant.product.title,
+            productStatus: storedVariant.product.status,
+            quantity: storedVariant.inventoryQuantity,
+          }
+        : null,
+      shopifyBySku: bySkuMatches.map((variant) => ({
+        variantId: variant.id,
+        productTitle: variant.product.title,
+        productStatus: variant.product.status,
+        quantity: variant.inventoryQuantity,
+      })),
+    };
+  });
+}
+
 function jsonResponse(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -595,6 +713,9 @@ async function syncProductsAndInventory(
       unit_cost: Number(variant.inventoryItem?.unitCost?.amount ?? existingProduct?.unit_cost ?? 0),
       unit_price: Number(variant.price ?? existingProduct?.unit_price ?? 0),
       current_inventory: totalInventory,
+      // Same formula as deriveInventoryAvailable in src/utils/lookbook.ts. inventory_allocated is
+      // owned by Nexus and not written here, so the stored available count stays correct after a sync.
+      inventory_available: Math.max(totalInventory - Number(existingProduct?.inventory_allocated ?? 0), 0),
       safety_stock: existingProduct?.safety_stock ?? 0,
       weight: formatShopifyWeight(variant.inventoryItem?.measurement?.weight) ?? existingProduct?.weight ?? null,
       image_url: variant.image?.url ?? variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
@@ -866,6 +987,19 @@ Deno.serve(async (request) => {
 
     stage = "parse_request";
     const body = await request.json().catch(() => ({}));
+    if (body.mode === "lookup") {
+      stage = "lookup";
+      const skus = (Array.isArray(body.skus) ? body.skus : [])
+        .filter((value: unknown): value is string => typeof value === "string" && value.trim() !== "")
+        .map((value: string) => value.trim())
+        .slice(0, LOOKUP_MAX_SKUS);
+      if (!skus.length) {
+        return jsonResponse(400, { ok: false, stage, error: "Provide a non-empty skus array." });
+      }
+      const results = await lookupSkus({ supabaseAdmin, storeDomain, adminToken, skus });
+      return jsonResponse(200, { ok: true, stage, mode: "lookup", results });
+    }
+
     const mode = body.mode === "product" ? "product" : "all";
     const sku = typeof body.sku === "string" ? body.sku.trim() : "";
     logInfo("request_parsed", { mode, sku: sku || null, lookbackDays });

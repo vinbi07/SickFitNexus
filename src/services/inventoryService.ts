@@ -5,6 +5,13 @@ import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
 import type { InventoryEvent, InventoryItem, Product, Vendor } from "@/types/domain";
 import { deriveInventoryAvailable } from "@/utils/lookbook";
 
+const WHOLESALE_SOURCE_SYSTEM = "nexus_wholesale";
+
+/** Shopify owns the stock count for these products; Nexus only reads it. */
+export function isShopifyLinked(product: Pick<Product, "is_shopify_synced" | "shopify_variant_id">) {
+  return Boolean(product.is_shopify_synced && product.shopify_variant_id);
+}
+
 async function syncProductInventory(productId: string) {
   const supabase = assertSupabase();
   const { data: inventoryRows, error: inventoryError } = await supabase
@@ -244,31 +251,120 @@ export const inventoryService = {
     }
   },
 
+  /**
+   * Ships wholesale units. Safe to call twice for the same PO: a line that already has its
+   * shipment event is skipped.
+   *
+   * Shopify-linked products: Shopify owns the count and Nexus never writes to it. The shipment is
+   * logged and the units stay held (inventory_allocated) until someone lowers the Shopify count and
+   * calls releaseProducts via confirmShopifyAdjusted. Available stays correct in the meantime.
+   *
+   * Other products: stock is taken from an inventory location and the hold is released.
+   */
   async fulfillProducts(lines: Array<{ productId: string; units: number; locationId?: string | null; relatedPoId?: string | null }>) {
     const supabase = assertSupabase();
+    const eventDate = new Date().toISOString().slice(0, 10);
+
+    const merged = new Map<string, { productId: string; units: number; locationId: string | null; relatedPoId: string | null }>();
     for (const line of lines) {
+      const existing = merged.get(line.productId);
+      if (existing) {
+        existing.units += Number(line.units ?? 0);
+      } else {
+        merged.set(line.productId, {
+          productId: line.productId,
+          units: Number(line.units ?? 0),
+          locationId: line.locationId ?? null,
+          relatedPoId: line.relatedPoId ?? null,
+        });
+      }
+    }
+
+    type Plan = {
+      line: { productId: string; units: number; locationId: string | null; relatedPoId: string | null };
+      product: Product;
+      sourceReference: string | null;
+      shopifyLinked: boolean;
+      item: InventoryItem | null;
+    };
+    const plans: Plan[] = [];
+    const results: Array<{ productId: string; awaitingShopify: boolean }> = [];
+
+    // Validate everything before changing anything, so a shortage does not leave a half-fulfilled PO.
+    for (const line of merged.values()) {
       const { data, error } = await supabase.from("products").select("*").eq("id", line.productId).single();
       if (error) throw error;
       const product = data as Product;
-      const nextInventory = Math.max(Number(product.current_inventory ?? 0) - Number(line.units ?? 0), 0);
-      const nextAllocated = Math.max(Number(product.inventory_allocated ?? 0) - Number(line.units ?? 0), 0);
-      await updateTable<Product>("products", product.id, {
-        current_inventory: nextInventory,
-        inventory_allocated: nextAllocated,
-        inventory_available: deriveInventoryAvailable({
-          current_inventory: nextInventory,
-          inventory_allocated: nextAllocated,
-        }),
-      });
-      await insertTable<InventoryEvent>("inventory_events", {
-        product_id: product.id,
-        location_id: line.locationId ?? null,
-        related_po_id: line.relatedPoId ?? null,
-        event_type: "Usage",
-        quantity_change: Number(line.units ?? 0) * -1,
-        event_date: new Date().toISOString().slice(0, 10),
-        notes: "Fulfilled lookbook order allocation.",
-      });
+      const shopifyLinked = isShopifyLinked(product);
+      const sourceReference = line.relatedPoId ? `${line.relatedPoId}:${product.id}` : null;
+
+      if (sourceReference) {
+        const { data: alreadyShipped, error: shippedError } = await supabase
+          .from("inventory_events")
+          .select("id")
+          .eq("source_system", WHOLESALE_SOURCE_SYSTEM)
+          .eq("source_reference", sourceReference)
+          .limit(1);
+        if (shippedError) throw shippedError;
+        if ((alreadyShipped ?? []).length) {
+          results.push({ productId: product.id, awaitingShopify: shopifyLinked });
+          continue;
+        }
+      }
+
+      let item: InventoryItem | null = null;
+      if (!shopifyLinked) {
+        const { data: items, error: itemsError } = await supabase
+          .from("inventory_items")
+          .select("*")
+          .eq("product_id", product.id)
+          .order("quantity_on_hand", { ascending: false });
+        if (itemsError) throw itemsError;
+        const candidates = (items ?? []) as InventoryItem[];
+        item = candidates.find((candidate) => candidate.location_id === line.locationId) ?? candidates[0] ?? null;
+        if (!item) {
+          throw new Error(`${product.name} has no inventory record to ship from. Add stock before fulfilling.`);
+        }
+        if (Number(item.quantity_on_hand ?? 0) < line.units) {
+          throw new Error(`Not enough stock of ${product.name} to fulfill ${line.units} units.`);
+        }
+      }
+      plans.push({ line, product, sourceReference, shopifyLinked, item });
     }
+
+    for (const { line, product, sourceReference, shopifyLinked, item } of plans) {
+      if (shopifyLinked) {
+        await insertTable<InventoryEvent>("inventory_events", {
+          product_id: product.id,
+          location_id: null,
+          related_po_id: line.relatedPoId,
+          event_type: "Usage",
+          quantity_change: line.units * -1,
+          event_date: eventDate,
+          notes: "Wholesale shipment. Units stay held until the Shopify count is lowered.",
+          source_system: WHOLESALE_SOURCE_SYSTEM,
+          source_reference: sourceReference,
+        });
+        results.push({ productId: product.id, awaitingShopify: true });
+        continue;
+      }
+
+      const nextAllocated = Math.max(Number(product.inventory_allocated ?? 0) - line.units, 0);
+      await updateTable<Product>("products", product.id, { inventory_allocated: nextAllocated });
+      await this.createAdjustment({
+        product_id: product.id,
+        location_id: item!.location_id,
+        related_po_id: line.relatedPoId,
+        event_type: "Usage",
+        quantity_change: line.units * -1,
+        event_date: eventDate,
+        notes: "Fulfilled wholesale order allocation.",
+        source_system: WHOLESALE_SOURCE_SYSTEM,
+        source_reference: sourceReference,
+      });
+      results.push({ productId: product.id, awaitingShopify: false });
+    }
+
+    return results;
   },
 };

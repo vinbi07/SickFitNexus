@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -39,7 +40,7 @@ export function CsvImportsPage() {
     <div className="section-stack">
       <PageHeader
         title="CSV Import + Normalization"
-        description="Upload wholesale PO files, preview and validate a Shields-style template, undo mistakes safely, and keep the app ready for future PDF-to-CSV intake."
+        description="Upload wholesale PO spreadsheets, preview and validate a Shields-style template, and undo mistakes safely. For PO PDFs, use PO PDF Import."
         actions={
           <button className="btn btn-danger" onClick={() => setShowReset(true)}>
             Reset Imported Data
@@ -50,18 +51,14 @@ export function CsvImportsPage() {
       <CsvImportWorkflow onImported={reload} />
       <div className="panel section-stack">
         <div className="panel-header">
-          <h3>Future PDF Intake</h3>
+          <h3>Have a PO as a PDF?</h3>
+          <Link className="btn btn-primary btn-small" to="/purchase-orders/import-pdf">
+            Import PO PDF
+          </Link>
         </div>
-        <div className="timeline">
-          <div className="timeline-item">
-            <strong>AI-assisted PDF to CSV placeholder</strong>
-            <p>Converted PO data should land in the same CSV template used here so validation, preview, undo import, and error handling continue to work without a separate import path.</p>
-          </div>
-          <div className="timeline-item">
-            <strong>Audit trail structure reserved</strong>
-            <p>The data model now leaves room for record-level audit logging later without requiring authentication to ship first.</p>
-          </div>
-        </div>
+        <p className="helper-text">
+          PO PDF Import reads every purchase order in the file, matches each line to your products, checks stock, and creates the Retailer POs and their invoices. No CSV needed.
+        </p>
       </div>
       <div className="panel section-stack">
         <div className="panel-header">

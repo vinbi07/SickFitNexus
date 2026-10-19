@@ -81,12 +81,12 @@ export function InvoiceDetailPage() {
           <strong className="metric-value">{invoice.total_units}</strong>
         </div>
         <div className="card metric-card">
-          <span className="metric-label">Order Date</span>
-          <strong className="metric-value">{formatDate(invoice.order_date)}</strong>
+          <span className="metric-label">Invoice Date</span>
+          <strong className="metric-value">{formatDate(invoice.invoice_date ?? invoice.order_date)}</strong>
         </div>
         <div className="card metric-card">
-          <span className="metric-label">Expected Delivery</span>
-          <strong className="metric-value">{formatDate(invoice.expected_delivery_date)}</strong>
+          <span className="metric-label">Due Date</span>
+          <strong className="metric-value">{formatDate(invoice.due_date)}</strong>
         </div>
         <div className="card metric-card">
           <span className="metric-label">Currency</span>
@@ -99,6 +99,19 @@ export function InvoiceDetailPage() {
           </div>
         ) : null}
       </div>
+      {invoice.stock_warnings?.length ? (
+        <div className="panel">
+          <div className="panel-header">
+            <h3>Review before sending</h3>
+          </div>
+          <p className="helper-text">Found when this invoice was generated. They are not printed on the invoice.</p>
+          <ul className="po-import-warnings">
+            {invoice.stock_warnings.map((warning, index) => (
+              <li key={index} className={`po-import-warning-${warning.kind}`}>{warning.message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="panel">
         <div className="panel-header">
           <h3>Status</h3>

@@ -79,19 +79,24 @@ async function saveProduct(payload: Partial<Product>) {
     product_barcode_links: _productBarcodeLinks,
     compliance_docs_required_input: _complianceDocsRequiredInput,
     starting_inventory: _startingInventory,
+    // Stock columns are owned by the inventory flows and the Shopify sync. A form or row loaded
+    // earlier holds stale copies, so never write them back when editing product details.
+    current_inventory: formInventory,
+    inventory_available: _inventoryAvailable,
+    inventory_allocated: _inventoryAllocated,
     ...productPayload
   } = payload as Partial<Product> & {
     compliance_docs_required_input?: string;
     starting_inventory?: number;
   };
   const isCreate = !productPayload.id;
-  const startingInventory = Number(productPayload.current_inventory ?? 0);
+  const startingInventory = Number(formInventory ?? 0);
   const [saved] = (await upsertTable<Product>("products", {
     ...productPayload,
     parent_product_id: productPayload.parent_product_id ? String(productPayload.parent_product_id) : null,
     variant_title: productPayload.variant_title ? String(productPayload.variant_title) : null,
     variant_sort_order: Number(productPayload.variant_sort_order ?? 0),
-    current_inventory: isCreate ? 0 : productPayload.current_inventory,
+    ...(isCreate ? { current_inventory: 0 } : {}),
   })) as Product[];
 
   if (isCreate && startingInventory > 0) {

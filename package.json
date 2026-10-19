@@ -12,6 +12,7 @@
     "seed:reorder-scenario": "tsx --tsconfig tsconfig.app.json src/db/scripts/seed-reorder-scenario.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@supabase/supabase-js": "^2.57.0",
     "bcryptjs": "^3.0.3",
     "d3-geo": "^3.1.1",

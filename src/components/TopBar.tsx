@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 const pageContexts = [
   { match: /^\/$/, title: "Operations Command", context: "Wholesale, inventory, inbound, and account velocity" },
   { match: /^\/imports/, title: "CSV Intake", context: "Normalize wholesale PO files and import lineage" },
+  { match: /^\/purchase-orders\/import-pdf/, title: "PO PDF Import", context: "Turn retailer PO PDFs into POs and invoices" },
   { match: /^\/purchase-orders\/new/, title: "PO Builder", context: "Create catalog-driven wholesale purchase orders" },
   { match: /^\/purchase-orders/, title: "Purchase Orders", context: "Lifecycle, approvals, invoices, and fulfillment" },
   { match: /^\/pending-queue/, title: "Pending Queue", context: "Inbound requests waiting for review" },

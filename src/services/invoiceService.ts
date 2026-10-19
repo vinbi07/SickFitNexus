@@ -7,10 +7,12 @@ import type {
   Invoice,
   InvoiceLineItem,
   InvoiceStatus,
+  InvoiceWarning,
   Location,
   Retailer,
   Vendor,
 } from "@/types/domain";
+import { computeDueDate } from "@/utils/invoiceTerms";
 
 function attachInvoiceRelations(
   invoices: Invoice[],
@@ -52,17 +54,23 @@ function omitEmptyId<T extends { id?: string | null }>(payload: T): Omit<T, "id"
 }
 
 export const invoiceService = {
+  /** Next number in the shared sequence (continues the QuickBooks numbering, see migration 031). */
   async generateInvoiceNumber(): Promise<string> {
     const supabase = assertSupabase();
-    const dateStamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const prefix = `INV-${dateStamp}`;
+    const { data, error } = await supabase.rpc("next_invoice_number");
+    if (error) throw error;
+    return String(data);
+  },
+
+  async findBySourcePo(poId: string): Promise<Invoice | null> {
+    const supabase = assertSupabase();
     const { data, error } = await supabase
       .from("invoices")
-      .select("invoice_number")
-      .ilike("invoice_number", `${prefix}%`);
+      .select("*")
+      .eq("source_po_id", poId)
+      .maybeSingle();
     if (error) throw error;
-    const sequence = String((data ?? []).length + 1).padStart(4, "0");
-    return `${prefix}-${sequence}`;
+    return (data as Invoice | null) ?? null;
   },
 
   async list(filters?: { status?: string; search?: string }) {
@@ -146,6 +154,7 @@ export const invoiceService = {
       upc: item.upc ? String(item.upc) : null,
       variant_label: item.variant_label ? String(item.variant_label) : null,
       description: item.description ? String(item.description) : null,
+      retailer_item_number: item.retailer_item_number ? String(item.retailer_item_number) : null,
       unit: item.unit ? String(item.unit) : "EA",
       case_pack_quantity: Number(item.case_pack_quantity ?? 1),
       case_quantity: Number(item.case_quantity ?? 0),
@@ -172,6 +181,10 @@ export const invoiceService = {
         expected_delivery_date: normalizeOptionalDate(invoicePayload.expected_delivery_date),
         actual_delivery_date: normalizeOptionalDate(invoicePayload.actual_delivery_date),
         submitted_at: normalizeOptionalDate(invoicePayload.submitted_at),
+        invoice_date: normalizeOptionalDate(invoicePayload.invoice_date),
+        due_date: normalizeOptionalDate(invoicePayload.due_date),
+        customer_po_number: normalizeOptionalText(invoicePayload.customer_po_number),
+        stock_warnings: invoicePayload.stock_warnings ?? [],
         bill_to_company_name: normalizeOptionalText(invoicePayload.bill_to_company_name),
         bill_to_contact_name: normalizeOptionalText(invoicePayload.bill_to_contact_name),
         bill_to_street: normalizeOptionalText(invoicePayload.bill_to_street),
@@ -259,10 +272,21 @@ export const invoiceService = {
     return data as Invoice;
   },
 
-  async convertFromPo(poId: string): Promise<Invoice> {
+  /**
+   * Creates the invoice for a PO, or returns the one that already exists (one invoice per PO).
+   * Quantities and prices come from the PO; SKU, UPC and name come from the matched catalog
+   * product so PO typos never reach the invoice.
+   */
+  async convertFromPo(poId: string, options?: { warnings?: InvoiceWarning[] }): Promise<Invoice> {
+    const existing = await this.findBySourcePo(poId);
+    if (existing) return existing;
+
     const detail = await purchaseOrderService.getById(poId);
     const { purchaseOrder, lineItems } = detail;
+    const retailer = purchaseOrder.retailers ?? null;
     const invoiceNumber = await this.generateInvoiceNumber();
+    const paymentTerms = purchaseOrder.payment_terms_snapshot ?? retailer?.default_payment_terms ?? null;
+    const invoiceDate = purchaseOrder.order_date ?? new Date().toISOString().slice(0, 10);
 
     const invoicePayload: Partial<Invoice> = {
       invoice_number: invoiceNumber,
@@ -272,22 +296,26 @@ export const invoiceService = {
       buyer_id: purchaseOrder.buyer_id,
       location_id: purchaseOrder.location_id,
       status: "Draft",
+      invoice_date: invoiceDate,
+      due_date: computeDueDate(invoiceDate, paymentTerms),
+      customer_po_number: purchaseOrder.po_number,
+      stock_warnings: options?.warnings ?? [],
       order_date: purchaseOrder.order_date,
-      ship_date: purchaseOrder.ship_date,
+      ship_date: purchaseOrder.ship_date ?? purchaseOrder.start_ship_date,
       start_ship_date: purchaseOrder.start_ship_date,
       ship_complete_date: purchaseOrder.ship_complete_date,
       eta_date: purchaseOrder.eta_date,
       expected_delivery_date: purchaseOrder.expected_delivery_date,
       actual_delivery_date: purchaseOrder.actual_delivery_date,
       submitted_at: purchaseOrder.submitted_at,
-      bill_to_company_name: purchaseOrder.bill_to_company_name,
-      bill_to_contact_name: purchaseOrder.bill_to_contact_name,
-      bill_to_street: purchaseOrder.bill_to_street,
-      bill_to_city: purchaseOrder.bill_to_city,
-      bill_to_state: purchaseOrder.bill_to_state,
-      bill_to_zip: purchaseOrder.bill_to_zip,
-      bill_to_phone: purchaseOrder.bill_to_phone,
-      bill_to_email: purchaseOrder.bill_to_email,
+      bill_to_company_name: purchaseOrder.bill_to_company_name ?? retailer?.billing_company_name ?? retailer?.name ?? null,
+      bill_to_contact_name: purchaseOrder.bill_to_contact_name ?? retailer?.billing_contact_name ?? null,
+      bill_to_street: purchaseOrder.bill_to_street ?? retailer?.billing_street ?? null,
+      bill_to_city: purchaseOrder.bill_to_city ?? retailer?.billing_city ?? null,
+      bill_to_state: purchaseOrder.bill_to_state ?? retailer?.billing_state ?? null,
+      bill_to_zip: purchaseOrder.bill_to_zip ?? retailer?.billing_zip ?? null,
+      bill_to_phone: purchaseOrder.bill_to_phone ?? retailer?.billing_phone ?? null,
+      bill_to_email: purchaseOrder.bill_to_email ?? retailer?.billing_email ?? null,
       ship_to_company_name: purchaseOrder.ship_to_company_name,
       ship_to_attention: purchaseOrder.ship_to_attention,
       ship_to_street: purchaseOrder.ship_to_street,
@@ -295,7 +323,7 @@ export const invoiceService = {
       ship_to_state: purchaseOrder.ship_to_state,
       ship_to_zip: purchaseOrder.ship_to_zip,
       ship_to_phone: purchaseOrder.ship_to_phone,
-      payment_terms_snapshot: purchaseOrder.payment_terms_snapshot,
+      payment_terms_snapshot: paymentTerms,
       buyer_name_snapshot: purchaseOrder.buyer_name_snapshot,
       approver_name_snapshot: purchaseOrder.approver_name_snapshot,
       subtotal: purchaseOrder.subtotal,
@@ -309,10 +337,11 @@ export const invoiceService = {
     };
 
     const invoiceLineItems: Array<Partial<InvoiceLineItem>> = lineItems.map((item, index) => ({
-      sku: item.sku,
-      upc: item.upc,
-      product_name: item.product_name,
+      sku: item.products?.sku ?? item.sku,
+      upc: item.products?.upc ?? item.upc,
+      product_name: item.products?.name ?? item.product_name,
       product_id: item.product_id,
+      retailer_item_number: item.retailer_item_number ?? null,
       variant_label: item.variant_label,
       description: item.description,
       unit: item.unit,
@@ -329,7 +358,15 @@ export const invoiceService = {
       sort_order: item.sort_order ?? index,
     }));
 
-    const savedInvoice = await this.save({ invoice: invoicePayload, lineItems: invoiceLineItems });
+    let savedInvoice: Invoice;
+    try {
+      savedInvoice = await this.save({ invoice: invoicePayload, lineItems: invoiceLineItems });
+    } catch (error) {
+      // Another conversion of the same PO won the race (uq_invoices_source_po_id).
+      const raced = (error as { code?: string } | null)?.code === "23505" ? await this.findBySourcePo(poId) : null;
+      if (raced) return raced;
+      throw error;
+    }
 
     await activityService.create({
       event_type: "invoice_converted_from_po",
