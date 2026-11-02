@@ -16,13 +16,31 @@ import { purchaseOrderService } from "@/services/purchaseOrderService";
 import { invoiceService } from "@/services/invoiceService";
 import { retailerService } from "@/services/retailerService";
 import { supportService } from "@/services/supportService";
+import { supplyChainService } from "@/services/supplyChainService";
 import { vendorService } from "@/services/vendorService";
 import type {
   PurchaseOrder,
   PurchaseOrderStatus,
   PurchaseOrderType,
 } from "@/types/domain";
-import { formatCurrency, formatDate } from "@/utils/format";
+import { formatCurrency, formatDate, formatDateOnly } from "@/utils/format";
+import { DEFAULT_LEAD_TIME_SETTINGS } from "@/utils/leadTime";
+import { nextStepLabel, type StageContext } from "@/utils/productionStage";
+
+function localTodayIso() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Falls back to planning defaults so the list still renders before the
+// supply chain settings migration has been applied.
+async function loadStageContext(): Promise<StageContext> {
+  const [settings, shutdowns] = await Promise.all([
+    supplyChainService.getSettings().catch(() => null),
+    supplyChainService.listShutdowns().catch(() => []),
+  ]);
+  return { settings: settings ?? DEFAULT_LEAD_TIME_SETTINGS, shutdowns, today: localTodayIso() };
+}
 
 const purchaseOrderStatuses: PurchaseOrderStatus[] = [
   "Draft",
@@ -87,6 +105,7 @@ export function PurchaseOrdersPage() {
       vendors: await vendorService.list(),
       retailers: await retailerService.list(),
       locations: await supportService.listLocations(),
+      stageContext: await loadStageContext(),
     }),
     [status, vendorId, retailerId, locationId, poType, search],
   );
@@ -348,6 +367,28 @@ export function PurchaseOrdersPage() {
                 </span>
               </div>
             ),
+          },
+          {
+            key: "next",
+            title: "Next",
+            render: (row) => {
+              const next = row.po_type === "Manufacturer PO" ? nextStepLabel(row, data.stageContext) : null;
+              if (!next) return <span className="helper-text">—</span>;
+              return (
+                <div className="cell-stack">
+                  {next.tone === "neutral" ? (
+                    <strong>{next.text}</strong>
+                  ) : (
+                    <span className={`status-badge ${next.tone === "late" ? "status-danger" : "status-warning"}`}>
+                      {next.text}
+                    </span>
+                  )}
+                  {next.expected ? (
+                    <span className="helper-text">Expected {formatDateOnly(next.expected)}</span>
+                  ) : null}
+                </div>
+              );
+            },
           },
           {
             key: "source",

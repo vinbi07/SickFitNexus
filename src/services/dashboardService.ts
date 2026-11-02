@@ -1,5 +1,9 @@
 import { assertSupabase } from "@/lib/supabase";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
+import { supplyChainService } from "@/services/supplyChainService";
+import { DEFAULT_LEAD_TIME_SETTINGS } from "@/utils/leadTime";
+import { currentStage, expectedStageDates, nextStage, shipModeOf, stageAlert, stageDates } from "@/utils/productionStage";
+import { buildOrderChain, chainStepAverages } from "@/utils/orderChain";
 import type {
   ActivityEvent,
   Alert,
@@ -35,7 +39,7 @@ import {
   isIgnoredProduct,
   isInventoryDanger,
 } from "@/utils/operations";
-import { daysBetween } from "@/utils/date";
+import { addDays, daysBetween, toDateInput } from "@/utils/date";
 
 const SHOPIFY_DASHBOARD_SYNC_FUNCTION = "shopify-dashboard-sync";
 
@@ -213,6 +217,47 @@ export const dashboardService = {
     const activeWholesalePipelineOrders = openRetailerOrders.filter((po) => normalizeChannelName(po.source_channel) !== "DTC + Shopify");
 
     const today = new Date().toISOString().slice(0, 10);
+
+    // Factory orders for the supply-chain map: everything still moving, plus
+    // anything received in the last two weeks so arrivals stay visible.
+    const [leadTimeSettings, factoryShutdowns] = await Promise.all([
+      supplyChainService.getSettings().catch(() => null),
+      supplyChainService.listShutdowns().catch(() => []),
+    ]);
+    const stageContext = {
+      settings: leadTimeSettings ?? DEFAULT_LEAD_TIME_SETTINGS,
+      shutdowns: factoryShutdowns,
+      today,
+    };
+    const recentReceiptCutoff = toDateInput(addDays(new Date(), -14));
+    // Milestone chain for every factory order; past orders set the "avg" pace for each step.
+    const chainByPo = new Map(
+      manufacturerOrders
+        .filter((po) => po.status !== "Cancelled")
+        .map((po) => [po.id, buildOrderChain(stageDates(po), expectedStageDates(po, stageContext)?.expected ?? {})]),
+    );
+    const supplyChainStepAverages = chainStepAverages([...chainByPo.values()]);
+    const supplyChainOrders: DashboardSnapshot["supplyChainOrders"] = manufacturerOrders
+      .filter((po) => po.status !== "Cancelled" && (!po.actual_delivery_date || po.actual_delivery_date >= recentReceiptCutoff))
+      .map((po) => {
+        const dates = stageDates(po);
+        const projection = expectedStageDates(po, stageContext);
+        const upcoming = nextStage(po);
+        return {
+          poId: po.id,
+          poNumber: po.po_number,
+          manufacturer: getManufacturerDisplayName(po, vendorById.get(po.vendor_id ?? "")),
+          units: Number(po.total_units ?? 0),
+          shipMode: shipModeOf(po),
+          stage: currentStage(po),
+          shippedDate: dates.Shipped,
+          expectedAtPort: dates["At US port"] ?? projection?.expected["At US port"] ?? null,
+          nextStage: upcoming,
+          nextStageDate: upcoming ? (projection?.expected[upcoming] ?? null) : null,
+          late: stageAlert(po, stageContext)?.severity === "late",
+          chain: chainByPo.get(po.id) ?? [],
+        };
+      });
     const twentySevenDaysAgo = dateOnlyDaysAgo(27);
     const currentYear = new Date().getFullYear();
     const currentYearStart = `${currentYear}-01-01`;
@@ -920,6 +965,8 @@ export const dashboardService = {
         .map(([status, count]) => ({ status, count }))
         .sort((left, right) => right.count - left.count),
       missingPoLocationCount,
+      supplyChainOrders,
+      supplyChainStepAverages,
       latePurchaseOrders,
       behindPaceAccounts,
       shippedUnitsLedger,

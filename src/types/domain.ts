@@ -279,6 +279,10 @@ export interface PurchaseOrder {
   notes: string | null;
   source_production_plan_id?: string | null;
   source_simulation_run_id?: string | null;
+  ship_mode?: "Sea" | "Air" | null;
+  freight_cost?: number | null;
+  production_stage?: string | null;
+  stage_dates?: Record<string, string> | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
@@ -741,7 +745,8 @@ export type AlertType =
   | "Unusually Large Order"
   | "Inventory Mismatch"
   | "Missing Delivery Date"
-  | "Missing SKU";
+  | "Missing SKU"
+  | "Production Milestone";
 
 export interface Alert {
   id: string;
@@ -846,6 +851,51 @@ export interface AppSettings {
   primary_color: string;
   secondary_color: string;
   prior_ytd_revenue: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProductionStageName =
+  | "Sent to vendor"
+  | "Paid"
+  | "In production"
+  | "Packing"
+  | "Shipped"
+  | "Labels created"
+  | "At US port"
+  | "Received";
+
+export interface OrderChainMilestone {
+  stage: ProductionStageName;
+  label: string;
+  phase: "wait" | "prod" | "pack" | "ship" | "recv";
+  /** Actual date, YYYY-MM-DD. */
+  date: string | null;
+  /** Expected date when not yet reached, shifted by how late the order is running. */
+  expected: string | null;
+}
+
+export interface SupplyChainSettings {
+  id: string;
+  prod_days: number;
+  pack_days: number;
+  sea_days: number;
+  air_days: number;
+  port_to_wh_days: number;
+  buffer_days: number;
+  packaging_reorder_pct: number;
+  sea_rate_per_pair: number | null;
+  air_rate_per_pair: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FactoryShutdown {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1006,6 +1056,24 @@ export interface DashboardSnapshot {
   }>;
   poStatusCounts: Array<{ status: PurchaseOrderStatus | string; count: number }>;
   missingPoLocationCount: number;
+  /** Factory orders placed along the factory → warehouse route for the supply-chain map. */
+  supplyChainOrders: Array<{
+    poId: string;
+    poNumber: string;
+    manufacturer: string;
+    units: number;
+    shipMode: "Sea" | "Air";
+    stage: ProductionStageName | null;
+    shippedDate: string | null;
+    expectedAtPort: string | null;
+    nextStage: ProductionStageName | null;
+    nextStageDate: string | null;
+    late: boolean;
+    /** Every milestone, order placed to delivered, with actual or expected dates. */
+    chain: OrderChainMilestone[];
+  }>;
+  /** Average days between each pair of consecutive milestones, across past factory orders. */
+  supplyChainStepAverages: Array<number | null>;
   latePurchaseOrders: Array<{
     poId: string;
     poNumber: string;

@@ -1,9 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { geoAlbersUsa, geoPath } from "d3-geo";
 import { Link, useNavigate } from "react-router-dom";
-import { feature } from "topojson-client";
-import usStatesTopology from "us-atlas/states-10m.json";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
 import "react-day-picker/style.css";
@@ -12,11 +9,16 @@ import { LoadingState } from "@/components/LoadingState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardService } from "@/services/dashboardService";
-import type { DashboardSnapshot } from "@/types/domain";
+import type { DashboardSnapshot, ProductionStageName } from "@/types/domain";
 import { addDays, daysBetween, toDateInput } from "@/utils/date";
 import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
-import type { FeatureCollection, Geometry } from "geojson";
-import type { GeometryCollection, Topology } from "topojson-specification";
+import { RetailPoMap } from "@/components/dashboard/map/RetailPoMap";
+import { SupplyChainMap } from "@/components/dashboard/map/SupplyChainMap";
+import { OrderChainBar } from "@/components/dashboard/map/OrderChainBar";
+import { stageTone } from "@/utils/supplyChainMap";
+import { STATE_COORDINATES, STATE_NAMES } from "@/lib/usStates";
+import { PRODUCTION_STAGES } from "@/utils/productionStage";
+import { buildOrderChain } from "@/utils/orderChain";
 
 type MapPoint = DashboardSnapshot["poMapPoints"][number];
 type ChannelRow = DashboardSnapshot["wholesaleChannelRows"][number];
@@ -29,123 +31,6 @@ type UrgentAction = {
   meta: string;
   tone: "danger" | "warning" | "success" | "info";
   to: string;
-};
-
-const US_STATES_FEATURES = (
-  feature(
-    usStatesTopology as unknown as Topology,
-    (usStatesTopology as unknown as { objects: { states: GeometryCollection } })
-      .objects.states,
-  ) as FeatureCollection<Geometry, Record<string, unknown>>
-).features;
-
-const US_MAP_PROJECTION = geoAlbersUsa().translate([490, 280]).scale(1120);
-const US_MAP_PATH = geoPath(US_MAP_PROJECTION);
-
-const STATE_COORDINATES: Record<string, [number, number]> = {
-  AL: [-86.8, 32.8],
-  AK: [-150.0, 64.0],
-  AZ: [-111.7, 34.2],
-  AR: [-92.4, 34.9],
-  CA: [-119.5, 37.2],
-  CO: [-105.5, 39.0],
-  CT: [-72.7, 41.6],
-  DE: [-75.5, 39.0],
-  FL: [-81.7, 27.8],
-  GA: [-83.4, 32.7],
-  HI: [-157.5, 20.9],
-  IA: [-93.5, 42.0],
-  ID: [-114.5, 44.2],
-  IL: [-89.2, 40.1],
-  IN: [-86.1, 40.0],
-  KS: [-98.4, 38.5],
-  KY: [-84.8, 37.8],
-  LA: [-91.9, 30.9],
-  MA: [-71.8, 42.3],
-  MD: [-76.7, 39.0],
-  ME: [-69.2, 45.2],
-  MI: [-85.5, 44.3],
-  MN: [-94.6, 46.0],
-  MO: [-92.5, 38.5],
-  MS: [-89.7, 32.7],
-  MT: [-110.4, 46.9],
-  NC: [-79.8, 35.5],
-  ND: [-100.5, 47.5],
-  NE: [-99.8, 41.5],
-  NH: [-71.6, 43.7],
-  NJ: [-74.5, 40.1],
-  NM: [-106.1, 34.4],
-  NV: [-116.6, 39.3],
-  NY: [-75.5, 42.9],
-  OH: [-82.8, 40.4],
-  OK: [-97.5, 35.6],
-  OR: [-120.5, 44.0],
-  PA: [-77.7, 40.9],
-  RI: [-71.5, 41.7],
-  SC: [-80.9, 33.8],
-  SD: [-100.2, 44.4],
-  TN: [-86.4, 35.8],
-  TX: [-99.9, 31.1],
-  UT: [-111.7, 39.3],
-  VA: [-78.6, 37.5],
-  VT: [-72.7, 44.0],
-  WA: [-120.7, 47.4],
-  WI: [-89.8, 44.6],
-  WV: [-80.6, 38.6],
-  WY: [-107.6, 43.0],
-};
-
-const STATE_NAMES: Record<string, string> = {
-  ALABAMA: "AL",
-  ALASKA: "AK",
-  ARIZONA: "AZ",
-  ARKANSAS: "AR",
-  CALIFORNIA: "CA",
-  COLORADO: "CO",
-  CONNECTICUT: "CT",
-  DELAWARE: "DE",
-  FLORIDA: "FL",
-  GEORGIA: "GA",
-  HAWAII: "HI",
-  IDAHO: "ID",
-  ILLINOIS: "IL",
-  INDIANA: "IN",
-  IOWA: "IA",
-  KANSAS: "KS",
-  KENTUCKY: "KY",
-  LOUISIANA: "LA",
-  MAINE: "ME",
-  MARYLAND: "MD",
-  MASSACHUSETTS: "MA",
-  MICHIGAN: "MI",
-  MINNESOTA: "MN",
-  MISSISSIPPI: "MS",
-  MISSOURI: "MO",
-  MONTANA: "MT",
-  NEBRASKA: "NE",
-  NEVADA: "NV",
-  "NEW HAMPSHIRE": "NH",
-  "NEW JERSEY": "NJ",
-  "NEW MEXICO": "NM",
-  "NEW YORK": "NY",
-  "NORTH CAROLINA": "NC",
-  "NORTH DAKOTA": "ND",
-  OHIO: "OH",
-  OKLAHOMA: "OK",
-  OREGON: "OR",
-  PENNSYLVANIA: "PA",
-  "RHODE ISLAND": "RI",
-  "SOUTH CAROLINA": "SC",
-  "SOUTH DAKOTA": "SD",
-  TENNESSEE: "TN",
-  TEXAS: "TX",
-  UTAH: "UT",
-  VERMONT: "VT",
-  VIRGINIA: "VA",
-  WASHINGTON: "WA",
-  "WEST VIRGINIA": "WV",
-  WISCONSIN: "WI",
-  WYOMING: "WY",
 };
 
 const PREVIEW_MAP_POINTS: MapPoint[] = [
@@ -238,6 +123,80 @@ const PREVIEW_CHANNELS: ChannelRow[] = [
   { channel: "Field sales preview", count: 3, value: 73000 },
   { channel: "Distributor preview", count: 2, value: 42000 },
 ];
+
+// Synthetic factory orders so the supply-chain view and its milestone bar can be demoed.
+const previewDay = (offset: number) => toDateInput(addDays(new Date(), offset));
+
+function previewSupplyOrder(
+  poId: string,
+  poNumber: string,
+  units: number,
+  shipMode: "Sea" | "Air",
+  actual: Partial<Record<ProductionStageName, number>>,
+  planned: Partial<Record<ProductionStageName, number>>,
+  late = false,
+): DashboardSnapshot["supplyChainOrders"][number] {
+  const toDates = (offsets: Partial<Record<ProductionStageName, number>>) =>
+    Object.fromEntries(Object.entries(offsets).map(([stage, offset]) => [stage, previewDay(offset as number)])) as Partial<
+      Record<ProductionStageName, string>
+    >;
+  const chain = buildOrderChain(toDates(actual), toDates(planned));
+  const reached = [...chain].reverse().find((milestone) => milestone.date) ?? null;
+  const upcoming = chain.find((milestone, index) => !milestone.date && index > chain.indexOf(reached ?? chain[0]));
+  return {
+    poId,
+    poNumber,
+    manufacturer: "Sample Factory",
+    units,
+    shipMode,
+    stage: reached?.stage ?? null,
+    shippedDate: chain[4].date,
+    expectedAtPort: chain[6].date ?? chain[6].expected,
+    nextStage: upcoming?.stage ?? null,
+    nextStageDate: upcoming?.expected ?? null,
+    late,
+    chain,
+  };
+}
+
+const PREVIEW_SUPPLY_ORDERS: DashboardSnapshot["supplyChainOrders"] = [
+  previewSupplyOrder(
+    "preview-mo-1",
+    "DEMO-260912",
+    2400,
+    "Sea",
+    { "Sent to vendor": -52, Paid: -47, "In production": -46, Packing: -21, Shipped: -16 },
+    { "At US port": 19, Received: 26 },
+  ),
+  previewSupplyOrder(
+    "preview-mo-2",
+    "DEMO-260723",
+    1200,
+    "Air",
+    { "Sent to vendor": -40, Paid: -36, "In production": -35, Packing: -9, Shipped: -4 },
+    { "At US port": 6, Received: 10 },
+  ),
+  previewSupplyOrder(
+    "preview-mo-3",
+    "DEMO-OCTOBER",
+    3000,
+    "Sea",
+    { "Sent to vendor": -30, Paid: -26, "In production": -25 },
+    { Packing: -3, Shipped: 2, "At US port": 37, Received: 44 },
+    true,
+  ),
+  previewSupplyOrder(
+    "preview-mo-4",
+    "DEMO-260519",
+    1800,
+    "Air",
+    { "Sent to vendor": -80, "Labels created": -22, Received: -3 },
+    {},
+  ),
+];
+
+/** Typical days per step for the preview, standing in for real order history. */
+const PREVIEW_STEP_AVERAGES = [5, 2, 25, 5, 18, 9, 4];
 
 const PREVIEW_STATUSES: StatusRow[] = [
   { status: "In Transit", count: 1 },
@@ -718,14 +677,56 @@ function getPoUrgencyReason(etaDate: string | null, today: Date) {
   return `ETA ${formatDate(etaDate)}`;
 }
 
+type MapView = "supply" | "retail";
+
+const SUPPLY_TONE_ORDER = { transit: 0, production: 1, waiting: 2, received: 3 } as const;
+
+const MAP_VIEW_KEY = "nexus-dashboard-map-view";
+
+function readMapView(): MapView {
+  try {
+    return window.localStorage.getItem(MAP_VIEW_KEY) === "retail" ? "retail" : "supply";
+  } catch {
+    return "supply";
+  }
+}
+
+const MAP_VIEW_COPY: Record<MapView, { title: string; description: string }> = {
+  supply: {
+    title: "Where everything is",
+    description: "Factory orders on their way from the factory to the warehouse.",
+  },
+  retail: {
+    title: "Where the POs are going",
+    description: "Open wholesale POs, account movement and regional action signals.",
+  },
+};
+
 function PoCommandMap({ data }: { data: DashboardSnapshot }) {
   const [previewMode, setPreviewMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [view, setView] = useState<MapView>(readMapView);
   const liveActions = useMemo(() => buildPoUrgentActions(data), [data]);
   const points = previewMode ? PREVIEW_MAP_POINTS : data.poMapPoints;
+  const navigate = useNavigate();
+  // Moving orders first, then production, waiting, and recent arrivals, matching how the chain bar reads.
+  const supplyOrders = [...(previewMode ? PREVIEW_SUPPLY_ORDERS : data.supplyChainOrders)].sort(
+    (left, right) => SUPPLY_TONE_ORDER[stageTone(left.stage)] - SUPPLY_TONE_ORDER[stageTone(right.stage)],
+  );
+  const stepAverages = previewMode ? PREVIEW_STEP_AVERAGES : data.supplyChainStepAverages;
+  const [pickedOrderId, setPickedOrderId] = useState<string | null>(null);
+  const selectedOrderId = supplyOrders.some((order) => order.poId === pickedOrderId)
+    ? pickedOrderId
+    : (supplyOrders[0]?.poId ?? null);
   const accounts = previewMode ? PREVIEW_ACCOUNTS : data.wholesaleAccounts;
   const channels = previewMode ? PREVIEW_CHANNELS : data.wholesaleChannelRows;
-  const statuses = previewMode ? PREVIEW_STATUSES : data.poStatusCounts;
+  const retailStatuses = previewMode ? PREVIEW_STATUSES : data.poStatusCounts;
+  // On the supply view the status card counts factory orders by production stage.
+  const stageStatuses: StatusRow[] = PRODUCTION_STAGES.map((stage) => ({
+    status: stage,
+    count: supplyOrders.filter((order) => order.stage === stage).length,
+  })).filter((row) => row.count > 0);
+  const statuses = view === "supply" ? stageStatuses : retailStatuses;
   const urgentActions = previewMode
     ? [
         {
@@ -767,6 +768,26 @@ function PoCommandMap({ data }: { data: DashboardSnapshot }) {
     ...channels.map((channel) => channel.value),
     1,
   );
+  const today = toDateInput(new Date());
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MAP_VIEW_KEY, view);
+    } catch {
+      // Storage can be unavailable (private mode); the view just won't persist.
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
+
+  const copy = MAP_VIEW_COPY[view];
 
   return (
     <section
@@ -775,23 +796,36 @@ function PoCommandMap({ data }: { data: DashboardSnapshot }) {
       <div className="po-map-header">
         <div>
           <div className="po-map-title-row">
-            <p className="section-eyebrow">PO Map</p>
+            <h2>{copy.title}</h2>
             {previewMode ? (
               <span className="preview-badge">Preview data</span>
             ) : null}
           </div>
-          <h2>Account & PO Map</h2>
-          <span>
-            Open wholesale POs, account movement, and regional action signals.
-          </span>
+          <span>{copy.description}</span>
         </div>
         <div className="po-map-controls">
+          <div className="map-view-toggle" role="group" aria-label="Map view">
+            <button
+              type="button"
+              aria-pressed={view === "supply"}
+              onClick={() => setView("supply")}
+            >
+              Supply chain
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "retail"}
+              onClick={() => setView("retail")}
+            >
+              Retail POs
+            </button>
+          </div>
           <button
             type="button"
-            className="btn btn-secondary btn-small"
+            className="btn btn-ghost btn-small"
             onClick={() => setPreviewMode((current) => !current)}
           >
-            {previewMode ? "Return to Live Data" : "Preview Map Data"}
+            {previewMode ? "Return to live data" : "Preview map data"}
           </button>
           <button
             type="button"
@@ -799,7 +833,7 @@ function PoCommandMap({ data }: { data: DashboardSnapshot }) {
             aria-pressed={fullscreen}
             onClick={() => setFullscreen((current) => !current)}
           >
-            {fullscreen ? "Exit Fullscreen" : "Fullscreen Map"}
+            {fullscreen ? "Exit fullscreen" : "Fullscreen"}
           </button>
         </div>
       </div>
@@ -807,100 +841,125 @@ function PoCommandMap({ data }: { data: DashboardSnapshot }) {
       <div className="po-map-stage">
         <div
           className="po-map-canvas"
-          aria-label={previewMode ? "Preview PO map" : "Live PO map"}
+          aria-label={previewMode ? "Preview map" : "Live map"}
         >
-          <UsPoMap regions={regions} previewMode={previewMode} />
-          {!regions.length ? (
-            <div className="po-map-empty">
-              <strong>No mapped PO states yet</strong>
-              <span>
-                {missingLocationCount
-                  ? `${missingLocationCount} open wholesale POs need ship-to state data.`
-                  : "Use preview mode to demonstrate the overlay model."}
-              </span>
+          <div className="po-map-area">
+            {view === "supply" ? (
+              <SupplyChainMap
+                orders={supplyOrders}
+                today={today}
+                selectedId={selectedOrderId}
+                onSelect={setPickedOrderId}
+              />
+            ) : (
+              <RetailPoMap regions={regions} previewMode={previewMode} />
+            )}
+            {view === "retail" && !regions.length ? (
+              <div className="po-map-empty">
+                <strong>No mapped PO states yet</strong>
+                <span>
+                  {missingLocationCount
+                    ? `${missingLocationCount} open wholesale POs need ship-to state data.`
+                    : "Use preview mode to see how the map fills in."}
+                </span>
+              </div>
+            ) : null}
+            {view === "retail" && missingLocationCount ? (
+              <div className="po-map-missing">
+                {missingLocationCount} missing location
+              </div>
+            ) : null}
+            <MapLegend view={view} />
+            <div className="po-map-overlays">
+              <MapOverlayCard
+                title="Accounts"
+                actionTo="/retailers"
+                position="top-left"
+              >
+                {accounts.slice(0, 4).map((account) => (
+                  <AccountOverlayRow
+                    key={account.retailerId}
+                    account={account}
+                    maxActivity={maxAccountActivity}
+                    to={
+                      previewMode
+                        ? "/retailers"
+                        : `/retailers/${account.retailerId}`
+                    }
+                  />
+                ))}
+              </MapOverlayCard>
+
+              <MapOverlayCard
+                title="Sales Channels"
+                actionTo="/reports"
+                position="bottom-left"
+              >
+                {channels.slice(0, 4).map((channel) => (
+                  <ChannelOverlayRow
+                    key={channel.channel}
+                    channel={channel}
+                    maxValue={maxChannelValue}
+                  />
+                ))}
+              </MapOverlayCard>
+
+              <MapOverlayCard
+                title={view === "supply" ? "Factory orders" : "PO Status"}
+                actionTo="/purchase-orders"
+                position="top-right"
+              >
+                {statuses.length ? (
+                  statuses.slice(0, 5).map((status) => (
+                    <Link
+                      key={status.status}
+                      className="overlay-row"
+                      to="/purchase-orders"
+                    >
+                      <span>{status.status}</span>
+                      <StatusBadge label={String(status.count)} />
+                    </Link>
+                  ))
+                ) : (
+                  <div className="overlay-empty">Nothing in progress.</div>
+                )}
+              </MapOverlayCard>
+
+              <MapOverlayCard
+                title="Urgent Actions"
+                actionTo="/alerts"
+                position="bottom-right"
+              >
+                {urgentActions.length ? (
+                  urgentActions.map((action) => (
+                    <Link
+                      key={action.id}
+                      className={`overlay-action overlay-action-${action.tone}`}
+                      to={action.to}
+                    >
+                      <span>{action.label}</span>
+                      <strong>{action.title}</strong>
+                      <em>{action.meta}</em>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="overlay-empty">
+                    No urgent PO actions right now.
+                  </div>
+                )}
+              </MapOverlayCard>
             </div>
-          ) : null}
-          {missingLocationCount ? (
-            <div className="po-map-missing">
-              {missingLocationCount} missing location
-            </div>
-          ) : null}
-          <MapLegend />
-          <div className="po-map-overlays">
-            <MapOverlayCard
-              title="Accounts"
-              actionTo="/retailers"
-              position="top-left"
-            >
-              {accounts.slice(0, 4).map((account) => (
-                <AccountOverlayRow
-                  key={account.retailerId}
-                  account={account}
-                  maxActivity={maxAccountActivity}
-                  to={
-                    previewMode
-                      ? "/retailers"
-                      : `/retailers/${account.retailerId}`
-                  }
-                />
-              ))}
-            </MapOverlayCard>
-
-            <MapOverlayCard
-              title="Sales Channels"
-              actionTo="/reports"
-              position="bottom-left"
-            >
-              {channels.slice(0, 4).map((channel) => (
-                <ChannelOverlayRow
-                  key={channel.channel}
-                  channel={channel}
-                  maxValue={maxChannelValue}
-                />
-              ))}
-            </MapOverlayCard>
-
-            <MapOverlayCard
-              title="PO Status"
-              actionTo="/purchase-orders"
-              position="top-right"
-            >
-              {statuses.slice(0, 5).map((status) => (
-                <Link
-                  key={status.status}
-                  className="overlay-row"
-                  to="/purchase-orders"
-                >
-                  <span>{status.status}</span>
-                  <StatusBadge label={String(status.count)} />
-                </Link>
-              ))}
-            </MapOverlayCard>
-
-            <MapOverlayCard
-              title="Urgent Actions"
-              actionTo="/alerts"
-              position="bottom-right"
-            >
-              {urgentActions.length ? (
-                urgentActions.map((action) => (
-                  <Link
-                    key={action.id}
-                    className={`overlay-action overlay-action-${action.tone}`}
-                    to={action.to}
-                  >
-                    <span>{action.label}</span>
-                    <strong>{action.title}</strong>
-                    <em>{action.meta}</em>
-                  </Link>
-                ))
-              ) : (
-                <div className="overlay-empty">
-                  No urgent PO actions right now.
-                </div>
-              )}
-            </MapOverlayCard>
           </div>
+          {view === "supply" ? (
+            <OrderChainBar
+              orders={supplyOrders}
+              selectedId={selectedOrderId}
+              averages={stepAverages}
+              today={today}
+              onSelect={setPickedOrderId}
+              onOpen={(poId) => navigate(previewMode ? "/purchase-orders" : `/purchase-orders/${poId}`)}
+            />
+          ) : null}
         </div>
       </div>
     </section>
@@ -976,126 +1035,30 @@ function ChannelOverlayRow({
   );
 }
 
-function UsPoMap({
-  regions,
-  previewMode,
-}: {
-  regions: Array<{
-    state: string;
-    count: number;
-    firstPoint: MapPoint;
-    tone: string;
-  }>;
-  previewMode: boolean;
-}) {
-  return (
-    <svg
-      className="po-map-svg"
-      viewBox="0 0 980 560"
-      role="img"
-      aria-label="United States purchase order activity map"
-    >
-      {US_STATES_FEATURES.map((stateFeature, index) => {
-        const pathData = US_MAP_PATH(stateFeature);
-        if (!pathData) return null;
-        return (
-          <path
-            key={String(stateFeature.id ?? index)}
-            className="po-map-geography"
-            d={pathData}
-          />
-        );
-      })}
-      {regions.map((region) => {
-        const coordinates = STATE_COORDINATES[region.state];
-        if (!coordinates) return null;
-        return (
-          <MapMarker
-            key={region.state}
-            state={region.state}
-            count={region.count}
-            tone={region.tone}
-            radius={Math.min(17, Math.max(9, 7 + region.count * 2.2))}
-            coordinates={coordinates}
-            to={
-              previewMode
-                ? "/purchase-orders"
-                : `/purchase-orders/${region.firstPoint.poId}`
-            }
-            title={`${region.state}: ${region.count} PO${region.count === 1 ? "" : "s"}`}
-          />
-        );
-      })}
-    </svg>
-  );
-}
-
-function MapMarker({
-  state,
-  count,
-  tone,
-  radius,
-  coordinates,
-  to,
-  title,
-}: {
-  state: string;
-  count: number;
-  tone: string;
-  radius: number;
-  coordinates: [number, number];
-  to: string;
-  title: string;
-}) {
-  const navigate = useNavigate();
-
-  const openRoute = () => navigate(to);
-  const projectedCoordinates = US_MAP_PROJECTION(coordinates);
-  if (!projectedCoordinates) return null;
-
-  return (
-    <g
-      className={`po-region-bubble po-region-${tone}`}
-      role="link"
-      tabIndex={0}
-      transform={`translate(${projectedCoordinates[0]} ${projectedCoordinates[1]})`}
-      onClick={openRoute}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openRoute();
-        }
-      }}
-    >
-      <title>{title}</title>
-      <circle r={radius} />
-      <text y="-1">{state}</text>
-      <text y="9" className="po-region-count">
-        {count}
-      </text>
-    </g>
-  );
-}
-
-function MapLegend() {
+function MapLegend({ view }: { view: MapView }) {
+  const items =
+    view === "supply"
+      ? [
+          ["waiting", "Not paid yet"],
+          ["production", "In production"],
+          ["transit", "In transit"],
+          ["received", "Received"],
+          ["late", "Late"],
+        ]
+      : [
+          ["danger", "Late"],
+          ["warning", "Attention"],
+          ["success", "In route"],
+          ["info", "Open"],
+        ];
   return (
     <div className="po-map-legend" aria-label="Map marker legend">
-      <span>
-        <i className="legend-dot legend-dot-danger" />
-        Late
-      </span>
-      <span>
-        <i className="legend-dot legend-dot-warning" />
-        Attention
-      </span>
-      <span>
-        <i className="legend-dot legend-dot-success" />
-        In route
-      </span>
-      <span>
-        <i className="legend-dot legend-dot-info" />
-        Open
-      </span>
+      {items.map(([tone, label]) => (
+        <span key={tone}>
+          <i className={`legend-dot map-tone-dot-${tone}`} />
+          {label}
+        </span>
+      ))}
     </div>
   );
 }

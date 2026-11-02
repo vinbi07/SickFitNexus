@@ -2,7 +2,11 @@ import { assertSupabase } from "@/lib/supabase";
 import { activityService } from "@/services/activityService";
 import { insertTable, listTable, updateTable } from "@/services/baseService";
 import type { Alert, InventoryEvent, PoLineItem, Product, PurchaseOrder, ShopifyOrder, ShopifyOrderLineItem, Vendor } from "@/types/domain";
+import { supplyChainService } from "@/services/supplyChainService";
 import { calculateForecastMetric, calculateVendorDelay } from "@/utils/forecasting";
+import { formatDateOnly } from "@/utils/format";
+import { DEFAULT_LEAD_TIME_SETTINGS } from "@/utils/leadTime";
+import { stageAlert } from "@/utils/productionStage";
 import { isGiftCardProductName, isIgnoredProduct } from "@/utils/operations";
 
 export interface AlertListItem extends Alert {
@@ -197,6 +201,15 @@ export const alertService = {
     const purchaseOrders = (poResponse.data ?? []) as PurchaseOrder[];
     const vendors = (vendorResponse.data ?? []) as Vendor[];
     const newAlerts: Partial<Alert>[] = [];
+    const [leadTimeSettings, shutdowns] = await Promise.all([
+      supplyChainService.getSettings().catch(() => null),
+      supplyChainService.listShutdowns().catch(() => []),
+    ]);
+    const stageContext = {
+      settings: leadTimeSettings ?? DEFAULT_LEAD_TIME_SETTINGS,
+      shutdowns,
+      today: new Date().toISOString().slice(0, 10),
+    };
 
     for (const product of products) {
       if (isGiftCardProductName(product.name) || isIgnoredProduct(product)) continue;
@@ -243,6 +256,17 @@ export const alertService = {
           alert_type: "PO Overdue",
           severity: "High",
           message: `PO ${po.po_number} is running ${calculateVendorDelay(po)} days late.`,
+          related_entity_type: "purchase_order",
+          related_entity_id: po.id,
+        });
+      }
+
+      const productionAlert = po.po_type === "Manufacturer PO" ? stageAlert(po, stageContext) : null;
+      if (productionAlert) {
+        newAlerts.push({
+          alert_type: "Production Milestone",
+          severity: productionAlert.severity === "late" ? "High" : "Low",
+          message: `PO ${po.po_number}: ${productionAlert.message} (expected ${formatDateOnly(productionAlert.expected)}).`,
           related_entity_type: "purchase_order",
           related_entity_id: po.id,
         });

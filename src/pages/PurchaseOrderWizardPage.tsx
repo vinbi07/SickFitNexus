@@ -12,6 +12,7 @@ import { PoStepOrderDetails, isPoStepOrderDetailsValid } from "@/components/docu
 import { PoStepAddresses, isPoStepAddressesValid } from "@/components/documents/steps/po/PoStepAddresses";
 import { PoStepLineItems, isPoStepLineItemsValid } from "@/components/documents/steps/po/PoStepLineItems";
 import { PoStepReview, getPoStepReviewIssues } from "@/components/documents/steps/po/PoStepReview";
+import { PoTypeChooser } from "@/components/documents/steps/po/PoTypeChooser";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { buyerService } from "@/services/buyerService";
 import { purchaseOrderService } from "@/services/purchaseOrderService";
@@ -37,9 +38,40 @@ const STEP_DEFS: WizardStepDef<PoWizardState>[] = [
 
 export function PurchaseOrderWizardPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const duplicateFromId = searchParams.get("copyFrom") ?? "";
+  // Step one asks which kind of PO to make. Manufacturer orders use the
+  // builder's manufacturer form; this wizard covers retailer POs.
+  const needsTypeChoice = !duplicateFromId && searchParams.get("type") !== "retailer";
 
+  if (needsTypeChoice) {
+    return (
+      <PoTypeChooser
+        onContinue={(choice) => {
+          if (choice === "manufacturer") {
+            navigate("/purchase-orders/new?type=manufacturer");
+            return;
+          }
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("type", "retailer");
+            return next;
+          });
+        }}
+      />
+    );
+  }
+
+  return <RetailerPurchaseOrderWizard navigate={navigate} duplicateFromId={duplicateFromId} />;
+}
+
+function RetailerPurchaseOrderWizard({
+  navigate,
+  duplicateFromId,
+}: {
+  navigate: ReturnType<typeof useNavigate>;
+  duplicateFromId: string;
+}) {
   const { data, loading, error: loadError } = useAsyncData(async () => {
     const [retailers, buyers, locations, barcodes, vendors, poNumber] = await Promise.all([
       retailerService.list(),

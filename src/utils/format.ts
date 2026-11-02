@@ -21,6 +21,17 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+/** Formats a date-only (YYYY-MM-DD) value without shifting it a day in US time zones. */
+export function formatDateOnly(value: string | null | undefined) {
+  if (!value) return "N/A";
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(year, month - 1, day));
+}
+
 export function toSlug(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }

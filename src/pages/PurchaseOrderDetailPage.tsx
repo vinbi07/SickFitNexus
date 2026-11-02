@@ -6,12 +6,14 @@ import { ErrorState } from "@/components/ErrorState";
 import { InventoryImpactList } from "@/components/InventoryImpactList";
 import { LoadingState } from "@/components/LoadingState";
 import { NotificationBanner } from "@/components/NotificationBanner";
-import { OrderSummaryCard } from "@/components/OrderSummaryCard";
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader, type PageHeaderAction } from "@/components/PageHeader";
+import { SummaryStrip } from "@/components/SummaryStrip";
+import { Disclosure } from "@/components/Disclosure";
 import { ProductNameWithMetadata } from "@/components/ProductNameWithMetadata";
 import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentView";
 import { PurchaseOrderDrawer } from "@/components/PurchaseOrderDrawer";
 import { ManufacturerPoDocumentView } from "@/components/orders/ManufacturerPoDocumentView";
+import { ProductionStageTimeline } from "@/components/orders/ProductionStageTimeline";
 import { ReceiveInventoryModal } from "@/components/ReceiveInventoryModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/context/AuthContext";
@@ -26,7 +28,7 @@ import type {
   PurchaseOrderStatus,
 } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
-import { formatCurrency, formatDate } from "@/utils/format";
+import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
 import {
   getAvailableAfterIncoming,
   getInventoryHealthTone,
@@ -118,7 +120,6 @@ export function PurchaseOrderDetailPage() {
     openDrawer,
     closeDrawer,
   } = usePurchaseOrderDrawer();
-  const actionsMenuRef = useRef<HTMLDetailsElement>(null);
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
     message: string;
@@ -359,10 +360,56 @@ export function PurchaseOrderDetailPage() {
     }
   };
 
-  function runAndClose(action: () => void) {
-    if (actionsMenuRef.current) actionsMenuRef.current.open = false;
-    action();
-  }
+  // One obvious next step in the header; everything else lives under "More actions".
+  const allActions: PageHeaderAction[] = [
+    { label: "Edit general info", onClick: () => openDrawer(poId, "edit") },
+    { label: "Edit PO", onClick: () => navigate(`/purchase-orders/${poId}/edit`) },
+    { label: "Duplicate PO", onClick: () => navigate(`/purchase-orders/new?copyFrom=${poId}`) },
+    { label: "Convert to invoice", onClick: () => void handleConvertToInvoice() },
+    { label: "Email PO", onClick: handleEmailPo },
+    ...(isManufacturerPo
+      ? [
+          { label: "Mark as paid", onClick: () => void handleMarkAsPaid(), disabled: paymentStatus === "Paid" },
+          {
+            label: "Mark as shipped",
+            onClick: () => void handleMarkAsShipped(),
+            disabled: Boolean(data.purchaseOrder.ship_date),
+          },
+          {
+            label: "Receive inventory",
+            onClick: () => setReceiving(true),
+            disabled: manufacturingStatus === "Received",
+          },
+        ]
+      : [
+          { label: "Approve", onClick: () => void handleApprove() },
+          { label: "Counter", onClick: () => void handleCounter() },
+          { label: "Queue for fulfillment", onClick: () => void handleQueueForFulfillment() },
+          { label: "Fulfill", onClick: () => void handleFulfill() },
+          ...(EDITABLE_PO_STATUSES.includes(data.purchaseOrder.status)
+            ? EDITABLE_PO_STATUSES.filter((status) => status !== data.purchaseOrder.status).map((status) => ({
+                label: `Set status: ${status}`,
+                onClick: () => void handleStatusChange(status),
+                disabled: statusUpdating,
+              }))
+            : []),
+          { label: "Reject / cancel", onClick: () => void handleReject(), danger: true },
+        ]),
+  ];
+  const primaryLabel = isManufacturerPo
+    ? paymentStatus !== "Paid"
+      ? "Mark as paid"
+      : !data.purchaseOrder.ship_date
+        ? "Mark as shipped"
+        : manufacturingStatus !== "Received"
+          ? "Receive inventory"
+          : "Edit general info"
+    : ["Not Requested", "Pending Approval"].includes(data.purchaseOrder.approval_status) &&
+        data.purchaseOrder.status !== "Cancelled"
+      ? "Approve"
+      : "Edit general info";
+  const primaryAction = allActions.find((action) => action.label === primaryLabel && !action.disabled) ?? null;
+  const secondaryActions = allActions.filter((action) => action !== primaryAction);
 
   return (
     <div className="section-stack">
@@ -384,247 +431,52 @@ export function PurchaseOrderDetailPage() {
               data.purchaseOrder.bill_to_company_name ??
               "Purchase Order")
         }
+        badge={
+          <StatusBadge
+            label={isManufacturerPo ? manufacturingStatus : data.purchaseOrder.status}
+          />
+        }
         description={
           isManufacturerPo
-            ? `Manufacturing Order · ${getManufacturingOrderTitle(data.purchaseOrder)}`
-            : `PO ${data.purchaseOrder.po_number} · ${data.purchaseOrder.po_type}${data.purchaseOrder.buyers?.buyer_name ? ` | ${data.purchaseOrder.buyers.buyer_name}` : ""}`
+            ? `Manufacturing order · ${getManufacturingOrderTitle(data.purchaseOrder)}`
+            : `PO ${data.purchaseOrder.po_number}${data.purchaseOrder.buyers?.buyer_name ? ` · ${data.purchaseOrder.buyers.buyer_name}` : ""}`
         }
-        actions={
-          <div className="btn-row">
-            <StatusBadge label={data.purchaseOrder.status} />
+        primaryAction={
+          primaryAction ? (
             <button
               type="button"
-              className="btn btn-secondary btn-small"
-              onClick={() => runAndClose(() => openDrawer(poId, "edit"))}
+              className="btn btn-primary"
+              disabled={statusUpdating}
+              onClick={primaryAction.onClick}
             >
-              Edit General Info
+              {primaryAction.label}
             </button>
-            <details className="actions-dropdown" ref={actionsMenuRef}>
-              <summary className="btn btn-secondary btn-small">Actions</summary>
-              <div className="actions-dropdown-menu">
-                <button
-                  type="button"
-                  onClick={() =>
-                    runAndClose(() => navigate(`/purchase-orders/${poId}/edit`))
-                  }
-                >
-                  Edit PO
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    runAndClose(() =>
-                      navigate(`/purchase-orders/new?copyFrom=${poId}`),
-                    )
-                  }
-                >
-                  Duplicate PO
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    runAndClose(() => void handleConvertToInvoice())
-                  }
-                >
-                  Convert to Invoice
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runAndClose(handleEmailPo)}
-                >
-                  Email PO
-                </button>
-                {isManufacturerPo ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={paymentStatus === "Paid"}
-                      onClick={() => runAndClose(() => void handleMarkAsPaid())}
-                    >
-                      Mark as Paid
-                    </button>
-                    <button
-                      type="button"
-                      disabled={Boolean(data.purchaseOrder.ship_date)}
-                      onClick={() =>
-                        runAndClose(() => void handleMarkAsShipped())
-                      }
-                    >
-                      Mark as Shipped
-                    </button>
-                    <button
-                      type="button"
-                      disabled={manufacturingStatus === "Received"}
-                      onClick={() => runAndClose(() => setReceiving(true))}
-                    >
-                      Receive Inventory
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => runAndClose(() => void handleApprove())}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runAndClose(() => void handleCounter())}
-                    >
-                      Counter
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        runAndClose(() => void handleQueueForFulfillment())
-                      }
-                    >
-                      Queue for Fulfillment
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runAndClose(() => void handleFulfill())}
-                    >
-                      Fulfill
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => runAndClose(() => void handleReject())}
-                    >
-                      Reject / Cancel
-                    </button>
-                  </>
-                )}
-              </div>
-            </details>
-          </div>
+          ) : null
         }
+        secondaryActions={secondaryActions}
       />
-      <OrderSummaryCard
-        heading={
-          data.purchaseOrder.retailers?.name ??
-          data.purchaseOrder.vendors?.name ??
-          data.purchaseOrder.bill_to_company_name ??
-          "Purchase Order"
-        }
-        metaLine={
-          isManufacturerPo
-            ? `Manufacturing Order · ${getManufacturingOrderTitle(data.purchaseOrder)}`
-            : `PO ${data.purchaseOrder.po_number} · ${data.purchaseOrder.po_type}${data.purchaseOrder.buyers?.buyer_name ? ` | ${data.purchaseOrder.buyers.buyer_name}` : ""}`
-        }
-        statusControl={
-          <div className="cell-stack">
-            <StatusBadge
-              label={
-                isManufacturerPo
-                  ? manufacturingStatus
-                  : data.purchaseOrder.status
-              }
-            />
-            {!isManufacturerPo &&
-            EDITABLE_PO_STATUSES.includes(data.purchaseOrder.status) ? (
-              <select
-                disabled={statusUpdating}
-                value=""
-                onChange={(event) =>
-                  void handleStatusChange(event.target.value)
-                }
-              >
-                <option value="">Change status...</option>
-                {EDITABLE_PO_STATUSES.filter(
-                  (status) => status !== data.purchaseOrder.status,
-                ).map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            ) : !isManufacturerPo ? (
-              <span className="helper-text">
-                Use Approve/Fulfill/Reject for this status — they update
-                inventory too.
-              </span>
-            ) : null}
-          </div>
-        }
-        fields={
+      <SummaryStrip
+        items={
           isManufacturerPo
             ? [
-                {
-                  label: "Ordered",
-                  value: formatDate(data.purchaseOrder.order_date),
-                },
-                {
-                  label: "Expected Ship",
-                  value: formatDate(data.purchaseOrder.ship_date),
-                },
-                {
-                  label: "Expected Arrival",
-                  value: formatDate(
-                    data.purchaseOrder.eta_date ??
-                      data.purchaseOrder.expected_delivery_date,
-                  ),
-                },
-                {
-                  label: "Received Date",
-                  value: data.purchaseOrder.actual_delivery_date
-                    ? formatDate(data.purchaseOrder.actual_delivery_date)
-                    : "Not yet received",
-                },
-                {
-                  label: "Payment Status",
-                  value: <StatusBadge label={paymentStatus} />,
-                },
-                { label: "Total Units", value: data.purchaseOrder.total_units },
-                {
-                  label: "Total Cost",
-                  value: formatCurrency(data.purchaseOrder.total_cost),
-                },
-                {
-                  label: "Inventory Impact",
-                  value: <InventoryImpactList lineItems={data.lineItems} />,
-                },
+                { label: "Total cost", value: formatCurrency(data.purchaseOrder.total_cost) },
+                { label: "Units", value: formatNumber(data.purchaseOrder.total_units) },
+                { label: "Payment", value: <StatusBadge label={paymentStatus} /> },
+                data.purchaseOrder.actual_delivery_date
+                  ? { label: "Received", value: formatDate(data.purchaseOrder.actual_delivery_date) }
+                  : {
+                      label: "Expected arrival",
+                      value: formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date),
+                    },
               ]
             : [
+                { label: "Total", value: formatCurrency(data.purchaseOrder.total_cost) },
+                { label: "Units", value: formatNumber(data.purchaseOrder.total_units) },
                 {
-                  label: "Created",
-                  value: formatDate(data.purchaseOrder.order_date),
+                  label: "Needed by",
+                  value: formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date),
                 },
-                {
-                  label: "Needed By",
-                  value: formatDate(
-                    data.purchaseOrder.eta_date ??
-                      data.purchaseOrder.expected_delivery_date,
-                  ),
-                },
-                {
-                  label: "Payment Status",
-                  value: (
-                    <StatusBadge
-                      label={data.purchaseOrder.invoice_status ?? "Open"}
-                    />
-                  ),
-                },
-                {
-                  label: "Fulfillment Status",
-                  value: (
-                    <StatusBadge label={data.purchaseOrder.allocation_status} />
-                  ),
-                },
-                { label: "Total Units", value: data.purchaseOrder.total_units },
-                {
-                  label: "Total Cost",
-                  value: formatCurrency(data.purchaseOrder.total_cost),
-                },
-                {
-                  label: "Paid to Delivered",
-                  value:
-                    paidToDeliveredDays !== null
-                      ? `${paidToDeliveredDays}d`
-                      : "Open",
-                },
+                { label: "Payment", value: <StatusBadge label={data.purchaseOrder.invoice_status ?? "Open"} /> },
               ]
         }
       />
@@ -734,12 +586,119 @@ export function PurchaseOrderDetailPage() {
       ) : null}
       {activeTab === "overview" ? (
       <>
+      {isManufacturerPo ? (
+        <ProductionStageTimeline
+          purchaseOrder={data.purchaseOrder}
+          onChanged={reload}
+          onReceive={() => setReceiving(true)}
+        />
+      ) : null}
       <div className="panel section-stack">
         <div className="panel-header">
-          <h3>Lifecycle</h3>
+          <h3>Line items</h3>
         </div>
-        <div className="detail-grid">
-          {(
+        <DataTable
+          columns={[
+            {
+              key: "product_name",
+              title: "Product",
+              width: "25%",
+              render: (row) => (
+                <ProductNameWithMetadata
+                  product={row.products}
+                  fallbackName={row.product_name}
+                  fallbackSku={row.sku}
+                />
+              ),
+            },
+            {
+              key: "case_quantity",
+              priority: "secondary",
+              title: "Cases",
+              render: (row) => row.case_quantity,
+            },
+            {
+              key: "quantity_ordered",
+              title: "Ordered",
+              render: (row) => row.quantity_ordered,
+            },
+            {
+              key: "unit_quantity",
+              priority: "secondary",
+              title: "Units",
+              render: (row) => row.unit_quantity,
+            },
+            {
+              key: "quantity_received",
+              title: "Received",
+              render: (row) => row.quantity_received,
+            },
+            {
+              key: "unit_cost",
+              priority: "secondary",
+              title: "Unit Cost",
+              render: (row) => formatCurrency(row.unit_cost),
+            },
+            {
+              key: "line_total",
+              title: "Extended Cost",
+              render: (row) =>
+                formatCurrency(row.extended_cost || row.line_total),
+            },
+            {
+              key: "inventory_status",
+              title: "Inventory",
+              render: (row) => {
+                const product = row.products;
+                if (!product) return <StatusBadge label="Unknown" />;
+                const incoming =
+                  reorderBySku.get(row.sku)?.incomingQuantity ?? 0;
+                const tone = getInventoryHealthTone(
+                  product.current_inventory,
+                  [],
+                  product.safety_stock ?? 0,
+                );
+                const riskStatus = getInventoryRiskStatus(
+                  product.current_inventory,
+                  tone,
+                  incoming,
+                );
+                const label = riskStatus === "Safe" ? "In Stock" : riskStatus;
+                if (!isManufacturerPo) return <StatusBadge label={label} />;
+                const incomingFromThisOrder = Math.max(
+                  Number(row.quantity_ordered ?? 0) -
+                    Number(row.quantity_received ?? 0),
+                  0,
+                );
+                const committed = Number(product.inventory_allocated ?? 0);
+                return (
+                  <div className="cell-stack">
+                    <StatusBadge label={label} />
+                    <span className="helper-text">
+                      {getOversoldLabel(product.current_inventory) ??
+                        `Current Stock: ${product.current_inventory}`}
+                    </span>
+                    <span className="helper-text">
+                      Incoming From This Order: {incomingFromThisOrder}
+                    </span>
+                    <span className="helper-text">
+                      Available After Incoming:{" "}
+                      {getAvailableAfterIncoming(
+                        product.current_inventory,
+                        incoming,
+                        committed,
+                      )}
+                    </span>
+                  </div>
+                );
+              },
+            },
+          ]}
+          rows={data.lineItems}
+        />
+      </div>
+      {(() => {
+        const fields: Array<{ label: string; value: ReactNode; show: boolean; wide?: boolean }> = (
             [
               {
                 label: "Retailer",
@@ -872,6 +831,12 @@ export function PurchaseOrderDetailPage() {
                 wide: true,
               },
               {
+                label: "Inventory Impact",
+                value: <InventoryImpactList lineItems={data.lineItems} />,
+                show: isManufacturerPo,
+                wide: true,
+              },
+              {
                 label: "Notes",
                 value: data.purchaseOrder.notes ?? "No notes added.",
                 show: Boolean(data.purchaseOrder.notes),
@@ -883,121 +848,34 @@ export function PurchaseOrderDetailPage() {
               show: boolean;
               wide?: boolean;
             }>
-          )
-            .filter((field) => field.show)
-            .map((field) => (
-              <div
-                className="detail-card"
-                key={field.label}
-                style={field.wide ? { gridColumn: "1 / -1" } : undefined}
-              >
-                <span>{field.label}</span>
-                <strong>{field.value}</strong>
-              </div>
-            ))}
-        </div>
-      </div>
-      <div className="panel section-stack">
-        <div className="panel-header">
-          <h3>PO Line Items</h3>
-        </div>
-        <DataTable
-          columns={[
-            {
-              key: "product_name",
-              title: "Product",
-              width: "25%",
-              render: (row) => (
-                <ProductNameWithMetadata
-                  product={row.products}
-                  fallbackName={row.product_name}
-                  fallbackSku={row.sku}
-                />
-              ),
-            },
-            {
-              key: "case_quantity",
-              title: "Cases",
-              render: (row) => row.case_quantity,
-            },
-            {
-              key: "quantity_ordered",
-              title: "Ordered",
-              render: (row) => row.quantity_ordered,
-            },
-            {
-              key: "unit_quantity",
-              title: "Units",
-              render: (row) => row.unit_quantity,
-            },
-            {
-              key: "quantity_received",
-              title: "Received",
-              render: (row) => row.quantity_received,
-            },
-            {
-              key: "unit_cost",
-              title: "Unit Cost",
-              render: (row) => formatCurrency(row.unit_cost),
-            },
-            {
-              key: "line_total",
-              title: "Extended Cost",
-              render: (row) =>
-                formatCurrency(row.extended_cost || row.line_total),
-            },
-            {
-              key: "inventory_status",
-              title: "Inventory",
-              render: (row) => {
-                const product = row.products;
-                if (!product) return <StatusBadge label="Unknown" />;
-                const incoming =
-                  reorderBySku.get(row.sku)?.incomingQuantity ?? 0;
-                const tone = getInventoryHealthTone(
-                  product.current_inventory,
-                  [],
-                  product.safety_stock ?? 0,
-                );
-                const riskStatus = getInventoryRiskStatus(
-                  product.current_inventory,
-                  tone,
-                  incoming,
-                );
-                const label = riskStatus === "Safe" ? "In Stock" : riskStatus;
-                if (!isManufacturerPo) return <StatusBadge label={label} />;
-                const incomingFromThisOrder = Math.max(
-                  Number(row.quantity_ordered ?? 0) -
-                    Number(row.quantity_received ?? 0),
-                  0,
-                );
-                const committed = Number(product.inventory_allocated ?? 0);
-                return (
-                  <div className="cell-stack">
-                    <StatusBadge label={label} />
-                    <span className="helper-text">
-                      {getOversoldLabel(product.current_inventory) ??
-                        `Current Stock: ${product.current_inventory}`}
-                    </span>
-                    <span className="helper-text">
-                      Incoming From This Order: {incomingFromThisOrder}
-                    </span>
-                    <span className="helper-text">
-                      Available After Incoming:{" "}
-                      {getAvailableAfterIncoming(
-                        product.current_inventory,
-                        incoming,
-                        committed,
-                      )}
-                    </span>
-                  </div>
-                );
-              },
-            },
-          ]}
-          rows={data.lineItems}
-        />
-      </div>
+        ).filter((field) => field.show);
+        // Lead with a handful of facts; the rest waits behind "All details".
+        const keyFields = fields.filter((field) => !field.wide).slice(0, 6);
+        const moreFields = fields.filter((field) => !keyFields.includes(field));
+        const renderField = (field: (typeof fields)[number]) => (
+          <div
+            className="detail-card"
+            key={field.label}
+            style={field.wide ? { gridColumn: "1 / -1" } : undefined}
+          >
+            <span>{field.label}</span>
+            <strong>{field.value}</strong>
+          </div>
+        );
+        return (
+          <div className="panel section-stack">
+            <div className="panel-header">
+              <h3>Details</h3>
+            </div>
+            <div className="detail-grid">{keyFields.map(renderField)}</div>
+            {moreFields.length ? (
+              <Disclosure summary={`All details (${moreFields.length} more)`} openSummary="Hide extra details">
+                <div className="detail-grid">{moreFields.map(renderField)}</div>
+              </Disclosure>
+            ) : null}
+          </div>
+        );
+      })()}
       </>
       ) : null}
       {activeTab === "fulfillment" ? (

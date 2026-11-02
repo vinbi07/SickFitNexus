@@ -1,0 +1,963 @@
+/*
+ * Dashboard map — "Where everything is" / "Where the POs are going".
+ * Soft water, sage land with a low shadow, white borders, sock markers.
+ * Motion is calm: routes drift in the direction goods travel, markers glide
+ * in once, late items breathe. All of it stops under reduced motion.
+ */
+
+:root {
+  --map-water-top: #eef4f8;
+  --map-water-bottom: #e2ecf2;
+  --map-land: #dfe5da;
+  --map-line: #ffffff;
+  --map-nation: #9aa79a;
+  --map-state-label: #a3ad9f;
+  --map-route: #9aa39a;
+  --map-marker-shadow: rgba(0, 0, 0, 0.18);
+
+  --map-tone-waiting: #a9aea8;
+  --map-tone-production: #2a78d6;
+  --map-tone-transit: #eb6834;
+  --map-tone-received: #1baf7a;
+  --map-tone-late: #c0262d;
+  --map-tone-attention: #d97706;
+  --map-phase-pack: #8fb8e8;
+
+  --map-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Card shell ──────────────────────────────────────── */
+
+.po-command-map {
+  min-height: 0;
+  padding: var(--nx-card-padding);
+  border: 0;
+  background: var(--nx-surface);
+}
+
+.po-command-map-preview {
+  box-shadow: 0 0 0 2px var(--nx-warning-bg), var(--nx-shadow-card);
+}
+
+.po-map-header {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.po-map-header h2 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-size: var(--nx-text-card-title);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+.po-map-header span {
+  color: var(--nx-muted);
+  font-size: var(--nx-text-small);
+}
+
+.po-map-title-row {
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.po-map-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.map-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--nx-radius-menu);
+  background: var(--nx-neutral-bg);
+}
+
+.map-view-toggle button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--nx-radius-control);
+  background: transparent;
+  color: var(--nx-text-soft);
+  font: inherit;
+  font-size: var(--nx-text-small);
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 0.2s var(--map-ease-out), color 0.2s var(--map-ease-out), box-shadow 0.2s var(--map-ease-out);
+}
+
+.map-view-toggle button:hover {
+  color: var(--nx-ink);
+}
+
+.map-view-toggle button[aria-pressed="true"] {
+  background: var(--nx-surface);
+  color: var(--nx-ink);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+
+.preview-badge,
+.po-map-missing {
+  border: 0;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-warning-bg);
+  color: var(--nx-warning);
+  font-size: var(--nx-text-caption);
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Canvas and map frame ────────────────────────────── */
+
+.po-map-stage,
+.po-map-canvas {
+  min-height: 0;
+}
+
+/* The canvas is the water; the map area sits on top and the milestone bar floats below it. */
+.po-map-canvas {
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: var(--nx-radius-card);
+  background: var(--map-water-bottom);
+  overflow: hidden;
+}
+
+.po-map-area {
+  position: relative;
+  height: clamp(480px, 56vw, 640px);
+}
+
+.map-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-water-top {
+  stop-color: var(--map-water-top);
+}
+
+.map-water-bottom {
+  stop-color: var(--map-water-bottom);
+}
+
+.map-graticule {
+  fill: none;
+  stroke: var(--map-line);
+  stroke-opacity: 0.7;
+  stroke-width: 0.7;
+}
+
+.map-land {
+  fill: var(--map-land);
+}
+
+.map-borders {
+  fill: none;
+  stroke: var(--map-line);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.map-borders-fine {
+  stroke-width: 0.6;
+}
+
+.map-borders-states {
+  stroke-width: 1.4;
+}
+
+.map-nation-outline {
+  fill: none;
+  stroke: var(--map-nation);
+  stroke-width: 1.2;
+}
+
+.map-state-label {
+  fill: var(--map-state-label);
+  font-size: var(--nx-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+/* ── Routes and arcs ─────────────────────────────────── */
+
+.map-routes {
+  transition: opacity 0.6s var(--map-ease-out);
+}
+
+.map-route {
+  fill: none;
+  stroke: var(--map-route);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.map-route-ocean {
+  stroke-dasharray: 6 5;
+}
+
+.map-route-air {
+  stroke-width: 1.2;
+  stroke-dasharray: 2 5;
+}
+
+/* A sparse bright dash that drifts along each leg, factory → warehouse. */
+.map-route-flow {
+  fill: none;
+  stroke: var(--map-line);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 2 26;
+  opacity: 0.95;
+  animation: map-flow 18s linear infinite;
+}
+
+.map-route-flow-truck {
+  animation-duration: 9s;
+}
+
+.map-route-label {
+  fill: var(--nx-muted);
+  font-size: var(--nx-text-caption);
+  font-weight: 500;
+  paint-order: stroke;
+  stroke: var(--map-water-top);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.map-arc {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-opacity: 0.7;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+}
+
+.map-arc-flow {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 3 16;
+  animation: map-flow 14s linear infinite;
+  transition: opacity 0.6s var(--map-ease-out);
+}
+
+.map-arc-danger,
+.map-arc-flow-danger {
+  stroke: var(--map-tone-late);
+}
+
+.map-arc-warning,
+.map-arc-flow-warning {
+  stroke: var(--map-tone-attention);
+}
+
+.map-arc-success,
+.map-arc-flow-success {
+  stroke: var(--map-tone-received);
+}
+
+.map-arc-info,
+.map-arc-flow-info {
+  stroke: var(--map-tone-production);
+}
+
+@keyframes map-flow {
+  to {
+    stroke-dashoffset: -280;
+  }
+}
+
+/* ── Stops ───────────────────────────────────────────── */
+
+.map-node-hit {
+  fill: transparent;
+}
+
+.map-node-dot {
+  fill: var(--nx-surface);
+  stroke: var(--nx-ink);
+  stroke-width: 1.5;
+}
+
+.map-home-dot {
+  fill: var(--nx-ink);
+  stroke: var(--nx-surface);
+  stroke-width: 2;
+}
+
+.map-node-label,
+.map-marker-label {
+  fill: var(--nx-ink);
+  font-size: var(--nx-text-small);
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--map-water-top);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.map-marker-label {
+  font-size: var(--nx-text-caption);
+}
+
+.map-empty-note {
+  fill: var(--nx-muted);
+  font-size: var(--nx-text-small);
+}
+
+/* ── Sock markers ────────────────────────────────────── */
+
+.sock-marker.is-interactive {
+  cursor: pointer;
+}
+
+.sock-marker:focus {
+  outline: none;
+}
+
+.sock-marker-shadow {
+  fill: var(--map-marker-shadow);
+}
+
+.sock-marker-body {
+  stroke: #ffffff;
+  stroke-linejoin: round;
+  transition: filter 0.2s var(--map-ease-out), stroke 0.2s var(--map-ease-out);
+}
+
+.sock-marker-cuff {
+  fill: #ffffff;
+  opacity: 0.9;
+}
+
+.sock-marker:hover .sock-marker-body {
+  filter: brightness(1.08) drop-shadow(0 2px 3px rgba(16, 24, 40, 0.25));
+}
+
+.sock-marker:focus-visible .sock-marker-body {
+  stroke: var(--nx-focus);
+}
+
+.map-tone-waiting .sock-marker-body { fill: var(--map-tone-waiting); }
+.map-tone-production .sock-marker-body,
+.map-tone-info .sock-marker-body { fill: var(--map-tone-production); }
+.map-tone-transit .sock-marker-body { fill: var(--map-tone-transit); }
+.map-tone-received .sock-marker-body,
+.map-tone-success .sock-marker-body { fill: var(--map-tone-received); }
+.map-tone-warning .sock-marker-body { fill: var(--map-tone-attention); }
+.map-tone-late .sock-marker-body,
+.map-tone-danger .sock-marker-body { fill: var(--map-tone-late); }
+
+/* Late items breathe: a soft ring that swells and fades. */
+.sock-marker-pulse {
+  fill: none;
+  stroke: var(--map-tone-late);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-pulse 2.4s var(--map-ease-out) infinite;
+}
+
+@keyframes map-pulse {
+  from {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+/* ── Tooltip ─────────────────────────────────────────── */
+
+.map-tooltip {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  gap: 2px;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: var(--nx-radius-menu);
+  background: var(--nx-surface);
+  box-shadow: var(--nx-shadow-float);
+  color: var(--nx-text-soft);
+  font-size: var(--nx-text-caption);
+  line-height: 1.45;
+  pointer-events: none;
+  animation: map-tip-in 0.18s var(--map-ease-out);
+}
+
+.map-tooltip strong {
+  color: var(--nx-ink);
+  font-size: var(--nx-text-small);
+  font-weight: 600;
+}
+
+.map-tooltip em {
+  color: var(--nx-muted);
+  font-style: normal;
+}
+
+.map-tooltip-alert {
+  color: var(--nx-danger);
+  font-weight: 600;
+}
+
+@keyframes map-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ── Legend and overlay cards ────────────────────────── */
+
+/* One row: size to its items instead of the old 420px cap. */
+.po-map-legend {
+  flex-wrap: nowrap;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  gap: 14px;
+  padding: 6px 14px;
+  white-space: nowrap;
+  border: 0;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-surface);
+  backdrop-filter: none;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+}
+
+.po-map-legend span {
+  gap: 6px;
+  color: var(--nx-text-soft);
+  font-size: var(--nx-text-caption);
+  font-weight: 500;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.map-tone-dot-waiting { background: var(--map-tone-waiting); }
+.map-tone-dot-production,
+.map-tone-dot-info { background: var(--map-tone-production); }
+.map-tone-dot-transit { background: var(--map-tone-transit); }
+.map-tone-dot-received,
+.map-tone-dot-success { background: var(--map-tone-received); }
+.map-tone-dot-warning { background: var(--map-tone-attention); }
+.map-tone-dot-late,
+.map-tone-dot-danger { background: var(--map-tone-late); }
+
+.po-map-overlays {
+  inset: 14px;
+}
+
+.map-overlay-card {
+  width: min(300px, calc(50% - 20px));
+  max-height: 232px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--nx-radius-card);
+  background: var(--nx-surface);
+  backdrop-filter: none;
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.1), 0 0 0 1px rgba(16, 24, 40, 0.04);
+}
+
+.map-overlay-head {
+  margin-bottom: 8px;
+}
+
+.map-overlay-head h3 {
+  color: var(--nx-ink);
+  font-size: var(--nx-text-small);
+  font-weight: 600;
+  text-transform: none;
+}
+
+.map-overlay-head a {
+  color: var(--nx-text-soft);
+  font-size: var(--nx-text-caption);
+  font-weight: 550;
+}
+
+.map-overlay-list {
+  gap: 2px;
+}
+
+.overlay-row,
+.overlay-visual-row,
+.overlay-action {
+  border: 0;
+  border-radius: var(--nx-radius-control);
+  background: transparent;
+  transition: background-color 0.15s var(--map-ease-out);
+}
+
+.overlay-row:hover,
+.overlay-visual-row:hover,
+.overlay-action:hover {
+  background: var(--nx-surface-muted);
+}
+
+.overlay-row {
+  padding: 7px 8px;
+}
+
+.overlay-row span,
+.overlay-visual-head span {
+  color: var(--nx-ink);
+  font-size: var(--nx-text-caption);
+  font-weight: 550;
+}
+
+.overlay-visual-row {
+  padding: 8px;
+}
+
+.overlay-visual-head strong,
+.overlay-action span {
+  color: var(--nx-muted);
+  font-size: var(--nx-text-micro);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.overlay-visual-row em,
+.overlay-action em {
+  color: var(--nx-muted);
+  font-size: var(--nx-text-micro);
+}
+
+.overlay-bar-track {
+  height: 6px;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-neutral-bg);
+}
+
+.overlay-bar-fill {
+  border-radius: var(--nx-radius-pill);
+  transform-origin: left center;
+  animation: map-bar-grow 0.9s var(--map-ease-out) both;
+}
+
+.overlay-bar-fill-account {
+  background: var(--map-tone-received);
+}
+
+.overlay-bar-fill-channel {
+  background: var(--map-tone-production);
+}
+
+@keyframes map-bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.overlay-action {
+  padding: 8px;
+}
+
+.overlay-action strong {
+  color: var(--nx-ink);
+  font-size: var(--nx-text-small);
+}
+
+.overlay-action-danger {
+  background: var(--nx-danger-bg);
+}
+
+.overlay-action-warning {
+  background: var(--nx-warning-bg);
+}
+
+.overlay-empty {
+  padding: 12px;
+  border: 0;
+  border-radius: var(--nx-radius-control);
+  background: var(--nx-surface-muted);
+  color: var(--nx-muted);
+  font-size: var(--nx-text-caption);
+}
+
+/* ── Selected order: its own route and a soft halo ─────── */
+
+.map-sel {
+  fill: none;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  transition: opacity 0.4s var(--map-ease-out);
+}
+
+.map-sel.is-ahead {
+  stroke-dasharray: 5 5;
+  opacity: 0.7;
+}
+
+.map-sel-pack {
+  stroke: var(--map-phase-pack);
+}
+
+.map-sel-ship {
+  stroke: var(--map-tone-transit);
+}
+
+.map-sel-recv {
+  stroke: var(--map-tone-received);
+}
+
+.sock-marker-halo {
+  fill: var(--nx-surface);
+  fill-opacity: 0.85;
+  stroke: var(--nx-ink);
+  stroke-width: 1.5;
+}
+
+/* ── Milestone bar ─────────────────────────────────────── */
+
+.order-chain {
+  margin: 0 14px 14px;
+  padding: 14px 16px 16px;
+  border-radius: var(--nx-radius-card);
+  background: var(--nx-surface);
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.1), 0 0 0 1px rgba(16, 24, 40, 0.04);
+  animation: map-chain-in 0.5s var(--map-ease-out) both;
+}
+
+.order-chain-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.order-chain-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.order-chain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-neutral-bg);
+  color: var(--nx-text-soft);
+  font: inherit;
+  font-size: var(--nx-text-caption);
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 0.15s var(--map-ease-out), color 0.15s var(--map-ease-out), box-shadow 0.15s var(--map-ease-out);
+}
+
+.order-chain-chip:hover {
+  color: var(--nx-ink);
+}
+
+.order-chain-chip.is-on {
+  background: var(--nx-surface);
+  color: var(--nx-ink);
+  font-weight: 650;
+  box-shadow: inset 0 0 0 1.5px var(--nx-ink);
+}
+
+.order-chain-chip i {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--nx-radius-pill);
+}
+
+.order-chain-summary {
+  flex: 1 1 260px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--nx-text-soft);
+  font-size: var(--nx-text-small);
+  text-align: right;
+}
+
+.order-chain-summary strong {
+  color: var(--nx-ink);
+  font-size: var(--nx-text-body);
+}
+
+.order-chain-meta {
+  color: var(--nx-muted);
+  font-size: var(--nx-text-caption);
+}
+
+.order-chain-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The line every step hangs from. */
+.order-chain-track::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 6.25%;
+  right: 6.25%;
+  height: 2px;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-divider);
+}
+
+.order-chain-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  text-align: center;
+  animation: map-chain-in 0.5s var(--map-ease-out) both;
+}
+
+.order-chain-step:nth-child(2) { animation-delay: 40ms; }
+.order-chain-step:nth-child(3) { animation-delay: 80ms; }
+.order-chain-step:nth-child(4) { animation-delay: 120ms; }
+.order-chain-step:nth-child(5) { animation-delay: 160ms; }
+.order-chain-step:nth-child(6) { animation-delay: 200ms; }
+.order-chain-step:nth-child(7) { animation-delay: 240ms; }
+.order-chain-step:nth-child(8) { animation-delay: 280ms; }
+
+.order-chain-dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--nx-border-hover);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-surface);
+}
+
+.order-chain-step.is-done .order-chain-dot {
+  border: 2px solid var(--nx-surface);
+  box-shadow: 0 0 0 1px var(--nx-border-strong);
+}
+
+.phase-wait { background: var(--map-tone-waiting); }
+.phase-prod { background: var(--map-tone-production); }
+.phase-pack { background: var(--map-phase-pack); }
+.phase-ship { background: var(--map-tone-transit); }
+.phase-recv { background: var(--map-tone-received); }
+
+.order-chain-label {
+  margin-top: 6px;
+  color: var(--nx-muted);
+  font-size: var(--nx-text-micro);
+  line-height: 1.25;
+}
+
+.order-chain-step.is-done .order-chain-label {
+  color: var(--nx-ink);
+  font-weight: 600;
+}
+
+.order-chain-date {
+  color: var(--nx-ink);
+  font-size: var(--nx-text-small);
+  font-weight: 700;
+}
+
+.order-chain-step.is-expected .order-chain-date {
+  color: var(--nx-muted);
+  font-weight: 500;
+}
+
+.order-chain-step.is-none .order-chain-date {
+  color: var(--nx-border-hover);
+  font-weight: 500;
+}
+
+.order-chain-gap {
+  color: var(--nx-muted);
+  font-size: var(--nx-text-micro);
+}
+
+.order-chain-gap em {
+  color: var(--nx-placeholder);
+  font-style: normal;
+}
+
+.order-chain-gap.is-slow {
+  color: var(--nx-warning);
+  font-weight: 600;
+}
+
+.order-chain-gap.is-fast {
+  color: var(--nx-success);
+  font-weight: 600;
+}
+
+@keyframes map-chain-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (max-width: 760px) {
+  .order-chain {
+    margin: 0;
+  }
+
+  .po-map-legend {
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .order-chain-summary {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .order-chain-track {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+
+  .order-chain-track::before {
+    display: none;
+  }
+}
+
+/* ── Fullscreen ──────────────────────────────────────── */
+
+.po-command-map-fullscreen {
+  inset: 16px;
+  max-height: calc(100vh - 32px);
+  border-radius: var(--nx-radius-modal);
+  box-shadow: var(--nx-shadow-float);
+  background: var(--nx-surface);
+}
+
+/* Keep the title visible in fullscreen; it names the current view. */
+.po-command-map-fullscreen .po-map-header {
+  justify-content: space-between;
+}
+
+.po-command-map-fullscreen .po-map-header > div:first-child {
+  display: block;
+}
+
+.po-command-map-fullscreen .po-map-canvas {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.po-command-map-fullscreen .po-map-area {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/* ── Narrow screens: map on top, overlays stacked below ─ */
+
+@media (max-width: 1260px) {
+  .po-map-canvas {
+    gap: 12px;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .po-map-area {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: auto;
+  }
+
+  .map-frame {
+    position: relative;
+    inset: auto;
+    aspect-ratio: 1000 / 560;
+    border-radius: var(--nx-radius-card);
+    background: var(--map-water-bottom);
+    overflow: hidden;
+  }
+
+  .po-map-legend {
+    position: static;
+    align-self: center;
+    max-width: 100%;
+    transform: none;
+  }
+
+  .po-map-missing,
+  .po-map-empty {
+    position: static;
+    transform: none;
+  }
+
+  .po-map-overlays {
+    position: static;
+    inset: auto;
+  }
+
+  .po-command-map-fullscreen {
+    overflow-y: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-chain,
+  .order-chain-step,
+  .map-route-flow,
+  .map-arc-flow,
+  .sock-marker-pulse,
+  .overlay-bar-fill,
+  .map-tooltip {
+    animation: none;
+  }
+
+  .map-routes,
+  .map-sel,
+  .order-chain-chip,
+  .map-arc-flow,
+  .map-view-toggle button,
+  .sock-marker-body {
+    transition: none;
+  }
+}

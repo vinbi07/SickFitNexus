@@ -12,14 +12,14 @@ const PO_CARD: DocumentTypeCard = {
   id: "purchase-order",
   title: "Purchase Order",
   description: "An order received from a retailer or wholesale customer.",
-  href: "/purchase-orders/new/wizard",
+  href: "/purchase-orders/new/wizard?type=retailer",
 };
 
 const MO_CARD: DocumentTypeCard = {
   id: "manufacturing-order",
   title: "Manufacturing Order",
   description: "An order SickFit sends to a manufacturer to produce inventory.",
-  href: "/manufacturing-orders/new/wizard",
+  href: "/purchase-orders/new?type=manufacturer",
 };
 
 export function DocumentTypeSelector() {

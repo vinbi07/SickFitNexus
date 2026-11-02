@@ -6943,3 +6943,102 @@ textarea {
     font-size: 0.72rem;
   }
 }
+
+/* Production stage track (manufacturer PO detail) */
+.stage-track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.stage-step {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.stage-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 2px solid var(--brand-border);
+  background: #ffffff;
+}
+
+.stage-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stage-step--done .stage-dot {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.stage-step--next {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+}
+
+.stage-step--next .stage-dot {
+  border-color: var(--info);
+}
+
+.stage-step--late {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.stage-step--late .stage-dot {
+  border-color: var(--danger);
+}
+
+.stage-mark-action {
+  justify-content: flex-end;
+}
+
+/* New PO type chooser */
+.po-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+
+.po-type-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.po-type-card h3,
+.po-type-card p {
+  margin: 0;
+}
+
+.po-type-card:hover {
+  border-color: var(--nx-border-hover);
+}
+
+.po-type-card:focus-visible {
+  outline: 2px solid var(--nx-ink);
+  outline-offset: 2px;
+}
+
+.po-type-card.is-selected {
+  border-color: var(--nx-ink);
+  box-shadow: 0 0 0 1px var(--nx-ink), var(--nx-shadow-card);
+}

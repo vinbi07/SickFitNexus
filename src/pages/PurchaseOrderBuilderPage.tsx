@@ -241,14 +241,17 @@ function buildLineFromDesign(
   };
 }
 
-function buildEmptyBuilderState(poNumber: string): BuilderState {
+function buildEmptyBuilderState(
+  poNumber: string,
+  poType: PurchaseOrder["po_type"] = "Retailer PO",
+): BuilderState {
   return {
     po_number: poNumber,
     vendor_id: "",
     retailer_id: "",
     buyer_id: "",
     location_id: "",
-    po_type: "Retailer PO",
+    po_type: poType,
     status: "Draft",
     order_date: today(),
     start_ship_date: "",
@@ -388,7 +391,12 @@ export function PurchaseOrderBuilderPage() {
   const editId = params.id ?? "";
   const duplicateFromId = searchParams.get("copyFrom") ?? "";
   const isEditMode = Boolean(editId);
-  const autosaveKey = `${AUTOSAVE_PREFIX}:${isEditMode ? editId : duplicateFromId || "new"}`;
+  const newPoType: PurchaseOrder["po_type"] =
+    searchParams.get("type") === "manufacturer" ? "Manufacturer PO" : "Retailer PO";
+  // Manufacturer drafts get their own slot so a half-finished retailer PO is
+  // never restored when someone chose "Manufacturer Order".
+  const newDraftSlot = newPoType === "Manufacturer PO" ? "new-manufacturer" : "new";
+  const autosaveKey = `${AUTOSAVE_PREFIX}:${isEditMode ? editId : duplicateFromId || newDraftSlot}`;
   const { user } = useAuth();
   const {
     isOpen: drawerOpen,
@@ -553,7 +561,7 @@ export function PurchaseOrderBuilderPage() {
         );
       }
     } else {
-      setPurchaseOrder(buildEmptyBuilderState(data.poNumber));
+      setPurchaseOrder(buildEmptyBuilderState(data.poNumber, newPoType));
       setLineItems([buildEmptyLineItem(0)]);
     }
 
@@ -784,7 +792,7 @@ export function PurchaseOrderBuilderPage() {
 
   function handleStartFresh() {
     window.localStorage.removeItem(autosaveKey);
-    setPurchaseOrder(buildEmptyBuilderState(data?.poNumber ?? ""));
+    setPurchaseOrder(buildEmptyBuilderState(data?.poNumber ?? "", newPoType));
     setLineItems([buildEmptyLineItem(0)]);
     setMfrLines([]);
     setLoadedFromDraft(false);

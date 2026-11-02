@@ -9,6 +9,7 @@ import type { AppSettings } from "@/types/domain";
 import { useState } from "react";
 import { getErrorMessage } from "@/utils/errors";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
+import { LeadTimeSettingsPanel } from "@/components/settings/LeadTimeSettingsPanel";
 
 export function SettingsPage() {
   const { data, loading, error, reload } = useAsyncData(() => supportService.listSettings(), []);
@@ -186,6 +187,7 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+      <LeadTimeSettingsPanel />
     </div>
   );
 }

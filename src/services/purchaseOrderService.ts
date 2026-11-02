@@ -4,6 +4,12 @@ import { deleteFromTable, insertTable, upsertTable } from "@/services/baseServic
 import { dashboardSessionService } from "@/services/dashboardSessionService";
 import { inventoryService } from "@/services/inventoryService";
 import { applyCalculatedSafetyStock } from "@/services/productPlanningService";
+import { supplyChainService } from "@/services/supplyChainService";
+import {
+  currentStage,
+  expectedStageDates,
+  type ProductionStage,
+} from "@/utils/productionStage";
 import {
   buildPurchaseOrderDocumentHtml,
   buildPurchaseOrderDocumentModel,
@@ -788,6 +794,87 @@ export const purchaseOrderService = {
     return data as PurchaseOrder;
   },
 
+  /**
+   * Records that a manufacturer PO reached a production stage on `date`.
+   * Paid and Shipped also write invoice_paid_at / ship_date so existing reports
+   * keep working. Received is left to receiveInventory, which moves stock.
+   */
+  async setProductionStage(id: string, stage: ProductionStage, date: string) {
+    if (stage === "Received") {
+      throw new Error("Use Receive Inventory to mark this order received so stock is updated.");
+    }
+    const supabase = assertSupabase();
+    const { data: current, error } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    const before = current as PurchaseOrder;
+    const fromStage = currentStage(before);
+
+    const patch: Partial<PurchaseOrder> = {
+      stage_dates: { ...(before.stage_dates ?? {}), [stage]: date },
+    };
+    if (stage === "Paid" && !before.invoice_paid_at) patch.invoice_paid_at = `${date}T12:00:00Z`;
+    if (stage === "Shipped") {
+      patch.ship_date = date;
+      if (["Draft", "Pending", "Ordered"].includes(before.status)) patch.status = "In Transit";
+    }
+
+    const next = { ...before, ...patch } as PurchaseOrder;
+    const reached = currentStage(next);
+    patch.production_stage = reached;
+
+    // First time a paid date exists, fill the expected arrival so calendar and
+    // overdue checks have something to work from.
+    if (!before.expected_delivery_date && next.invoice_paid_at) {
+      const [settings, shutdowns] = await Promise.all([
+        supplyChainService.getSettings(),
+        supplyChainService.listShutdowns(),
+      ]);
+      const projection = expectedStageDates(next, { settings, shutdowns });
+      if (projection?.expected.Received) patch.expected_delivery_date = projection.expected.Received;
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("purchase_orders")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+    const updated = data as PurchaseOrder;
+
+    const actor = await getDashboardActor().catch(() => null);
+    if (actor) {
+      await recordStatusHistory(
+        id,
+        fromStage ? `Production: ${fromStage}` : null,
+        `Production: ${reached ?? stage}`,
+        actor,
+        `${stage} on ${date}.`,
+      );
+    }
+    await activityService.create({
+      event_type: "purchase_order_production_stage",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number}: ${stage}`,
+      description: `${stage} recorded for ${date}.`,
+      metadata: { purchaseOrderId: id, stage, date },
+    });
+    return updated;
+  },
+
+  async updateShipping(id: string, patch: { ship_mode: "Sea" | "Air"; freight_cost: number | null }) {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("purchase_orders")
+      .update({ ship_mode: patch.ship_mode, freight_cost: patch.freight_cost })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as PurchaseOrder;
+  },
+
   async receiveInventory(
     id: string,
     lines: Array<{ lineItemId: string; productId: string; locationId: string; quantityToReceive: number }>,
@@ -845,7 +932,7 @@ export const purchaseOrderService = {
 
     await supabase
       .from("purchase_orders")
-      .update({ actual_delivery_date: new Date().toISOString().slice(0, 10) })
+      .update({ actual_delivery_date: new Date().toISOString().slice(0, 10), production_stage: "Received" })
       .eq("id", id);
 
     const actor = await getDashboardActor().catch(() => null);
