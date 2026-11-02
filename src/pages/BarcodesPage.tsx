@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import Papa from "papaparse";
+import { useSearchParams } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ListTabs, ResourceTable } from "@/components/lists/ResourceTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -62,7 +63,11 @@ export function BarcodesPage() {
   const [busyDelete, setBusyDelete] = useState(false);
   const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"all" | "problems" | "unlinked">("all");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState<"all" | "problems" | "unlinked">(
+    initialTab === "problems" || initialTab === "unlinked" ? initialTab : "all",
+  );
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data, loading, error, reload } = useAsyncData(
     async () => ({

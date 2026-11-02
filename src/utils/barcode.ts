@@ -106,3 +106,25 @@ export function assessProductBarcode(
   if (book.includes(normalized)) return assessment("verified", "Matches the barcode book.");
   return assessment("unconfirmed", "From Shopify only. Check it against GS1 before printing.");
 }
+
+/**
+ * Likely corrections for a code that fails the check: leading zeros that
+ * spreadsheets drop, or the right check digit if only that is off. These are
+ * guesses to confirm against GS1, never to apply blindly.
+ */
+export function suggestBarcodeRepairs(value: string | null | undefined) {
+  const code = normalizeBarcode(value);
+  if (!code || checkBarcode(code).ok) return [];
+  const suggestions: Array<{ code: string; reason: string }> = [];
+  for (let zeros = 1; code.length + zeros <= 13; zeros += 1) {
+    const padded = "0".repeat(zeros) + code;
+    if (GTIN_LENGTHS.has(padded.length) && checkBarcode(padded).ok) {
+      suggestions.push({ code: padded, reason: `Adds ${zeros === 1 ? "a leading zero" : `${zeros} leading zeros`}, which spreadsheets often drop.` });
+    }
+  }
+  if (GTIN_LENGTHS.has(code.length)) {
+    const fixed = code.slice(0, -1) + gs1CheckDigit(code.slice(0, -1));
+    suggestions.push({ code: fixed, reason: "Same first digits with the correct check digit." });
+  }
+  return suggestions;
+}

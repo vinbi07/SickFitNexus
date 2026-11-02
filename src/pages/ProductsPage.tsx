@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
@@ -95,6 +95,19 @@ export function ProductsPage() {
 
   useReloadOnShopifySync(reload);
   const { running: shopifySyncing, syncNow: syncShopifyNow } = useShopifySync();
+
+  // The product page sends "Edit" here as ?edit=<id>: open the form, then drop the param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+  useEffect(() => {
+    if (!editId || !data) return;
+    const product = data.products.find((candidate) => candidate.id === editId);
+    if (product) setEditing(product);
+    setSearchParams((params) => {
+      params.delete("edit");
+      return params;
+    }, { replace: true });
+  }, [editId, data, setSearchParams]);
 
   if (loading) return <LoadingState />;
   if (error || !data)

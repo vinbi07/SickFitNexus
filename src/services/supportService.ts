@@ -290,6 +290,66 @@ export const supportService = {
       generatedDocuments: (generatedDocsResponse.data ?? []) as GeneratedPurchaseOrderDocument[],
     };
   },
+  /**
+   * A product page shows the whole Shopify-style product, so this loads the
+   * SKU's family (its parent style, sibling variants and synced variants of
+   * the same Shopify product) with stock, sales and PO history for all of them.
+   */
+  getProductFamilyDetail: async (id: string) => {
+    const supabase = assertSupabase();
+    const productSelect = "*, vendors:vendors!products_vendor_id_fkey(*), product_barcode_links(*, product_barcodes(*))";
+    const { data: requested, error: requestedError } = await supabase.from("products").select("id, parent_product_id, shopify_product_id").eq("id", id).single();
+    if (requestedError) throw requestedError;
+    const rootId = (requested.parent_product_id as string | null) ?? id;
+
+    const [familyResponse, shopifyResponse, vendorsResponse] = await Promise.all([
+      supabase.from("products").select(productSelect).or(`id.eq.${rootId},parent_product_id.eq.${rootId}`),
+      requested.shopify_product_id
+        ? supabase.from("products").select(productSelect).eq("shopify_product_id", requested.shopify_product_id)
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from("vendors").select("*"),
+    ]);
+    if (familyResponse.error) throw familyResponse.error;
+    if (shopifyResponse.error) throw shopifyResponse.error;
+    if (vendorsResponse.error) throw vendorsResponse.error;
+
+    const members = new Map<string, Product>();
+    for (const row of [...(familyResponse.data ?? []), ...(shopifyResponse.data ?? [])] as Product[]) members.set(row.id, row);
+    const ids = [...members.keys()];
+    const upcs = [...new Set([...members.values()].map((product) => product.upc).filter((upc): upc is string => Boolean(upc)))];
+
+    const [eventsResponse, itemsResponse, reservationsResponse, lineItemsResponse, sharedUpcResponse] = await Promise.all([
+      supabase.from("inventory_events").select("*").in("product_id", ids).order("event_date", { ascending: false }),
+      supabase.from("inventory_items").select("*, locations:locations!inventory_items_location_id_fkey(*)").in("product_id", ids),
+      supabase.from("inventory_reservations").select("*").in("product_id", ids).order("created_at", { ascending: false }),
+      supabase.from("po_line_items").select("*, purchase_orders(*)").in("product_id", ids).order("created_at", { ascending: false }),
+      upcs.length
+        ? supabase.from("products").select("id, sku, name, upc, shopify_admin_url, shopify_variant_id, ignored, shopify_status, shopify_removed_at").in("upc", upcs).not("id", "in", `(${ids.join(",")})`)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (eventsResponse.error) throw eventsResponse.error;
+    if (itemsResponse.error) throw itemsResponse.error;
+    if (reservationsResponse.error) throw reservationsResponse.error;
+    if (lineItemsResponse.error) throw lineItemsResponse.error;
+    if (sharedUpcResponse.error) throw sharedUpcResponse.error;
+
+    const events = (eventsResponse.data ?? []) as InventoryEvent[];
+    const calculated = applyCalculatedSafetyStock([...members.values()], (vendorsResponse.data ?? []) as Vendor[], events);
+    return {
+      requestedId: id,
+      products: attachVariantRelations(
+        calculated.map((product) => ({ ...product, inventory_available: deriveInventoryAvailable(product) })),
+      ),
+      events,
+      inventoryItems: (itemsResponse.data ?? []) as Array<InventoryItem & { locations?: Location | null }>,
+      reservations: (reservationsResponse.data ?? []) as InventoryReservation[],
+      poLineItems: (lineItemsResponse.data ?? []) as Array<PoLineItem & { purchase_orders?: PurchaseOrder | null }>,
+      /** Other products in the catalog carrying one of this family's UPCs. */
+      sharedUpcProducts: (sharedUpcResponse.data ?? []) as Array<
+        Pick<Product, "id" | "sku" | "name" | "upc" | "shopify_admin_url" | "shopify_variant_id" | "ignored" | "shopify_status" | "shopify_removed_at">
+      >,
+    };
+  },
   saveProduct,
   deleteProduct: (id: string) => deleteFromTable("products", id),
   bulkUpdateProducts: (ids: string[], patch: Partial<Product>) => updateTableByIds<Product>("products", ids, patch),
