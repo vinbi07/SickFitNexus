@@ -1,25 +1,26 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { DashboardCard } from "@/components/DashboardCard";
 import { DataTable } from "@/components/DataTable";
+import { Disclosure } from "@/components/Disclosure";
+import { FilterChips, ListTabs, ResourceTable } from "@/components/lists/ResourceTable";
+import { FilterPopover } from "@/components/products/FilterPopover";
+import { latestShopifySync, ShopifySyncStatus } from "@/components/products/ShopifySyncStatus";
+import { useReloadOnShopifySync, useShopifySync } from "@/context/ShopifySyncContext";
 import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { Modal } from "@/components/Modal";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
-import { ProductNameWithMetadata } from "@/components/ProductNameWithMetadata";
-import { RowActionsMenu } from "@/components/RowActionsMenu";
-import { StatusBadge } from "@/components/StatusBadge";
+import { SummaryStrip } from "@/components/SummaryStrip";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { useDropdownPosition } from "@/hooks/useDropdownPosition";
 import { dashboardService } from "@/services/dashboardService";
 import { inventoryService } from "@/services/inventoryService";
+import { shopifyService } from "@/services/shopifyService";
 import { supportService } from "@/services/supportService";
 import type { InventoryEvent, InventoryItem } from "@/types/domain";
-import { formatCurrency, formatDate } from "@/utils/format";
+import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
 import {
   findDuplicateInventoryGroups,
   getAvailableAfterIncoming,
@@ -33,14 +34,17 @@ import {
   isBundleProductName,
   isGiftCardProductName,
   isHiddenByDefaultProductName,
+  isIgnoredProduct,
   isInventoryDanger,
   SOCK_TYPES,
 } from "@/utils/operations";
-import { getProductVariantLabel, getUnitsPerPack } from "@/utils/lookbook";
+import { getProductFamilyName, getProductVariantLabel, getUnitsPerPack } from "@/utils/lookbook";
 
 const NON_SOCK_FILTER_VALUE = "__non_sock__";
 
 type InventoryItemFormValues = Partial<InventoryItem>;
+
+type InventoryTab = "all" | "reorder" | "incoming";
 
 export function InventoryPage() {
   const [editing, setEditing] = useState<InventoryItemFormValues | null>(null);
@@ -76,7 +80,9 @@ export function InventoryPage() {
     tone: "success" | "error";
     message: string;
   } | null>(null);
-  const viewOptions = useDropdownPosition();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<InventoryTab>("all");
+  const [syncingAll, setSyncingAll] = useState(false);
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       items: await inventoryService.listItems(),
@@ -87,6 +93,9 @@ export function InventoryPage() {
     }),
     [],
   );
+
+  useReloadOnShopifySync(reload);
+  const { running: shopifySyncing, syncNow: syncShopifyNow } = useShopifySync();
 
   if (loading) return <LoadingState />;
   if (error || !data)
@@ -127,7 +136,7 @@ export function InventoryPage() {
         !category || item.products?.category === category;
       const matchesBundlesOnly =
         !bundlesOnly || isBundleProductName(item.products?.name);
-      const matchesIgnoredOnly = !ignoredOnly || item.products?.ignored;
+      const matchesIgnoredOnly = !ignoredOnly || (item.products ? isIgnoredProduct(item.products) : false);
       const matchesPackSize =
         !packSizeFilter ||
         (item.products ? getUnitsPerPack(item.products) : null) ===
@@ -142,7 +151,7 @@ export function InventoryPage() {
         (showHiddenCategories ||
           bundlesOnly ||
           !isHiddenByDefaultProductName(item.products?.name)) &&
-        (showIgnoredProducts || ignoredOnly || !item.products?.ignored);
+        (showIgnoredProducts || ignoredOnly || !(item.products && isIgnoredProduct(item.products)));
       return (
         matchesSearch &&
         matchesLocation &&
@@ -180,12 +189,38 @@ export function InventoryPage() {
       return leftDanger - rightDanger;
     });
 
-  const viewOptionsActiveCount = [
-    bundlesOnly,
-    showHiddenCategories,
-    showIgnoredProducts,
-    ignoredOnly,
-  ].filter(Boolean).length;
+  // Sellable now. Before migration 034 runs, only quantity_on_hand exists (and holds available).
+  const availableOf = (item: InventoryItem) => Number(item.quantity_available ?? item.quantity_on_hand ?? 0);
+  const committedOf = (item: InventoryItem) =>
+    Number(item.quantity_committed ?? 0) + Number(item.products?.inventory_allocated ?? 0);
+  const incomingOf = (item: InventoryItem) => reorderBySku.get(item.products?.sku ?? "")?.incomingQuantity ?? 0;
+  // Only problems get a status note; healthy stock stays quiet.
+  const statusOf = (item: InventoryItem): { label: string; tone: "danger" | "warning" | "info" } | null => {
+    if (isGiftCardProductName(item.products?.name)) return null;
+    const tone = getInventoryHealthTone(
+      availableOf(item),
+      eventsByProductId.get(item.product_id) ?? [],
+      item.products?.safety_stock ?? 0,
+    );
+    const risk = getInventoryRiskStatus(availableOf(item), tone, incomingOf(item));
+    if (risk === "Oversold") return { label: "Oversold", tone: "danger" };
+    if (risk === "Low Stock") return { label: "Low stock", tone: "danger" };
+    if (risk === "Reorder Soon") return { label: "Reorder soon", tone: "warning" };
+    if (risk === "Incoming Shipment") return { label: "Incoming", tone: "info" };
+    return null;
+  };
+  const needsReorder = (item: InventoryItem) => {
+    const status = statusOf(item);
+    return status?.tone === "danger" || status?.tone === "warning";
+  };
+  const tabCounts = {
+    all: filteredItems.length,
+    reorder: filteredItems.filter(needsReorder).length,
+    incoming: filteredItems.filter((item) => incomingOf(item) > 0).length,
+  };
+  const visibleItems = filteredItems.filter((item) =>
+    tab === "reorder" ? needsReorder(item) : tab === "incoming" ? incomingOf(item) > 0 : true,
+  );
 
   const activeFilters: Array<{
     key: string;
@@ -278,9 +313,24 @@ export function InventoryPage() {
     setShowIgnoredProducts(false);
   };
 
+  const syncAllFromShopify = async () => {
+    try {
+      setSyncingAll(true);
+      const result = await syncShopifyNow();
+      setNotice({
+        tone: "success",
+        message: `Shopify sync completed. ${result.inventoryRecordsSynced ?? 0} inventory records updated.`,
+      });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Shopify sync failed." });
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
   const nonGiftCardItems = data.items.filter(
     (item) =>
-      !isGiftCardProductName(item.products?.name) && !item.products?.ignored,
+      !isGiftCardProductName(item.products?.name) && !(item.products && isIgnoredProduct(item.products)),
   );
   const totalUnitsOnHand = nonGiftCardItems.reduce(
     (sum, item) => sum + Number(item.quantity_on_hand ?? 0),
@@ -305,29 +355,29 @@ export function InventoryPage() {
     <div className="section-stack">
       <PageHeader
         title="Inventory"
-        description="Track what is physically in stock, what is already committed to orders, and what is incoming from manufacturing."
-        actions={
-          <div className="btn-row">
-            <button
-              className="btn btn-secondary"
-              onClick={() => setCleanupOpen(true)}
-            >
-              Clean Up Inventory
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={() =>
-                setEditing({
-                  product_id: "",
-                  location_id: "",
-                  inventory_category: "Core",
-                })
-              }
-            >
-              Add New Inventory
-            </button>
-          </div>
+        primaryAction={
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              setEditing({
+                product_id: "",
+                location_id: "",
+                inventory_category: "Core",
+              })
+            }
+          >
+            Add inventory
+          </button>
         }
+        secondaryActions={[
+          {
+            label: syncingAll || shopifySyncing ? "Syncing Shopify…" : "Sync from Shopify",
+            disabled: syncingAll || shopifySyncing,
+            onClick: () => void syncAllFromShopify(),
+          },
+          { label: "Clean up inventory", onClick: () => setCleanupOpen(true) },
+          { label: "Refresh list", onClick: () => void reload() },
+        ]}
       />
       {notice ? (
         <NotificationBanner
@@ -336,414 +386,268 @@ export function InventoryPage() {
           onClose={() => setNotice(null)}
         />
       ) : null}
-      <div className="card-grid">
-        <DashboardCard
-          label="Units on Hand"
-          value={totalUnitsOnHand}
-          footnote="Across all tracked inventory records"
+      <ShopifySyncStatus
+        lastSyncedAt={latestShopifySync(data.products)}
+        onSynced={(message) => setNotice({ tone: "success", message })}
+        onError={(message) => setNotice({ tone: "error", message })}
+      />
+      <SummaryStrip
+        items={[
+          { label: "Units on hand", value: formatNumber(totalUnitsOnHand) },
+          { label: "Need reorder", value: formatNumber(dangerCount), note: "25 units or less" },
+          { label: "Incoming", value: formatNumber(data.snapshot.incomingInventoryUnits), note: "from manufacturing" },
+          { label: "Inventory value", value: formatCurrency(inventoryValue), note: "at cost" },
+        ]}
+      />
+      <section className="product-list">
+        <ListTabs
+          label="Inventory views"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { key: "all", label: "All", count: tabCounts.all },
+            { key: "reorder", label: "Needs reorder", count: tabCounts.reorder },
+            { key: "incoming", label: "Incoming", count: tabCounts.incoming },
+          ]}
         />
-        <DashboardCard
-          label="Danger Inventory"
-          value={dangerCount}
-          footnote="Products with 25 units or less on hand"
-        />
-        <DashboardCard
-          label="Incoming Units"
-          value={data.snapshot.incomingInventoryUnits}
-          footnote="Manufacturer inventory still in route"
-        />
-        <DashboardCard
-          label="Inventory Value"
-          value={formatCurrency(inventoryValue)}
-          footnote={`${noBundlesCount} no-bundles SKUs flagged`}
-        />
-      </div>
-      <div className="panel">
-        <div className="filter-row">
+        <div className="product-list-toolbar">
           <input
-            placeholder="Search product, SKU, or location"
+            className="product-list-search"
+            type="search"
+            aria-label="Search inventory"
+            placeholder="Search by product, SKU or location"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <select
-            value={locationId}
-            onChange={(event) => setLocationId(event.target.value)}
-          >
-            <option value="">All locations</option>
-            {data.locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-          >
-            <option value="">All categories</option>
-            {categories.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-          <select
-            value={packSizeFilter}
-            onChange={(event) => setPackSizeFilter(event.target.value)}
-          >
-            <option value="">All Pack Sizes</option>
-            {[1, 2, 3, 6, 10, 12].map((count) => (
-              <option key={count} value={count}>
-                {count === 1 ? "1-Pack (Single)" : `${count}-Pack`}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sockTypeFilter}
-            onChange={(event) => setSockTypeFilter(event.target.value)}
-          >
-            <option value="">All Sock Types</option>
-            {SOCK_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-            <option value={NON_SOCK_FILTER_VALUE}>
-              Other / Non-Sock (Apparel)
-            </option>
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-          >
-            <option value="">All Statuses</option>
-            {["Healthy", "Low", "Danger", "Slow Mover"].map((label) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
-          >
-            <option value="danger">Sort by danger</option>
-            <option value="incoming">Sort by incoming quantity</option>
-            <option value="quantity">Sort by quantity</option>
-          </select>
-          <button
-            ref={viewOptions.triggerRef}
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => viewOptions.setOpen((current) => !current)}
-          >
-            View Options
-            {viewOptionsActiveCount > 0 ? ` (${viewOptionsActiveCount})` : ""}
-          </button>
-          {viewOptions.open
-            ? createPortal(
-                <div
-                  ref={viewOptions.popoverRef}
-                  className="date-picker-popover-portal view-options-popover"
-                  style={{
-                    top: viewOptions.position.top,
-                    left: viewOptions.position.left,
-                  }}
-                >
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={bundlesOnly}
-                      onChange={(event) => setBundlesOnly(event.target.checked)}
-                    />
-                    Show Bundles Only
-                  </label>
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={showHiddenCategories}
-                      onChange={(event) =>
-                        setShowHiddenCategories(event.target.checked)
-                      }
-                    />
-                    Show Bundles &amp; Gift Cards
-                  </label>
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={showIgnoredProducts}
-                      onChange={(event) =>
-                        setShowIgnoredProducts(event.target.checked)
-                      }
-                    />
-                    Show Ignored
-                  </label>
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={ignoredOnly}
-                      onChange={(event) => setIgnoredOnly(event.target.checked)}
-                    />
-                    Ignored Only
-                  </label>
-                  <div className="view-options-divider" />
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-small"
-                    onClick={() => {
-                      void reload();
-                      viewOptions.setOpen(false);
-                    }}
-                  >
-                    Refresh
-                  </button>
-                </div>,
-                document.body,
-              )
-            : null}
-        </div>
-      </div>
-      <div className="panel">
-        <div className="btn-row">
-          <span>
-            Showing {filteredItems.length} of {data.items.length} inventory
-            records
-          </span>
-          {activeFilters.length > 0 ? (
-            <>
-              {activeFilters.map((filter) => (
-                <button
-                  key={filter.key}
-                  className="btn btn-ghost btn-small"
-                  onClick={filter.onClear}
-                >
-                  {filter.label} &times;
-                </button>
+          <label className="product-list-sort">
+            <span>Location</span>
+            <select value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+              <option value="">All locations</option>
+              {data.locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
               ))}
-              <button
-                className="btn btn-ghost btn-small"
-                onClick={clearAllFilters}
-              >
-                Clear All Filters
-              </button>
-            </>
-          ) : (
-            <span className="helper-text">No filters applied</span>
-          )}
+            </select>
+          </label>
+          <FilterPopover
+            activeCount={activeFilters.filter((filter) => filter.key !== "search" && filter.key !== "location").length}
+            onClearAll={clearAllFilters}
+          >
+            <label className="filter-field">
+              <span>Category</span>
+              <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                <option value="">All categories</option>
+                {categories.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Sock type</span>
+              <select value={sockTypeFilter} onChange={(event) => setSockTypeFilter(event.target.value)}>
+                <option value="">All sock types</option>
+                {SOCK_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+                <option value={NON_SOCK_FILTER_VALUE}>Other / non-sock (apparel)</option>
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Pack size</span>
+              <select value={packSizeFilter} onChange={(event) => setPackSizeFilter(event.target.value)}>
+                <option value="">All pack sizes</option>
+                {[1, 2, 3, 6, 10, 12].map((count) => (
+                  <option key={count} value={count}>
+                    {count === 1 ? "1-pack (single)" : `${count}-pack`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Stock health</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">Any</option>
+                {["Healthy", "Low", "Danger", "Slow Mover"].map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="filter-checks">
+              <legend>Show</legend>
+              <label>
+                <input type="checkbox" checked={bundlesOnly} onChange={(event) => setBundlesOnly(event.target.checked)} />
+                Bundles only
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showHiddenCategories}
+                  onChange={(event) => setShowHiddenCategories(event.target.checked)}
+                />
+                Include bundles and gift cards
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showIgnoredProducts}
+                  onChange={(event) => setShowIgnoredProducts(event.target.checked)}
+                />
+                Include ignored and removed from Shopify
+              </label>
+              <label>
+                <input type="checkbox" checked={ignoredOnly} onChange={(event) => setIgnoredOnly(event.target.checked)} />
+                Ignored only
+              </label>
+            </fieldset>
+          </FilterPopover>
+          <label className="product-list-sort">
+            <span>Sort</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="danger">Most urgent</option>
+              <option value="quantity">On hand</option>
+              <option value="incoming">Incoming</option>
+            </select>
+          </label>
+          <span className="product-list-count">
+            {visibleItems.length} {visibleItems.length === 1 ? "record" : "records"}
+          </span>
         </div>
-      </div>
-      <div className="panel section-stack">
-        <div className="panel-header">
-          <h3>Inventory Records</h3>
-        </div>
-        <DataTable
-          emptyMessage="No inventory records yet. Create an inventory record to assign a product to a location."
+        <FilterChips filters={activeFilters} onClearAll={clearAllFilters} />
+        <ResourceTable
+          rows={visibleItems}
+          rowKey={(row) => row.id}
+          emptyMessage={
+            data.items.length
+              ? tab === "all"
+                ? "No inventory matches these filters."
+                : "Nothing here right now."
+              : "No inventory yet. Add a record to put a product at a location."
+          }
+          onRowClick={(row) => setAdjusting(row)}
+          rowClassName={(row) => (Number(row.quantity_on_hand) < 0 ? "is-alert" : undefined)}
+          actionsFor={(row) => [
+            { label: "Adjust stock", onClick: () => setAdjusting(row) },
+            { label: "Transfer", onClick: () => setTransferring(row) },
+            { label: "Open product", onClick: () => navigate(`/products/${row.product_id}`) },
+            { label: "Details", onClick: () => setViewing(row) },
+            { label: "Edit record", onClick: () => setEditing(row) },
+            { label: "Create manufacturing PO", onClick: () => navigate("/purchase-orders/new?type=manufacturer") },
+            { label: "Delete", danger: true, onClick: () => setDeleting(row) },
+          ]}
           columns={[
             {
               key: "product",
               title: "Product",
               render: (row) => (
-                <ProductNameWithMetadata product={row.products} large />
-              ),
-            },
-            {
-              key: "quantities",
-              title: "Stock",
-              render: (row) => {
-                const incoming =
-                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ??
-                  0;
-                const committed = Number(
-                  row.products?.inventory_allocated ?? 0,
-                );
-                const oversoldLabel = getOversoldLabel(row.quantity_on_hand);
-                return (
-                  <div className="cell-stack">
-                    <strong>
-                      {oversoldLabel ?? `On hand ${row.quantity_on_hand}`}
-                    </strong>
-                    <span className="helper-text">Committed {committed}</span>
-                    <span className="helper-text">Incoming {incoming}</span>
-                    {/* Committed/Incoming are product-level aggregates, not per-location,
-                        so multi-location products repeat the same values on each row. */}
-                    <span className="helper-text">
-                      {row.locations?.name ?? "Unknown Location"}
+                <div className="pf-product">
+                  {row.products?.image_url ? (
+                    <img className="pf-thumb" src={row.products.image_url} alt="" loading="lazy" />
+                  ) : (
+                    <span className="pf-thumb pf-thumb-empty" aria-hidden="true">
+                      {(row.products?.name ?? "?").slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="pf-name">
+                    <strong className="rt-title">{row.products ? getProductFamilyName(row.products) : "Unknown product"}</strong>
+                    <span>
+                      {row.products ? getProductVariantLabel(row.products) : ""}
+                      {row.products?.sku ? ` · ${row.products.sku}` : ""}
                     </span>
                   </div>
-                );
-              },
-            },
-            {
-              key: "available_after_incoming",
-              title: "Available After Incoming",
-              render: (row) => {
-                const incoming =
-                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ??
-                  0;
-                const committed = Number(
-                  row.products?.inventory_allocated ?? 0,
-                );
-                return (
-                  <strong>
-                    {getAvailableAfterIncoming(
-                      row.quantity_on_hand,
-                      incoming,
-                      committed,
-                    )}
-                  </strong>
-                );
-              },
-            },
-            {
-              key: "planning",
-              title: "Planning",
-              render: (row) => {
-                const margin = getMarginMetrics(
-                  Number(row.products?.unit_cost ?? 0),
-                  Number(row.products?.unit_price ?? 0),
-                );
-                return (
-                  <div className="cell-stack">
-                    <strong>
-                      {formatCurrency(Number(row.products?.unit_cost ?? 0))}{" "}
-                      COGS
-                    </strong>
-                    <span className="helper-text">
-                      {formatCurrency(margin.marginDollars)} |{" "}
-                      {margin.marginPercent.toFixed(0)}% margin
-                    </span>
-                    <span className="helper-text">
-                      {row.products?.no_bundles
-                        ? "No bundles"
-                        : "Bundles allowed"}
-                    </span>
-                  </div>
-                );
-              },
-            },
-            {
-              key: "status",
-              title: "Status",
-              render: (row) => {
-                if (isGiftCardProductName(row.products?.name)) {
-                  return <StatusBadge label="Safe" />;
-                }
-                const incoming =
-                  reorderBySku.get(row.products?.sku ?? "")?.incomingQuantity ??
-                  0;
-                const tone = getInventoryHealthTone(
-                  row.quantity_on_hand,
-                  eventsByProductId.get(row.product_id) ?? [],
-                  row.products?.safety_stock ?? 0,
-                );
-                return (
-                  <StatusBadge
-                    label={getInventoryRiskStatus(
-                      row.quantity_on_hand,
-                      tone,
-                      incoming,
-                    )}
-                  />
-                );
-              },
-            },
-            {
-              key: "last_updated",
-              title: "Last Updated",
-              render: (row) => formatDate(row.updated_at),
-            },
-            {
-              key: "actions",
-              title: "Actions",
-              render: (row) => (
-                <div className="btn-row">
-                  <button
-                    className="btn btn-ghost btn-small"
-                    onClick={() => setViewing(row)}
-                  >
-                    View Details
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-small po-edit-btn"
-                    onClick={() => setEditing(row)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="btn btn-danger btn-small po-edit-btn"
-                    onClick={() => setDeleting(row)}
-                  >
-                    Delete
-                  </button>
-                  <RowActionsMenu>
-                    <button
-                      className="btn btn-secondary btn-small po-edit-btn"
-                      onClick={() => setAdjusting(row)}
-                    >
-                      Adjust
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-small"
-                      onClick={() => setTransferring(row)}
-                    >
-                      Transfer
-                    </button>
-                    {/* TODO: deep-link vendor/product once the PO builder supports prefill query params */}
-                    <Link
-                      className="btn btn-secondary btn-small"
-                      to="/purchase-orders/new"
-                    >
-                      Create Manufacturing PO
-                    </Link>
-                  </RowActionsMenu>
                 </div>
               ),
-            },
-          ]}
-          rows={filteredItems}
-        />
-      </div>
-      <div className="panel section-stack">
-        <div className="panel-header">
-          <h3>Inventory History</h3>
-        </div>
-        <DataTable
-          emptyMessage="No inventory events yet."
-          columns={[
-            {
-              key: "event_type",
-              title: "Event",
-              render: (row) => row.event_type,
-            },
-            {
-              key: "product",
-              title: "Product",
-              render: (row) => row.products?.name ?? "N/A",
             },
             {
               key: "location",
               title: "Location",
-              render: (row) => row.locations?.name ?? "N/A",
+              hideOnMobile: true,
+              render: (row) => row.locations?.name ?? <span className="pf-muted">—</span>,
             },
             {
-              key: "quantity_change",
-              title: "Change",
-              render: (row) => row.quantity_change,
+              key: "on_hand",
+              title: "On hand",
+              align: "right",
+              render: (row) => {
+                const qty = Number(row.quantity_on_hand ?? 0);
+                return <strong className={qty < 0 ? "rt-alert" : undefined}>{formatNumber(qty)}</strong>;
+              },
             },
             {
-              key: "event_date",
-              title: "Date",
-              render: (row) => formatDate(row.event_date),
+              key: "committed",
+              title: "Committed",
+              align: "right",
+              hideOnMobile: true,
+              render: (row) => formatNumber(committedOf(row)),
             },
             {
-              key: "notes",
-              title: "Notes",
-              render: (row) => row.notes ?? "N/A",
+              key: "incoming",
+              title: "Incoming",
+              align: "right",
+              hideOnMobile: true,
+              render: (row) => {
+                const incoming = incomingOf(row);
+                return incoming ? formatNumber(incoming) : <span className="pf-muted">—</span>;
+              },
+            },
+            {
+              key: "available",
+              title: "Available",
+              align: "right",
+              render: (row) => {
+                // Shopify already takes its own orders out of "available"; subtract only Nexus wholesale holds.
+                const available = getAvailableAfterIncoming(
+                  availableOf(row),
+                  incomingOf(row),
+                  Number(row.products?.inventory_allocated ?? 0),
+                );
+                const status = statusOf(row);
+                return (
+                  <span className="rt-available">
+                    <strong className={available < 0 ? "rt-alert" : undefined}>{formatNumber(available)}</strong>
+                    {status ? <em className={`rt-status is-${status.tone}`}>{status.label}</em> : null}
+                  </span>
+                );
+              },
             },
           ]}
-          rows={data.events.slice(0, 20)}
         />
-      </div>
+      </section>
+      <section className="product-list">
+        <div className="rt-section-head">
+          <h3>Recent stock changes</h3>
+          <span className="helper-text">Last {Math.min(20, data.events.length)} adjustments, receipts and sales</span>
+        </div>
+        <Disclosure summary="Show recent changes" openSummary="Hide recent changes">
+          <ResourceTable
+            rows={data.events.slice(0, 20)}
+            rowKey={(row) => row.id}
+            emptyMessage="No stock changes yet."
+            columns={[
+              { key: "date", title: "Date", render: (row) => formatDate(row.event_date) },
+              { key: "product", title: "Product", render: (row) => row.products?.name ?? "—" },
+              { key: "event", title: "Change", render: (row) => row.event_type },
+              {
+                key: "qty",
+                title: "Units",
+                align: "right",
+                render: (row) => {
+                  const change = Number(row.quantity_change ?? 0);
+                  return <span className={change < 0 ? "rt-alert" : "rt-positive"}>{change > 0 ? `+${change}` : change}</span>;
+                },
+              },
+              { key: "location", title: "Location", hideOnMobile: true, render: (row) => row.locations?.name ?? "—" },
+              { key: "notes", title: "Notes", hideOnMobile: true, render: (row) => row.notes ?? <span className="pf-muted">—</span> },
+            ]}
+          />
+        </Disclosure>
+      </section>
       {editing ? (
         <EntityFormModal<InventoryItemFormValues>
           title={editing.id ? "Edit Inventory Record" : "Add Inventory Record"}

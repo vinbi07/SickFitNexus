@@ -1160,7 +1160,7 @@ export function PurchaseOrderBuilderPage() {
       const nextStatus: PurchaseOrder["status"] = isDraft ? "Draft" : "Ordered";
 
       if (!isDraft) {
-        const issues = validateManufacturerOrder(validLines, localSockCards);
+        const issues = validateManufacturerOrder(validLines, localSockCards, data?.barcodes ?? []);
         if (hasStopIssues(issues)) {
           throw new Error(
             `Order has ${issues.filter((i) => i.severity === "stop").length} STOP issue(s). Fix them before sending.`,
@@ -1623,6 +1623,7 @@ export function PurchaseOrderBuilderPage() {
             <ManufacturerOrderCheckPanel
               lines={mfrLines}
               sockCards={localSockCards}
+              barcodeBook={data.barcodes}
             />
           </div>
         </div>

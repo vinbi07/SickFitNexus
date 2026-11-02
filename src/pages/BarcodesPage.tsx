@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import Papa from "papaparse";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { DataTable } from "@/components/DataTable";
+import { ListTabs, ResourceTable } from "@/components/lists/ResourceTable";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { Modal } from "@/components/Modal";
@@ -11,6 +11,32 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { supportService } from "@/services/supportService";
 import { getUiErrorLog } from "@/utils/errors";
 import type { Product, ProductBarcode, ProductBarcodeLink } from "@/types/domain";
+import { checkBarcode, findDuplicateBarcodes, normalizeBarcode } from "@/utils/barcode";
+
+type BookRowCheck = { tone: "success" | "warning" | "danger" | "neutral"; label: string; detail: string; isProblem: boolean };
+
+/** Judges one barcode-book row: valid code, unique to its SKU, and in step with Shopify. */
+function checkBookRow(row: ProductBarcode, duplicates: Map<string, string[]>): BookRowCheck {
+  const code = normalizeBarcode(row.barcode_upc);
+  if (!code) return { tone: "neutral", label: "Pending", detail: "No UPC yet.", isProblem: false };
+  const check = checkBarcode(row.barcode_upc);
+  if (!check.ok) return { tone: "danger", label: "Bad code", detail: check.reason, isProblem: true };
+  const others = (duplicates.get(code) ?? []).filter((sku) => sku !== row.sku);
+  if (others.length) return { tone: "danger", label: "Duplicate", detail: `Also on ${others.join(", ")}`, isProblem: true };
+  const drifted = (row.product_barcode_links ?? []).find((link) => {
+    const shopify = normalizeBarcode(link.products?.upc);
+    return shopify && shopify !== code;
+  });
+  if (drifted) {
+    return {
+      tone: "warning",
+      label: "Shopify differs",
+      detail: `${drifted.products?.sku ?? "Linked product"} has ${normalizeBarcode(drifted.products?.upc)} in Shopify`,
+      isProblem: true,
+    };
+  }
+  return { tone: "success", label: "Valid", detail: "Check digit OK", isProblem: false };
+}
 
 type BarcodeFormValues = Partial<ProductBarcode> & {
   linked_product_ids?: string[];
@@ -36,7 +62,7 @@ export function BarcodesPage() {
   const [busyDelete, setBusyDelete] = useState(false);
   const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState("");
-  const [linkFilter, setLinkFilter] = useState("");
+  const [tab, setTab] = useState<"all" | "problems" | "unlinked">("all");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
@@ -49,7 +75,10 @@ export function BarcodesPage() {
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load barcodes"} />;
 
-  const filteredBarcodes = data.barcodes.filter((barcode) => {
+  const duplicates = findDuplicateBarcodes(data.barcodes.map((barcode) => ({ owner: barcode.sku, code: barcode.barcode_upc })));
+  const checks = new Map(data.barcodes.map((barcode) => [barcode.id, checkBookRow(barcode, duplicates)]));
+
+  const searchedBarcodes = data.barcodes.filter((barcode) => {
     const normalizedQuery = query.trim().toLowerCase();
     const matchesQuery =
       !normalizedQuery ||
@@ -64,13 +93,17 @@ export function BarcodesPage() {
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery);
-    const linkCount = barcode.product_barcode_links?.length ?? 0;
-    const matchesLink =
-      !linkFilter ||
-      (linkFilter === "linked" && linkCount > 0) ||
-      (linkFilter === "unlinked" && linkCount === 0);
-    return matchesQuery && matchesLink;
+    return matchesQuery;
   });
+  const isUnlinked = (barcode: ProductBarcode) => !(barcode.product_barcode_links?.length ?? 0);
+  const tabCounts = {
+    all: searchedBarcodes.length,
+    problems: searchedBarcodes.filter((barcode) => checks.get(barcode.id)?.isProblem).length,
+    unlinked: searchedBarcodes.filter(isUnlinked).length,
+  };
+  const filteredBarcodes = searchedBarcodes.filter((barcode) =>
+    tab === "problems" ? checks.get(barcode.id)?.isProblem : tab === "unlinked" ? isUnlinked(barcode) : true,
+  );
 
   async function handleImportFile(file: File) {
     setImporting(true);
@@ -119,121 +152,155 @@ export function BarcodesPage() {
 
   return (
     <div className="section-stack">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            void handleImportFile(file);
+          }
+        }}
+      />
       <PageHeader
         title="Barcodes"
-        description="Manage barcode-book staging records in a standalone catalog before linking them into products and lookbook workflows."
-        actions={(
-          <div className="btn-row">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              style={{ display: "none" }}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void handleImportFile(file);
-                }
-              }}
-            />
-            <button className="btn btn-secondary" disabled={importing} onClick={() => fileInputRef.current?.click()}>
-              {importing ? "Importing CSV..." : "Import CSV"}
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={() =>
-                setEditing({
-                  sku: "",
-                  handle: "",
-                  product_name: "",
-                  collection: "",
-                  pack_quantity: 1,
-                  pack_unit: "",
-                  size: "",
-                  barcode_upc: "",
-                  linked_product_ids: [],
-                })
-              }
-            >
-              Add Barcode
-            </button>
-          </div>
-        )}
+        description="Your GS1 barcode book. Products and factory orders are checked against it."
+        primaryAction={
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              setEditing({
+                sku: "",
+                handle: "",
+                product_name: "",
+                collection: "",
+                pack_quantity: 1,
+                pack_unit: "",
+                size: "",
+                barcode_upc: "",
+                linked_product_ids: [],
+              })
+            }
+          >
+            Add barcode
+          </button>
+        }
+        secondaryActions={[
+          {
+            label: importing ? "Importing CSV…" : "Import barcode book (CSV)",
+            disabled: importing,
+            onClick: () => fileInputRef.current?.click(),
+          },
+          { label: "Refresh list", onClick: () => void reload() },
+        ]}
       />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
-      <div className="panel">
-        <div className="filter-row">
+      <section className="product-list">
+        <ListTabs
+          label="Barcode views"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { key: "all", label: "All", count: tabCounts.all },
+            { key: "problems", label: "Problems", count: tabCounts.problems },
+            { key: "unlinked", label: "Not linked", count: tabCounts.unlinked },
+          ]}
+        />
+        <div className="product-list-toolbar">
           <input
-            placeholder="Search SKU, handle, product, collection, barcode, or linked product"
+            className="product-list-search"
+            type="search"
+            aria-label="Search barcodes"
+            placeholder="Search by product, SKU, UPC, collection or linked product"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <select value={linkFilter} onChange={(event) => setLinkFilter(event.target.value)}>
-            <option value="">All barcode rows</option>
-            <option value="linked">Linked to products</option>
-            <option value="unlinked">Unlinked</option>
-          </select>
-          <button className="btn btn-secondary" onClick={() => void reload()}>
-            Refresh
-          </button>
+          <span className="product-list-count">
+            {filteredBarcodes.length} {filteredBarcodes.length === 1 ? "barcode" : "barcodes"}
+          </span>
         </div>
-      </div>
-      <DataTable
-        emptyMessage="No barcode rows yet. Import the barcode book CSV or add a record manually."
-        columns={[
-          {
-            key: "product_name",
-            title: "Barcode Product / SKU",
-            render: (row) => (
-              <div className="cell-stack">
-                <strong>{row.product_name}</strong>
-                <span className="helper-text">{row.sku}</span>
-                <span className="helper-text">{row.handle ?? "No handle"}{row.collection ? ` | ${row.collection}` : ""}</span>
-              </div>
-            ),
-          },
-          { key: "barcode", title: "UPC", render: (row) => <span className="product-compact-cell">{row.barcode_upc ?? "Pending"}</span> },
-          {
-            key: "pack",
-            title: "Pack / Size",
-            render: (row) => (
-              <div className="cell-stack">
-                <strong>{row.pack_quantity ?? "?"} {row.pack_unit ?? "Unit"}</strong>
-                <span className="helper-text">{row.size ?? "No size"}</span>
-              </div>
-            ),
-          },
-          {
-            key: "linked_products",
-            title: "Linked Products",
-            render: (row) => (
-              <div className="cell-stack">
-                <strong>{row.product_barcode_links?.length ? `${row.product_barcode_links.length} linked` : "Unlinked"}</strong>
-                <span className="helper-text">
-                  {row.product_barcode_links?.length
-                    ? row.product_barcode_links.slice(0, 3).map((link) => link.products?.sku ?? link.product_id).join(", ")
-                    : "No products linked yet"}
+        <ResourceTable
+          rows={filteredBarcodes}
+          rowKey={(row) => row.id}
+          emptyMessage={
+            data.barcodes.length
+              ? tab === "all"
+                ? "No barcodes match this search."
+                : "Nothing here right now."
+              : "No barcodes yet. Import your barcode book CSV or add one."
+          }
+          onRowClick={(row) => setEditing(row)}
+          actionsFor={(row) => [
+            { label: "Edit", onClick: () => setEditing(row) },
+            { label: "Delete", danger: true, onClick: () => setDeleting(row) },
+          ]}
+          columns={[
+            {
+              key: "product",
+              title: "Product",
+              render: (row) => (
+                <div className="pf-name">
+                  <strong className="rt-title">{row.product_name}</strong>
+                  <span>
+                    {row.sku}
+                    {row.collection ? ` · ${row.collection}` : ""}
+                  </span>
+                </div>
+              ),
+            },
+            {
+              key: "upc",
+              title: "UPC",
+              render: (row) => {
+                const check = checks.get(row.id)!;
+                return (
+                  <div className="pf-name">
+                    <span className="rt-code">{row.barcode_upc ?? "—"}</span>
+                    {check.isProblem || check.tone === "neutral" ? (
+                      <span className={check.tone === "danger" ? "rt-status is-danger" : "rt-status is-warning"} title={check.detail}>
+                        {check.label}: {check.detail}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              },
+            },
+            {
+              key: "pack",
+              title: "Pack",
+              hideOnMobile: true,
+              render: (row) => (
+                <span>
+                  {row.pack_quantity ?? "?"} {row.pack_unit ?? "unit"}
+                  {row.size ? ` · ${row.size}` : ""}
                 </span>
-              </div>
-            ),
-          },
-          {
-            key: "actions",
-            title: "Actions",
-            render: (row) => (
-              <div className="btn-row">
-                <button className="btn btn-secondary btn-small" onClick={() => setEditing(row)}>
-                  Edit
-                </button>
-                <button className="btn btn-danger btn-small" onClick={() => setDeleting(row)}>
-                  Delete
-                </button>
-              </div>
-            ),
-          },
-        ]}
-        rows={filteredBarcodes}
-      />
+              ),
+            },
+            {
+              key: "linked",
+              title: "Linked products",
+              render: (row) => {
+                const links = row.product_barcode_links ?? [];
+                if (!links.length) return <span className="pf-muted">Not linked</span>;
+                return (
+                  <div className="rt-links">
+                    <strong>{links.length === 1 ? "1 product" : `${links.length} products`}</strong>
+                    <span>
+                      {links
+                        .slice(0, 2)
+                        .map((link) => link.products?.sku ?? link.product_id)
+                        .join(", ")}
+                      {links.length > 2 ? ` +${links.length - 2}` : ""}
+                    </span>
+                  </div>
+                );
+              },
+            },
+          ]}
+        />
+      </section>
       {editing ? (
         <BarcodeEditorModal
           initialValue={editing}
@@ -417,7 +484,22 @@ function BarcodeEditorModal({
         </div>
         <div className="field field-wide">
           <label>Barcode UPC</label>
-          <input value={String(values.barcode_upc ?? "")} onChange={(event) => setValues((current) => ({ ...current, barcode_upc: event.target.value }))} />
+          <input
+            inputMode="numeric"
+            aria-describedby="barcode-upc-check"
+            value={String(values.barcode_upc ?? "")}
+            onChange={(event) => setValues((current) => ({ ...current, barcode_upc: event.target.value }))}
+          />
+          {String(values.barcode_upc ?? "").trim()
+            ? (() => {
+                const check = checkBarcode(values.barcode_upc);
+                return (
+                  <span id="barcode-upc-check" className={check.ok ? "success-text" : "danger-text"}>
+                    {check.ok ? "Check digit OK" : check.reason}
+                  </span>
+                );
+              })()
+            : null}
         </div>
         <div className="field field-wide">
           <label>Linked Products</label>

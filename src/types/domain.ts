@@ -147,6 +147,10 @@ export interface Product {
   shopify_storefront_url: string | null;
   is_shopify_synced: boolean;
   last_shopify_sync_at: string | null;
+  /** "active" | "draft" | "archived", as Shopify reports it. */
+  shopify_status?: string | null;
+  /** Set when a full sync no longer finds this variant in Shopify. */
+  shopify_removed_at?: string | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
@@ -183,7 +187,12 @@ export interface InventoryItem {
   id: string;
   product_id: string;
   location_id: string;
+  /** Shopify "on hand": physically at the location. */
   quantity_on_hand: number;
+  /** Shopify "available": sellable now (on hand minus committed and unavailable). */
+  quantity_available?: number | null;
+  /** Shopify "committed": in unfulfilled orders. */
+  quantity_committed?: number | null;
   reorder_point: number;
   target_stock: number;
   notes: string | null;

@@ -12,6 +12,7 @@ type ShopifyVariantNode = {
   id: string;
   title: string;
   price: string;
+  barcodes: { nodes: Array<{ value: string }> } | null;
   inventoryQuantity: number | null;
   inventoryItem: {
     id: string;
@@ -35,17 +36,13 @@ type ShopifyVariantNode = {
       }>;
     };
   } | null;
-  image: {
-    url: string;
-  } | null;
+  media: { nodes: Array<{ preview: { image: { url: string } | null } | null }> } | null;
   product: {
     id: string;
     title: string;
     handle: string;
     status: string;
-    featuredImage: {
-      url: string;
-    } | null;
+    featuredMedia: { preview: { image: { url: string } | null } | null } | null;
   };
 };
 
@@ -69,7 +66,8 @@ type ShopifyOrderNode = {
   };
 };
 
-const SHOPIFY_API_VERSION = "2025-01";
+// Keep within Shopify's 12-month support window; 2026-10 replaced barcode/image with barcodes/media.
+const SHOPIFY_API_VERSION = "2026-10";
 
 const SHOPIFY_VARIANTS_QUERY = `
   query ProductVariants($first: Int!, $after: String, $query: String) {
@@ -83,9 +81,20 @@ const SHOPIFY_VARIANTS_QUERY = `
           id
           title
           price
+          barcodes(first: 5) {
+            nodes {
+              value
+            }
+          }
           inventoryQuantity
-          image {
-            url
+          media(first: 1) {
+            nodes {
+              preview {
+                image {
+                  url
+                }
+              }
+            }
           }
           inventoryItem {
             id
@@ -106,7 +115,7 @@ const SHOPIFY_VARIANTS_QUERY = `
                   location {
                     name
                   }
-                  quantities(names: ["available"]) {
+                  quantities(names: ["available", "on_hand", "committed"]) {
                     name
                     quantity
                   }
@@ -119,8 +128,12 @@ const SHOPIFY_VARIANTS_QUERY = `
             title
             handle
             status
-            featuredImage {
-              url
+            featuredMedia {
+              preview {
+                image {
+                  url
+                }
+              }
             }
           }
         }
@@ -388,8 +401,21 @@ async function fetchShopifyGraphql({
   return payload;
 }
 
-function getAvailableQuantity(levelNode: ShopifyVariantNode["inventoryItem"]["inventoryLevels"]["edges"][number]["node"]) {
-  return levelNode.quantities.find((quantity) => quantity.name === "available")?.quantity ?? 0;
+type InventoryLevelNode = NonNullable<ShopifyVariantNode["inventoryItem"]>["inventoryLevels"]["edges"][number]["node"];
+
+function getQuantity(levelNode: InventoryLevelNode, name: "available" | "on_hand" | "committed") {
+  return levelNode.quantities.find((quantity) => quantity.name === name)?.quantity ?? 0;
+}
+
+// Sellable now: what Shopify shows as "available".
+function getAvailableQuantity(levelNode: InventoryLevelNode) {
+  return getQuantity(levelNode, "available");
+}
+
+/** Shopify barcodes are free text; keep digits-only codes, trimmed. */
+function normalizeBarcode(value: string | null | undefined) {
+  const trimmed = String(value ?? "").trim();
+  return trimmed ? trimmed.replace(/[\s-]/g, "") : null;
 }
 
 async function fetchShopifyVariants({
@@ -595,9 +621,17 @@ async function syncProductsAndInventory(
       unit_cost: Number(variant.inventoryItem?.unitCost?.amount ?? existingProduct?.unit_cost ?? 0),
       unit_price: Number(variant.price ?? existingProduct?.unit_price ?? 0),
       current_inventory: totalInventory,
+      // Shopify's barcode wins when it has one; a UPC typed into Nexus is kept otherwise.
+      upc: normalizeBarcode(variant.barcodes?.nodes[0]?.value) ?? (existingProduct?.upc as string | null | undefined) ?? null,
+      shopify_status: variant.product.status?.toLowerCase() ?? null,
+      shopify_removed_at: null,
       safety_stock: existingProduct?.safety_stock ?? 0,
       weight: formatShopifyWeight(variant.inventoryItem?.measurement?.weight) ?? existingProduct?.weight ?? null,
-      image_url: variant.image?.url ?? variant.product.featuredImage?.url ?? existingProduct?.image_url ?? null,
+      image_url:
+        variant.media?.nodes[0]?.preview?.image?.url ??
+        variant.product.featuredMedia?.preview?.image?.url ??
+        existingProduct?.image_url ??
+        null,
       no_bundles: existingProduct?.no_bundles ?? false,
       shopify_product_id: variant.product.id,
       shopify_variant_id: variant.id,
@@ -692,7 +726,9 @@ async function syncProductsAndInventory(
         id: existingItem?.id,
         product_id: productId,
         location_id: location.id,
-        quantity_on_hand: getAvailableQuantity(level.node),
+        quantity_on_hand: getQuantity(level.node, "on_hand"),
+        quantity_available: getQuantity(level.node, "available"),
+        quantity_committed: getQuantity(level.node, "committed"),
         reorder_point: existingItem?.reorder_point ?? 0,
         target_stock: existingItem?.target_stock ?? 0,
         inventory_category:
@@ -701,6 +737,19 @@ async function syncProductsAndInventory(
         notes: existingItem?.notes ?? "Synced from Shopify inventory levels.",
       });
     }
+  }
+
+  // A location the variant no longer stocks at would otherwise keep its old count.
+  for (const [key, existingItem] of existingItems) {
+    if (inventoryRows.has(key)) continue;
+    inventoryRows.set(key, {
+      id: existingItem.id,
+      product_id: existingItem.product_id,
+      location_id: existingItem.location_id,
+      quantity_on_hand: 0,
+      quantity_available: 0,
+      quantity_committed: 0,
+    });
   }
 
   await upsertRows(supabaseAdmin, "inventory_items", [...inventoryRows.values()], {
@@ -720,6 +769,47 @@ async function syncProductsAndInventory(
     productsByShopifyVariantId,
     productsBySku,
   };
+}
+
+/**
+ * After a full sync, any product still pointing at a Shopify variant that
+ * Shopify no longer returned was deleted there. Keep the row (PO history and
+ * events reference it) but zero its stock and stamp when it disappeared.
+ */
+async function markRemovedVariants(supabaseAdmin: SupabaseClient, fetchedVariantIds: Set<string>) {
+  const removedIds: string[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabaseAdmin
+      .from("products")
+      .select("id, shopify_variant_id")
+      .not("shopify_variant_id", "is", null)
+      .is("shopify_removed_at", null)
+      .range(from, from + 999);
+    if (error) throw error;
+    for (const row of (data ?? []) as Array<{ id: string; shopify_variant_id: string }>) {
+      if (!fetchedVariantIds.has(row.shopify_variant_id)) removedIds.push(row.id);
+    }
+    if (!data || data.length < 1000) break;
+    from += 1000;
+  }
+  if (!removedIds.length) return 0;
+
+  const removedAt = new Date().toISOString();
+  for (const chunk of chunkArray(removedIds, LOOKUP_CHUNK_SIZE)) {
+    const { error: productError } = await supabaseAdmin
+      .from("products")
+      .update({ current_inventory: 0, shopify_removed_at: removedAt })
+      .in("id", chunk);
+    if (productError) throw productError;
+    const { error: itemError } = await supabaseAdmin
+      .from("inventory_items")
+      .update({ quantity_on_hand: 0, quantity_available: 0, quantity_committed: 0 })
+      .in("product_id", chunk);
+    if (itemError) throw itemError;
+  }
+  logInfo("sync_marked_removed_variants", { count: removedIds.length });
+  return removedIds.length;
 }
 
 async function syncShopifyOrderUsageEvents({
@@ -898,6 +988,11 @@ Deno.serve(async (request) => {
       matchedProductSkus: productsBySku.size,
     });
 
+    // Only a full sync sees every variant, so only it may decide what was deleted.
+    stage = "mark_removed_variants";
+    const removedVariants =
+      mode === "all" ? await markRemovedVariants(supabaseAdmin, new Set(variants.map((variant) => variant.id))) : 0;
+
     stage = "fetch_orders";
     const orders = await fetchShopifyOrders({
       storeDomain,
@@ -921,6 +1016,7 @@ Deno.serve(async (request) => {
       productsSynced,
       inventoryRecordsSynced,
       usageEventsSynced,
+      removedVariants,
       matchedVariants: variants.length,
       matchedOrders: orders.length,
       lookbackDays,
@@ -932,6 +1028,7 @@ Deno.serve(async (request) => {
       productsSynced,
       inventoryRecordsSynced,
       usageEventsSynced,
+      removedVariants,
       matchedVariants: variants.length,
       matchedOrders: orders.length,
       lookbackDays,

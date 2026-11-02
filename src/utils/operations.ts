@@ -70,8 +70,19 @@ export function isApparelProductName(name: string | null | undefined): boolean {
   return /shorts?|\btee\b|t-shirt|\bshirt\b|windbreaker|\bjacket\b|\bhoodie\b/i.test(name ?? "");
 }
 
-export function isIgnoredProduct(product: Pick<Product, "ignored">): boolean {
-  return Boolean(product.ignored);
+/**
+ * Products that should drop out of stock counts, alerts and default lists:
+ * ignored in Nexus, deleted from Shopify, or archived there.
+ */
+export function isIgnoredProduct(
+  product: Pick<Product, "ignored"> & Partial<Pick<Product, "shopify_removed_at" | "shopify_status">>,
+): boolean {
+  return Boolean(product.ignored) || isRetiredFromShopify(product);
+}
+
+/** Deleted or archived in Shopify. */
+export function isRetiredFromShopify(product: Partial<Pick<Product, "shopify_removed_at" | "shopify_status">>): boolean {
+  return Boolean(product.shopify_removed_at) || product.shopify_status === "archived";
 }
 
 export type InventoryRiskStatus = "Oversold" | "Low Stock" | "Reorder Soon" | "Incoming Shipment" | "Safe";

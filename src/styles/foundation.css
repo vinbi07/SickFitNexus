@@ -1161,3 +1161,44 @@ h4 {
 .stage-mark-action {
   gap: 8px;
 }
+
+/* Manufacturer order check: real icons, status colors from tokens. */
+.mfr-issue-stop,
+.mfr-issue-warn,
+.mfr-check-pass {
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--nx-text-small);
+  line-height: 1.45;
+}
+
+.mfr-issue-stop {
+  color: var(--nx-danger);
+}
+
+.mfr-issue-warn {
+  color: var(--nx-warning);
+}
+
+.mfr-issue-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.mfr-check-pass {
+  display: flex;
+  margin: 0;
+  color: var(--nx-success);
+}
+
+.mfr-check-counts {
+  display: flex;
+  gap: 10px;
+  margin: 4px 0 0;
+  font-size: var(--nx-text-small);
+  font-weight: 550;
+}
+
+.mfr-check-warn-count {
+  color: var(--nx-warning);
+}

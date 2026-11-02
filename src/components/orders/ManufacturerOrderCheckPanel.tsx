@@ -1,9 +1,12 @@
-import type { PoLineItem, SockCard } from "@/types/domain";
+import { CircleAlert, CircleCheck, OctagonX } from "lucide-react";
+import type { PoLineItem, ProductBarcode, SockCard } from "@/types/domain";
 import { validateManufacturerOrder, type ManufacturerOrderIssue } from "@/utils/manufacturerOrderValidation";
 
 type Props = {
   lines: Array<Partial<PoLineItem>>;
   sockCards: SockCard[];
+  /** GS1 barcode book; when given, each UPC is checked against it. */
+  barcodeBook?: ProductBarcode[];
 };
 
 function IssueRow({ issue }: { issue: ManufacturerOrderIssue }) {
@@ -11,21 +14,21 @@ function IssueRow({ issue }: { issue: ManufacturerOrderIssue }) {
   if (issue.severity === "stop") {
     return (
       <li className="mfr-issue-stop">
-        <span className="mfr-issue-icon">⛔</span>
+        <OctagonX className="mfr-issue-icon" size={15} aria-label="Stop" />
         {linePrefix}{issue.message}
       </li>
     );
   }
   return (
     <li className="mfr-issue-warn">
-      <span className="mfr-issue-icon">⚠</span>
+      <CircleAlert className="mfr-issue-icon" size={15} aria-label="Warning" />
       {linePrefix}{issue.message}
     </li>
   );
 }
 
-export function ManufacturerOrderCheckPanel({ lines, sockCards }: Props) {
-  const issues = validateManufacturerOrder(lines, sockCards);
+export function ManufacturerOrderCheckPanel({ lines, sockCards, barcodeBook = [] }: Props) {
+  const issues = validateManufacturerOrder(lines, sockCards, barcodeBook);
   const stops = issues.filter((i) => i.severity === "stop").length;
   const warnings = issues.filter((i) => i.severity === "warning").length;
   const clean = issues.length === 0;
@@ -34,22 +37,20 @@ export function ManufacturerOrderCheckPanel({ lines, sockCards }: Props) {
     <div className={`panel${clean ? " mfr-check-clean" : ""}`}>
       <div className="panel-header">
         <div>
-          <p className="lookbook-kicker">Validation</p>
-          <h3>
-            Order Check
-            {!clean && (
-              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 400 }}>
-                {stops > 0 && <span style={{ color: "var(--color-danger, #c0392b)" }}> {stops} STOP{stops > 1 ? "S" : ""}</span>}
-                {warnings > 0 && <span style={{ color: "var(--color-warning, #e67e22)" }}> {warnings} warning{warnings > 1 ? "s" : ""}</span>}
-              </span>
-            )}
-          </h3>
+          <h3>Order check</h3>
+          {!clean ? (
+            <p className="mfr-check-counts">
+              {stops > 0 ? <span className="danger-text">{stops} stop{stops > 1 ? "s" : ""}</span> : null}
+              {warnings > 0 ? <span className="mfr-check-warn-count">{warnings} warning{warnings > 1 ? "s" : ""}</span> : null}
+            </p>
+          ) : null}
         </div>
       </div>
 
       {clean ? (
-        <p style={{ color: "var(--color-success, #27ae60)", fontSize: 13 }}>
-          ✓ All checks passed. Safe to send.
+        <p className="mfr-check-pass">
+          <CircleCheck size={16} aria-hidden="true" />
+          All checks passed. Safe to send.
         </p>
       ) : (
         <ul className="mfr-issue-list">

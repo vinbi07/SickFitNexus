@@ -29,6 +29,19 @@ export const shopifyService = {
     return data;
   },
 
+  /** When stock was last pulled from Shopify (latest product sync), or null if never. */
+  async getLatestSyncAt() {
+    const client = assertSupabaseFunctions();
+    const { data, error } = await client
+      .from("products")
+      .select("last_shopify_sync_at")
+      .not("last_shopify_sync_at", "is", null)
+      .order("last_shopify_sync_at", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return ((data ?? [])[0] as { last_shopify_sync_at: string } | undefined)?.last_shopify_sync_at ?? null;
+  },
+
   async syncAllProducts() {
     const client = assertSupabaseFunctions();
     const { data, error } = await client.functions.invoke(SHOPIFY_SYNC_FUNCTION, {

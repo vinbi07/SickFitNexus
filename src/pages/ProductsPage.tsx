@@ -1,18 +1,18 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { DataTable } from "@/components/DataTable";
 import { EntityFormModal } from "@/components/EntityFormModal";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { Modal } from "@/components/Modal";
 import { NotificationBanner } from "@/components/NotificationBanner";
-import { PageHeader } from "@/components/PageHeader";
-import { RowActionsMenu } from "@/components/RowActionsMenu";
-import { StatusBadge } from "@/components/StatusBadge";
+import { PageHeader, type PageHeaderAction } from "@/components/PageHeader";
+import { FilterPopover } from "@/components/products/FilterPopover";
+import { ProductFamilyTable } from "@/components/products/ProductFamilyTable";
+import { latestShopifySync, ShopifySyncStatus } from "@/components/products/ShopifySyncStatus";
+import { useReloadOnShopifySync, useShopifySync } from "@/context/ShopifySyncContext";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { useDropdownPosition } from "@/hooks/useDropdownPosition";
+import { assessProductBarcode, findDuplicateBarcodes, type BarcodeAssessment } from "@/utils/barcode";
 import { inventoryService } from "@/services/inventoryService";
 import { shopifyService } from "@/services/shopifyService";
 import { supportService } from "@/services/supportService";
@@ -24,6 +24,7 @@ import {
   getProductVariantLabel,
   getUnitsPerPack,
 } from "@/utils/lookbook";
+import { groupProductFamilies, isLowStockFamily, needsAttention, type ProductFamily } from "@/utils/productFamilies";
 import {
   getInventoryHealthLabel,
   getMarginMetrics,
@@ -31,6 +32,7 @@ import {
   isApparelProductName,
   isBundleProductName,
   isHiddenByDefaultProductName,
+  isIgnoredProduct,
   isInventoryDanger,
   SOCK_TYPES,
 } from "@/utils/operations";
@@ -41,6 +43,20 @@ type ProductFormValues = Partial<Product> & {
 };
 
 const NON_SOCK_FILTER_VALUE = "__non_sock__";
+
+const BARCODE_FILTER_LABELS: Record<string, string> = {
+  problems: "Barcode problems",
+  unconfirmed: "Needs GS1 check",
+  verified: "GS1 verified",
+};
+
+type ProductTab = "all" | "attention" | "low";
+
+const SORT_LABELS: Record<string, string> = {
+  name: "Name",
+  inventory: "Inventory",
+  margin: "Margin",
+};
 
 export function ProductsPage() {
   const [editing, setEditing] = useState<ProductFormValues | null>(null);
@@ -58,6 +74,7 @@ export function ProductsPage() {
   const [packSizeFilter, setPackSizeFilter] = useState("");
   const [sockTypeFilter, setSockTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [barcodeFilter, setBarcodeFilter] = useState("");
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
   const [showIgnoredProducts, setShowIgnoredProducts] = useState(false);
   const [sort, setSort] = useState("name");
@@ -65,7 +82,8 @@ export function ProductsPage() {
     tone: "success" | "error";
     message: string;
   } | null>(null);
-  const viewOptions = useDropdownPosition();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<ProductTab>("all");
   const { data, loading, error, reload } = useAsyncData(
     async () => ({
       products: await supportService.listProducts(),
@@ -74,6 +92,9 @@ export function ProductsPage() {
     }),
     [],
   );
+
+  useReloadOnShopifySync(reload);
+  const { running: shopifySyncing, syncNow: syncShopifyNow } = useShopifySync();
 
   if (loading) return <LoadingState />;
   if (error || !data)
@@ -87,6 +108,25 @@ export function ProductsPage() {
     eventsByProductId.set(event.product_id, bucket);
   });
 
+  const healthOf = (product: Product) =>
+    getInventoryHealthLabel(product.current_inventory, eventsByProductId.get(product.id) ?? [], product.safety_stock ?? 0);
+
+  // Barcode health per product: check digit, duplicates, and agreement with the barcode book.
+  const barcodeDuplicates = findDuplicateBarcodes(
+    data.products.filter((product) => !isIgnoredProduct(product)).map((product) => ({ owner: product.sku, code: product.upc })),
+  );
+  const barcodeByProductId = new Map<string, BarcodeAssessment>(
+    data.products.map((product) => [
+      product.id,
+      assessProductBarcode(
+        product.upc,
+        (product.product_barcode_links ?? []).map((link) => link.product_barcodes?.barcode_upc ?? "").filter(Boolean),
+        barcodeDuplicates,
+        product.sku,
+      ),
+    ]),
+  );
+
   const categories = [
     ...new Set(
       data.products.map((product) => product.category).filter(Boolean),
@@ -95,69 +135,68 @@ export function ProductsPage() {
   const parentCandidates = data.products.filter(
     (product) => !product.parent_product_id,
   );
-  const filteredProducts = data.products
-    .filter((product) => {
-      const query = search.trim().toLowerCase();
-      const matchesSearch =
-        !query ||
-        product.name.toLowerCase().includes(query) ||
-        getProductFamilyName(product).toLowerCase().includes(query) ||
-        getProductVariantLabel(product).toLowerCase().includes(query) ||
-        product.sku.toLowerCase().includes(query) ||
-        (product.description ?? "").toLowerCase().includes(query) ||
-        (product.vendors?.name ?? "").toLowerCase().includes(query);
-      const matchesCategory = !category || product.category === category;
-      const matchesBundlesOnly =
-        !bundlesOnly || isBundleProductName(product.name);
-      const matchesIgnoredOnly = !ignoredOnly || product.ignored;
-      const matchesPackSize =
-        !packSizeFilter || getUnitsPerPack(product) === Number(packSizeFilter);
-      const matchesSockType =
-        !sockTypeFilter ||
-        (sockTypeFilter === NON_SOCK_FILTER_VALUE
-          ? isApparelProductName(product.name)
-          : getSockTypeFromName(product.name) === sockTypeFilter);
-      const matchesStatus =
-        !statusFilter ||
-        getInventoryHealthLabel(
-          product.current_inventory,
-          eventsByProductId.get(product.id) ?? [],
-          product.safety_stock ?? 0,
-        ) === statusFilter;
-      const matchesVisibility =
-        (showHiddenCategories ||
-          bundlesOnly ||
-          !isHiddenByDefaultProductName(product.name)) &&
-        (showIgnoredProducts || ignoredOnly || !product.ignored);
-      return (
-        matchesSearch &&
-        matchesCategory &&
-        matchesBundlesOnly &&
-        matchesIgnoredOnly &&
-        matchesPackSize &&
-        matchesSockType &&
-        matchesStatus &&
-        matchesVisibility
-      );
-    })
+  // Visibility (bundles, gift cards, ignored) decides which SKUs exist in the list;
+  // the other filters decide which products show. A product shows when any of its
+  // variants matches, so searching a variant SKU finds the whole product.
+  const isVisible = (product: Product) =>
+    (showHiddenCategories || bundlesOnly || !isHiddenByDefaultProductName(product.name)) &&
+    (showIgnoredProducts || ignoredOnly || !isIgnoredProduct(product));
+  const matchesFilters = (product: Product) => {
+    const query = search.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      product.name.toLowerCase().includes(query) ||
+      getProductFamilyName(product).toLowerCase().includes(query) ||
+      getProductVariantLabel(product).toLowerCase().includes(query) ||
+      product.sku.toLowerCase().includes(query) ||
+      (product.upc ?? "").toLowerCase().includes(query) ||
+      (product.description ?? "").toLowerCase().includes(query) ||
+      (product.vendors?.name ?? "").toLowerCase().includes(query);
+    const matchesCategory = !category || product.category === category;
+    const matchesBundlesOnly = !bundlesOnly || isBundleProductName(product.name);
+    const matchesIgnoredOnly = !ignoredOnly || isIgnoredProduct(product);
+    const matchesPackSize = !packSizeFilter || getUnitsPerPack(product) === Number(packSizeFilter);
+    const matchesSockType =
+      !sockTypeFilter ||
+      (sockTypeFilter === NON_SOCK_FILTER_VALUE
+        ? isApparelProductName(product.name)
+        : getSockTypeFromName(product.name) === sockTypeFilter);
+    const matchesStatus = !statusFilter || healthOf(product) === statusFilter;
+    const barcode = barcodeByProductId.get(product.id);
+    const matchesBarcode =
+      !barcodeFilter || (barcodeFilter === "problems" ? Boolean(barcode?.isProblem) : barcode?.status === barcodeFilter);
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesBundlesOnly &&
+      matchesIgnoredOnly &&
+      matchesPackSize &&
+      matchesSockType &&
+      matchesStatus &&
+      matchesBarcode
+    );
+  };
+
+  const allFamilies = groupProductFamilies(data.products.filter(isVisible), {
+    healthOf,
+    hasBarcodeProblem: (product) => Boolean(barcodeByProductId.get(product.id)?.isProblem),
+  });
+  const matchingFamilies = allFamilies.filter((family) => family.variants.some(matchesFilters));
+  const tabCounts = {
+    all: matchingFamilies.length,
+    attention: matchingFamilies.filter(needsAttention).length,
+    low: matchingFamilies.filter(isLowStockFamily).length,
+  };
+  const families = matchingFamilies
+    .filter((family) => (tab === "attention" ? needsAttention(family) : tab === "low" ? isLowStockFamily(family) : true))
     .sort((left, right) => {
-      if (sort === "inventory")
-        return right.current_inventory - left.current_inventory;
-      if (sort === "margin")
-        return (
-          getMarginMetrics(right.unit_cost, right.unit_price).marginPercent -
-          getMarginMetrics(left.unit_cost, left.unit_price).marginPercent
-        );
+      if (sort === "inventory") return right.totalStock - left.totalStock;
+      if (sort === "margin") return (right.marginPercent ?? -1) - (left.marginPercent ?? -1);
       return left.name.localeCompare(right.name);
     });
+  const categoryOf = (family: ProductFamily) => getSockTypeFromName(family.root.name) ?? family.root.category ?? "";
 
-  const viewOptionsActiveCount = [
-    bundlesOnly,
-    showHiddenCategories,
-    showIgnoredProducts,
-    ignoredOnly,
-  ].filter(Boolean).length;
-
+  
   const activeFilters: Array<{
     key: string;
     label: string;
@@ -213,6 +252,12 @@ export function ProductsPage() {
       label: `Status: ${statusFilter}`,
       onClear: () => setStatusFilter(""),
     });
+  if (barcodeFilter)
+    activeFilters.push({
+      key: "barcode",
+      label: `Barcode: ${BARCODE_FILTER_LABELS[barcodeFilter] ?? barcodeFilter}`,
+      onClear: () => setBarcodeFilter(""),
+    });
   if (showHiddenCategories)
     activeFilters.push({
       key: "showHidden",
@@ -234,6 +279,7 @@ export function ProductsPage() {
     setPackSizeFilter("");
     setSockTypeFilter("");
     setStatusFilter("");
+    setBarcodeFilter("");
     setShowHiddenCategories(false);
     setShowIgnoredProducts(false);
   };
@@ -249,6 +295,78 @@ export function ProductsPage() {
       offLabel: "Unignore Selected",
     },
   ];
+
+  const syncAllFromShopify = async () => {
+    try {
+      setSyncingAll(true);
+      const result = await syncShopifyNow();
+      setNotice({
+        tone: "success",
+        message: `Shopify sync completed. ${result.productsSynced ?? 0} products, ${result.inventoryRecordsSynced ?? 0} inventory records, and ${result.usageEventsSynced ?? 0} usage events updated.`,
+      });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Shopify sync failed." });
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
+  const syncProducts = async (products: Product[]) => {
+    try {
+      let usage = 0;
+      for (const product of products) {
+        const result = await shopifyService.syncProduct(product);
+        usage += result.usageEventsSynced ?? 0;
+      }
+      await reload();
+      setNotice({
+        tone: "success",
+        message: `${products.length === 1 ? products[0].name : `${products.length} variants`} synced with Shopify (${usage} recent usage events).`,
+      });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to sync with Shopify." });
+    }
+  };
+
+  const setIgnored = async (products: Product[], ignored: boolean) => {
+    try {
+      await supportService.bulkUpdateProducts(
+        products.map((product) => product.id),
+        { ignored },
+      );
+      await reload();
+      setNotice({
+        tone: "success",
+        message: `${products.length === 1 ? products[0].name : `${products.length} variants`} ${ignored ? "ignored" : "restored"}.`,
+      });
+    } catch (err) {
+      setNotice({ tone: "error", message: err instanceof Error ? err.message : "Failed to update ignore status." });
+    }
+  };
+
+  // The "⋯" menu for a product or a single variant.
+  const actionsFor = (products: Product[], family: ProductFamily): PageHeaderAction[] => {
+    const single = products.length === 1 ? products[0] : null;
+    const allIgnored = products.every((product) => product.ignored);
+    return [
+      { label: "Edit", onClick: () => setEditing(single ?? family.root) },
+      ...(single ? [{ label: "Quick view", onClick: () => setViewing(single) }] : []),
+      { label: "Sync with Shopify", onClick: () => void syncProducts(products) },
+      { label: allIgnored ? "Unignore" : "Ignore", onClick: () => void setIgnored(products, !allIgnored) },
+      {
+        label: single ? "Delete" : `Delete ${products.length} variants`,
+        danger: true,
+        onClick: () => {
+          if (single) {
+            setDeleting(single);
+          } else {
+            setSelectedIds(new Set(products.map((product) => product.id)));
+            setBulkDeleting(true);
+          }
+        },
+      },
+    ];
+  };
 
   const applyBulkPatch = async (patch: Partial<Product>) => {
     try {
@@ -275,52 +393,30 @@ export function ProductsPage() {
     <div className="section-stack">
       <PageHeader
         title="Products"
-        description="Maintain wholesale-ready products with reusable images, pricing, COGS, margins, inventory danger visibility, and bundle eligibility."
-        actions={
-          <div className="btn-row">
-            <button
-              className="btn btn-secondary"
-              disabled={syncingAll}
-              onClick={async () => {
-                try {
-                  setSyncingAll(true);
-                  const result = await shopifyService.syncAllProducts();
-                  await reload();
-                  setNotice({
-                    tone: "success",
-                    message: `Shopify sync completed. ${result.productsSynced ?? 0} products, ${result.inventoryRecordsSynced ?? 0} inventory records, and ${result.usageEventsSynced ?? 0} usage events updated.`,
-                  });
-                } catch (err) {
-                  setNotice({
-                    tone: "error",
-                    message:
-                      err instanceof Error
-                        ? err.message
-                        : "Shopify sync failed.",
-                  });
-                } finally {
-                  setSyncingAll(false);
-                }
-              }}
-            >
-              {syncingAll ? "Syncing Shopify..." : "Sync All Shopify"}
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={() =>
-                setEditing({
-                  sku: "",
-                  name: "",
-                  image_url: "",
-                  no_bundles: false,
-                  ignored: false,
-                })
-              }
-            >
-              Add New Product
-            </button>
-          </div>
+        primaryAction={
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              setEditing({
+                sku: "",
+                name: "",
+                image_url: "",
+                no_bundles: false,
+                ignored: false,
+              })
+            }
+          >
+            Add product
+          </button>
         }
+        secondaryActions={[
+          {
+            label: syncingAll || shopifySyncing ? "Syncing Shopify…" : "Sync all from Shopify",
+            disabled: syncingAll || shopifySyncing,
+            onClick: () => void syncAllFromShopify(),
+          },
+          { label: "Refresh list", onClick: () => void reload() },
+        ]}
       />
       {notice ? (
         <NotificationBanner
@@ -329,430 +425,188 @@ export function ProductsPage() {
           onClose={() => setNotice(null)}
         />
       ) : null}
-      <div className="panel">
-        <div className="filter-row">
+      <ShopifySyncStatus
+        lastSyncedAt={latestShopifySync(data.products)}
+        onSynced={(message) => setNotice({ tone: "success", message })}
+        onError={(message) => setNotice({ tone: "error", message })}
+      />
+      <section className="product-list">
+        <div className="product-list-tabs" role="tablist" aria-label="Product views">
+          {(
+            [
+              ["all", "All"],
+              ["attention", "Needs attention"],
+              ["low", "Low stock"],
+            ] as Array<[ProductTab, string]>
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              className={`product-list-tab${tab === value ? " is-active" : ""}`}
+              onClick={() => setTab(value)}
+            >
+              {label}
+              <span className="product-list-tab-count">{tabCounts[value]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="product-list-toolbar">
           <input
-            placeholder="Search SKU, product, vendor, description"
+            className="product-list-search"
+            type="search"
+            aria-label="Search products"
+            placeholder="Search by name, SKU, UPC or vendor"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-          >
-            <option value="">All categories</option>
-            {categories.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-          <select
-            value={packSizeFilter}
-            onChange={(event) => setPackSizeFilter(event.target.value)}
-          >
-            <option value="">All Pack Sizes</option>
-            {[1, 2, 3, 6, 10, 12].map((count) => (
-              <option key={count} value={count}>
-                {count === 1 ? "1-Pack (Single)" : `${count}-Pack`}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sockTypeFilter}
-            onChange={(event) => setSockTypeFilter(event.target.value)}
-          >
-            <option value="">All Sock Types</option>
-            {SOCK_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-            <option value={NON_SOCK_FILTER_VALUE}>
-              Other / Non-Sock (Apparel)
-            </option>
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-          >
-            <option value="">All Statuses</option>
-            {["Healthy", "Low", "Danger", "Slow Mover"].map((label) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
-          >
-            <option value="name">Sort by name</option>
-            <option value="inventory">Sort by inventory</option>
-            <option value="margin">Sort by margin</option>
-          </select>
-          <button
-            ref={viewOptions.triggerRef}
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => viewOptions.setOpen((current) => !current)}
-          >
-            View Options
-            {viewOptionsActiveCount > 0 ? ` (${viewOptionsActiveCount})` : ""}
-          </button>
-          {viewOptions.open
-            ? createPortal(
-                <div
-                  ref={viewOptions.popoverRef}
-                  className="date-picker-popover-portal view-options-popover"
-                  style={{
-                    top: viewOptions.position.top,
-                    left: viewOptions.position.left,
-                  }}
-                >
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={bundlesOnly}
-                      onChange={(event) => setBundlesOnly(event.target.checked)}
-                    />
-                    Show Bundles Only
-                  </label>
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={showHiddenCategories}
-                      onChange={(event) =>
-                        setShowHiddenCategories(event.target.checked)
-                      }
-                    />
-                    Show Bundles &amp; Gift Cards
-                  </label>
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={showIgnoredProducts}
-                      onChange={(event) =>
-                        setShowIgnoredProducts(event.target.checked)
-                      }
-                    />
-                    Show Ignored
-                  </label>
-                  <label className="view-options-item">
-                    <input
-                      type="checkbox"
-                      checked={ignoredOnly}
-                      onChange={(event) => setIgnoredOnly(event.target.checked)}
-                    />
-                    Ignored Only
-                  </label>
-                  <div className="view-options-divider" />
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-small"
-                    onClick={() => {
-                      void reload();
-                      viewOptions.setOpen(false);
-                    }}
-                  >
-                    Refresh
-                  </button>
-                </div>,
-                document.body,
-              )
-            : null}
-        </div>
-      </div>
-      <div className="panel">
-        <div className="btn-row">
-          <span>
-            Showing {filteredProducts.length} of {data.products.length} products
-          </span>
-          {activeFilters.length > 0 ? (
-            <>
-              {activeFilters.map((filter) => (
-                <button
-                  key={filter.key}
-                  className="btn btn-ghost btn-small"
-                  onClick={filter.onClear}
-                >
-                  {filter.label} &times;
-                </button>
+          <FilterPopover activeCount={activeFilters.filter((filter) => filter.key !== "search").length} onClearAll={clearAllFilters}>
+            <label className="filter-field">
+              <span>Category</span>
+              <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                <option value="">All categories</option>
+                {categories.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Sock type</span>
+              <select value={sockTypeFilter} onChange={(event) => setSockTypeFilter(event.target.value)}>
+                <option value="">All sock types</option>
+                {SOCK_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+                <option value={NON_SOCK_FILTER_VALUE}>Other / non-sock (apparel)</option>
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Pack size</span>
+              <select value={packSizeFilter} onChange={(event) => setPackSizeFilter(event.target.value)}>
+                <option value="">All pack sizes</option>
+                {[1, 2, 3, 6, 10, 12].map((count) => (
+                  <option key={count} value={count}>
+                    {count === 1 ? "1-pack (single)" : `${count}-pack`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Stock health</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">Any</option>
+                {["Healthy", "Low", "Danger", "Slow Mover"].map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              <span>Barcode</span>
+              <select value={barcodeFilter} onChange={(event) => setBarcodeFilter(event.target.value)}>
+                <option value="">Any</option>
+                {Object.entries(BARCODE_FILTER_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="filter-checks">
+              <legend>Show</legend>
+              <label>
+                <input type="checkbox" checked={bundlesOnly} onChange={(event) => setBundlesOnly(event.target.checked)} />
+                Bundles only
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showHiddenCategories}
+                  onChange={(event) => setShowHiddenCategories(event.target.checked)}
+                />
+                Include bundles and gift cards
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showIgnoredProducts}
+                  onChange={(event) => setShowIgnoredProducts(event.target.checked)}
+                />
+                Include ignored and removed from Shopify
+              </label>
+              <label>
+                <input type="checkbox" checked={ignoredOnly} onChange={(event) => setIgnoredOnly(event.target.checked)} />
+                Ignored only
+              </label>
+            </fieldset>
+          </FilterPopover>
+          <label className="product-list-sort">
+            <span>Sort</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              {Object.entries(SORT_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
               ))}
-              <button
-                className="btn btn-ghost btn-small"
-                onClick={clearAllFilters}
-              >
-                Clear All Filters
-              </button>
-            </>
-          ) : (
-            <span className="helper-text">No filters applied</span>
-          )}
+            </select>
+          </label>
+          <span className="product-list-count">
+            {families.length} {families.length === 1 ? "product" : "products"}
+          </span>
         </div>
-      </div>
-      {selectedIds.size > 0 ? (
-        <div className="panel">
-          <div className="btn-row">
-            <span>{selectedIds.size} selected</span>
-            {bulkToggles.map((toggle) => (
-              <button
-                key={`${toggle.key}-on`}
-                className="btn btn-secondary"
-                onClick={() =>
-                  void applyBulkPatch({
-                    [toggle.key]: true,
-                  } as Partial<Product>)
-                }
-              >
-                {toggle.onLabel}
+        {activeFilters.length ? (
+          <div className="product-list-chips">
+            {activeFilters.map((filter) => (
+              <button key={filter.key} type="button" className="filter-chip" onClick={filter.onClear}>
+                {filter.label}
+                <span aria-hidden="true">×</span>
+                <span className="visually-hidden">Remove filter</span>
               </button>
             ))}
-            {bulkToggles.map((toggle) => (
-              <button
-                key={`${toggle.key}-off`}
-                className="btn btn-secondary"
-                onClick={() =>
-                  void applyBulkPatch({
-                    [toggle.key]: false,
-                  } as Partial<Product>)
-                }
-              >
-                {toggle.offLabel}
-              </button>
-            ))}
-            <button
-              className="btn btn-danger"
-              onClick={() => setBulkDeleting(true)}
-            >
-              Delete Selected
-            </button>
-            <button
-              className="btn btn-ghost"
-              onClick={() => setSelectedIds(new Set())}
-            >
-              Clear Selection
+            <button type="button" className="btn btn-ghost btn-small" onClick={clearAllFilters}>
+              Clear all
             </button>
           </div>
-        </div>
-      ) : null}
-      <DataTable
-        emptyMessage="No products yet. Add your first product to start managing catalog and inventory links."
-        columns={[
-          {
-            key: "select",
-            title: (
-              <input
-                type="checkbox"
-                checked={
-                  filteredProducts.length > 0 &&
-                  filteredProducts.every((product) =>
-                    selectedIds.has(product.id),
-                  )
-                }
-                onChange={(event) =>
-                  setSelectedIds(
-                    event.target.checked
-                      ? new Set(filteredProducts.map((product) => product.id))
-                      : new Set(),
-                  )
-                }
-              />
-            ),
-            width: "32px",
-            render: (row) => (
-              <input
-                type="checkbox"
-                checked={selectedIds.has(row.id)}
-                onChange={(event) =>
-                  setSelectedIds((current) => {
-                    const next = new Set(current);
-                    if (event.target.checked) next.add(row.id);
-                    else next.delete(row.id);
-                    return next;
-                  })
-                }
-              />
-            ),
-          },
-          {
-            key: "product",
-            title: "Product / SKU",
-            render: (row) => (
-              <div className="inventory-product-cell">
-                <div className="product-thumb-shell product-thumb-shell-large">
-                  {row.image_url ? (
-                    <img
-                      className="product-thumb"
-                      src={row.image_url}
-                      alt={row.name}
-                    />
-                  ) : (
-                    <span className="product-thumb-fallback">
-                      {row.sku.slice(0, 2)}
-                    </span>
-                  )}
-                </div>
-                <div className="cell-stack">
-                  <Link
-                    className="table-link product-sku-cell"
-                    to={`/products/${row.id}`}
-                  >
-                    <strong>{getProductFamilyName(row)}</strong>
-                  </Link>
-                  <span>{row.sku}</span>
-                  <span className="helper-text">
-                    {getProductVariantLabel(row)}
-                    {row.category ? ` | ${row.category}` : ""}
-                  </span>
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "danger",
-            title: "Health",
-            render: (row) => (
-              <StatusBadge
-                label={getInventoryHealthLabel(
-                  row.current_inventory,
-                  eventsByProductId.get(row.id) ?? [],
-                  row.safety_stock ?? 0,
-                )}
-              />
-            ),
-          },
-          {
-            key: "pricing",
-            title: "Price / Margin",
-            render: (row) => {
-              const margin = getMarginMetrics(row.unit_cost, row.unit_price);
-              return (
-                <div className="cell-stack">
-                  <strong>{formatCurrency(row.unit_price ?? 0)}</strong>
-                  <span className="helper-text">
-                    COGS {formatCurrency(row.unit_cost)}
-                  </span>
-                  <span className="helper-text">
-                    {formatCurrency(margin.marginDollars)} |{" "}
-                    {margin.marginPercent.toFixed(0)}%
-                  </span>
-                </div>
-              );
-            },
-          },
-          {
-            key: "inventory",
-            title: "Inventory",
-            render: (row) => row.current_inventory,
-          },
-          {
-            key: "vendor",
-            title: "Vendor / Pack",
-            render: (row) => (
-              <div className="cell-stack">
-                <strong>{row.vendors?.name ?? "Unassigned"}</strong>
-                <span className="helper-text">
-                  Weight {row.weight ?? "N/A"}
-                </span>
-                <span className="helper-text">
-                  {row.no_bundles ? "No bundles" : "Bundles allowed"}
-                </span>
-                {row.ignored ? (
-                  <span className="helper-text">Ignored</span>
-                ) : null}
-              </div>
-            ),
-          },
-          {
-            key: "actions",
-            title: "Actions",
-            width: "280px",
-            render: (row) => (
-              <div className="btn-row product-actions-cell">
-                <button
-                  className="btn btn-ghost btn-small po-edit-btn"
-                  onClick={() => setViewing(row)}
-                >
-                  View
-                </button>
-                <button
-                  className="btn btn-secondary btn-small po-edit-btn"
-                  onClick={() => setEditing(row)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn btn-danger btn-small po-edit-btn"
-                  onClick={() => setDeleting(row)}
-                >
-                  Delete
-                </button>
-                <RowActionsMenu>
-                  <Link
-                    className="btn btn-ghost btn-small"
-                    to={`/products/${row.id}`}
-                  >
-                    Open
-                  </Link>
-                  <button
-                    className="btn btn-ghost btn-small"
-                    onClick={async () => {
-                      try {
-                        const result = await shopifyService.syncProduct(row);
-                        await reload();
-                        setNotice({
-                          tone: "success",
-                          message: `${row.name} synced with Shopify inventory and ${result.usageEventsSynced ?? 0} recent usage events.`,
-                        });
-                      } catch (err) {
-                        setNotice({
-                          tone: "error",
-                          message:
-                            err instanceof Error
-                              ? err.message
-                              : "Failed to sync Shopify metadata.",
-                        });
-                      }
-                    }}
-                  >
-                    Sync
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-small"
-                    onClick={async () => {
-                      try {
-                        await supportService.saveProduct({
-                          ...row,
-                          ignored: !row.ignored,
-                        });
-                        await reload();
-                        setNotice({
-                          tone: "success",
-                          message: row.ignored
-                            ? `${row.name} is no longer ignored.`
-                            : `${row.name} is now ignored.`,
-                        });
-                      } catch (err) {
-                        setNotice({
-                          tone: "error",
-                          message:
-                            err instanceof Error
-                              ? err.message
-                              : "Failed to update ignore status.",
-                        });
-                      }
-                    }}
-                  >
-                    {row.ignored ? "Unignore" : "Ignore"}
-                  </button>
-                </RowActionsMenu>
-              </div>
-            ),
-          },
-        ]}
-        rows={filteredProducts}
-      />
+        ) : null}
+        <ProductFamilyTable
+          families={families}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          barcodeOf={(product) => barcodeByProductId.get(product.id)}
+          categoryOf={categoryOf}
+          actionsFor={actionsFor}
+          onOpen={(product) => navigate(`/products/${product.id}`)}
+          emptyMessage={
+            data.products.length
+              ? tab === "all"
+                ? "No products match these filters."
+                : "Nothing here right now."
+              : "No products yet. Add one, or sync from Shopify."
+          }
+          bulkActions={
+            <>
+              <button className="btn btn-secondary btn-small" onClick={() => void applyBulkPatch({ ignored: true })}>
+                Ignore
+              </button>
+              <button className="btn btn-secondary btn-small" onClick={() => void applyBulkPatch({ ignored: false })}>
+                Unignore
+              </button>
+              <button className="btn btn-danger btn-small" onClick={() => setBulkDeleting(true)}>
+                Delete
+              </button>
+              <button className="btn btn-ghost btn-small" onClick={() => setSelectedIds(new Set())}>
+                Clear selection
+              </button>
+            </>
+          }
+        />
+      </section>
       {editing ? (
         <EntityFormModal<ProductFormValues>
           title={editing.id ? "Edit Product" : "Add Product"}

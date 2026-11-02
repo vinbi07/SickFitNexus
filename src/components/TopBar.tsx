@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { DEFAULT_LOGO_URL } from "@/lib/branding";
 import { useAuth } from "@/context/AuthContext";
+import { useShopifySync } from "@/context/ShopifySyncContext";
 
 // A quiet utility row: each page's own header carries its title, so this bar
 // only holds global actions and the account.
@@ -12,6 +13,7 @@ export function TopBar({
   onOpenMobileNav?: (triggerButton: HTMLButtonElement) => void;
 }) {
   const { user, logout } = useAuth();
+  const { running: shopifySyncing } = useShopifySync();
 
   return (
     <div className="topbar">
@@ -29,6 +31,11 @@ export function TopBar({
       <div className="topbar-actions">
         {/* Only surface the connection when something needs attention. */}
         {!isSupabaseConfigured ? <span className="status-badge status-warning">Backend setup needed</span> : null}
+        {shopifySyncing ? (
+          <span className="status-badge status-info" role="status">
+            Syncing Shopify…
+          </span>
+        ) : null}
         <Link className="btn btn-primary btn-small" to="/purchase-orders/new/wizard">
           New PO
         </Link>

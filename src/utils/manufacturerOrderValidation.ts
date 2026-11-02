@@ -1,5 +1,6 @@
-import type { PoLineItem, SockCard } from "@/types/domain";
+import type { PoLineItem, ProductBarcode, SockCard } from "@/types/domain";
 import { calculateCardsUsed } from "@/services/sockCardService";
+import { checkBarcode, normalizeBarcode } from "@/utils/barcode";
 
 export type ManufacturerOrderIssue = {
   lineIndex?: number;
@@ -7,11 +8,24 @@ export type ManufacturerOrderIssue = {
   message: string;
 };
 
+/**
+ * Checks a manufacturer order before it goes to the factory. Pass the barcode
+ * book to also confirm each UPC against the GS1 codes on file; a wrong code
+ * means a reprint or a retailer rejecting the shipment.
+ */
 export function validateManufacturerOrder(
   lineItems: Array<Partial<PoLineItem>>,
   sockCards: SockCard[],
+  barcodeBook: ProductBarcode[] = [],
 ): ManufacturerOrderIssue[] {
   const issues: ManufacturerOrderIssue[] = [];
+  const bookByCode = new Map<string, ProductBarcode>();
+  for (const row of barcodeBook) {
+    const code = normalizeBarcode(row.barcode_upc);
+    if (code && !bookByCode.has(code)) bookByCode.set(code, row);
+  }
+  // code → lines using it, to catch one barcode printed on two different designs
+  const linesByCode = new Map<string, number[]>();
   const cardById = new Map(sockCards.map((c) => [c.id, c]));
   const usedByCardId = new Map<string, number>();
 
@@ -36,6 +50,30 @@ export function validateManufacturerOrder(
       issues.push({ lineIndex: index, severity: "stop", message: "Barcode is required but missing." });
     }
 
+    const code = normalizeBarcode(line.upc);
+    if (String(line.upc ?? "").trim()) {
+      const check = checkBarcode(line.upc);
+      if (!check.ok) {
+        issues.push({ lineIndex: index, severity: "stop", message: `Barcode ${line.upc}: ${check.reason}.` });
+      } else {
+        linesByCode.set(code, [...(linesByCode.get(code) ?? []), index]);
+        const book = bookByCode.get(code);
+        if (barcodeBook.length && !book) {
+          issues.push({
+            lineIndex: index,
+            severity: "warning",
+            message: `Barcode ${code} is not in the barcode book. Confirm it against GS1 before printing.`,
+          });
+        } else if (book && line.sku && book.sku.trim().toUpperCase() !== String(line.sku).trim().toUpperCase()) {
+          issues.push({
+            lineIndex: index,
+            severity: "warning",
+            message: `Barcode ${code} belongs to ${book.sku} in the barcode book.`,
+          });
+        }
+      }
+    }
+
     const qty = Number(line.quantity_ordered ?? 0);
     const pack = Number(line.pack_pairs ?? 1);
     if (pack > 0 && qty > 0 && qty % pack !== 0) {
@@ -52,6 +90,16 @@ export function validateManufacturerOrder(
       usedByCardId.set(line.sock_card_id, (usedByCardId.get(line.sock_card_id) ?? 0) + cards);
     }
   });
+
+  for (const [code, indexes] of linesByCode) {
+    const designs = new Set(indexes.map((i) => String(lineItems[i].sku || lineItems[i].product_name || i).trim().toUpperCase()));
+    if (designs.size > 1) {
+      issues.push({
+        severity: "stop",
+        message: `Barcode ${code} is on lines ${indexes.map((i) => i + 1).join(" and ")}. Each design needs its own code.`,
+      });
+    }
+  }
 
   // Card shortage stops — check after accumulating all lines
   for (const [cardId, totalUsed] of usedByCardId) {

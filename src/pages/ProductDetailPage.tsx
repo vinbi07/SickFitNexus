@@ -7,7 +7,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { supportService } from "@/services/supportService";
 import { formatCurrency, formatDate } from "@/utils/format";
-import { getInventoryHealthLabel } from "@/utils/operations";
+import { getInventoryHealthLabel, getMarginMetrics } from "@/utils/operations";
+import { assessProductBarcode } from "@/utils/barcode";
 
 export function ProductDetailPage() {
   const { id = "" } = useParams();
@@ -17,6 +18,14 @@ export function ProductDetailPage() {
   if (error || !data) return <ErrorState message={error ?? "Unable to load product detail"} />;
 
   const { product, events, reservations, poLineItems } = data;
+  const margin = getMarginMetrics(product.unit_cost, product.unit_price);
+  // Duplicates need the whole catalog, so this page checks the code itself and the barcode book link.
+  const barcode = assessProductBarcode(
+    product.upc,
+    (product.product_barcode_links ?? []).map((link) => link.product_barcodes?.barcode_upc ?? "").filter(Boolean),
+    new Map(),
+    product.sku,
+  );
 
   return (
     <div className="section-stack">
@@ -30,7 +39,28 @@ export function ProductDetailPage() {
         <div className="detail-card"><span>Available</span><strong>{product.inventory_available}</strong></div>
         <div className="detail-card"><span>Allocated</span><strong>{product.inventory_allocated}</strong></div>
         <div className="detail-card"><span>Health</span><strong>{getInventoryHealthLabel(product.current_inventory, events, product.safety_stock)}</strong></div>
-        <div className="detail-card"><span>UPC</span><strong>{product.upc ?? "N/A"}</strong></div>
+        <div className="detail-card"><span>Safety stock</span><strong>{product.safety_stock ?? 0}</strong></div>
+        <div className="detail-card">
+          <span>UPC</span>
+          <strong>
+            {product.upc ?? "N/A"}{" "}
+            <span
+              className={`status-badge status-${barcode.isProblem ? "danger" : barcode.status === "verified" ? "success" : "warning"}`}
+              title={barcode.detail}
+            >
+              {barcode.label}
+            </span>
+          </strong>
+        </div>
+        <div className="detail-card"><span>Retail price</span><strong>{formatCurrency(product.unit_price ?? 0)}</strong></div>
+        <div className="detail-card"><span>Cost (COGS)</span><strong>{formatCurrency(product.unit_cost)}</strong></div>
+        <div className="detail-card">
+          <span>Margin</span>
+          <strong>
+            {formatCurrency(margin.marginDollars)} · {margin.marginPercent.toFixed(0)}%
+          </strong>
+        </div>
+        <div className="detail-card"><span>Bundles</span><strong>{product.no_bundles ? "Not allowed" : "Allowed"}</strong></div>
         <div className="detail-card"><span>Case Pack</span><strong>{product.case_pack_quantity}</strong></div>
         <div className="detail-card"><span>Wholesale</span><strong>{formatCurrency(product.wholesale_price)}</strong></div>
         <div className="detail-card"><span>MSRP</span><strong>{formatCurrency(product.msrp)}</strong></div>

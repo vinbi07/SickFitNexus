@@ -42,7 +42,8 @@ type ShopifyOrderNode = {
   };
 };
 
-const SHOPIFY_API_VERSION = "2025-01";
+// Keep within Shopify's 12-month support window (query verified against 2026-10).
+const SHOPIFY_API_VERSION = "2026-10";
 
 const SHOPIFY_ORDERS_QUERY = `
   query Orders($first: Int!, $after: String, $query: String) {

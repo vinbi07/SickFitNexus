@@ -39,6 +39,7 @@ import { LookbookTemplateEditorPage } from "@/pages/LookbookTemplateEditorPage";
 import { LookbookPreviewPage } from "@/pages/LookbookPreviewPage";
 import { PendingQueuePage } from "@/pages/PendingQueuePage";
 import { AppShell } from "@/components/AppShell";
+import { ShopifySyncProvider } from "@/context/ShopifySyncContext";
 import { Sidebar } from "@/components/Sidebar";
 
 const RAIL_COLLAPSED_KEY = "sickfit-nexus-rail-collapsed";
@@ -61,6 +62,7 @@ export default function App() {
         path="*"
         element={(
           <ProtectedRoute>
+          <ShopifySyncProvider>
           <AppShell
             railCollapsed={railCollapsed}
             sidebar={
@@ -111,6 +113,7 @@ export default function App() {
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </AppShell>
+          </ShopifySyncProvider>
           </ProtectedRoute>
         )}
       />
