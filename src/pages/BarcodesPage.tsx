@@ -142,7 +142,16 @@ export function BarcodesPage() {
       await reload();
       setNotice({
         tone: "success",
-        message: `Imported ${result.importedCount} barcode rows into the staging catalog.`,
+        message: [
+          `${result.importedCount} new barcode ${result.importedCount === 1 ? "row" : "rows"} added, ${result.updatedCount} updated.`,
+          result.linkedCount ? `${result.linkedCount} linked to products.` : "",
+          result.unmatchedSkus.length
+            ? `No product found for ${result.unmatchedSkus.length} SKU${result.unmatchedSkus.length === 1 ? "" : "s"} (${result.unmatchedSkus.slice(0, 3).join(", ")}${result.unmatchedSkus.length > 3 ? ", …" : ""}); link those on the Not linked tab.`
+            : "",
+          result.repeatedSkus.length ? `${result.repeatedSkus.length} SKU${result.repeatedSkus.length === 1 ? " was" : "s were"} in the file twice; the last row was used.` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
     } catch (err) {
       setNotice({

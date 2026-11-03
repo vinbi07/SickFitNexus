@@ -22,6 +22,7 @@ import type {
   Vendor,
   Win,
 } from "@/types/domain";
+import { planBarcodeImport, type BarcodeImportRow } from "@/utils/barcodeImport";
 import { deriveInventoryAvailable, sortProductsByFamily } from "@/utils/lookbook";
 
 function attachVariantRelations(products: Product[]) {
@@ -365,8 +366,13 @@ export const supportService = {
   },
   saveBarcode: saveProductBarcode,
   deleteBarcode: (id: string) => deleteFromTable("product_barcodes", id),
+  /**
+   * Imports the barcode book from CSV. A SKU already in the book is updated
+   * (blank cells keep the old value) instead of added again, and each SKU is
+   * linked to the product with the same SKU.
+   */
   importBarcodes: async (rows: ProductBarcodeImportRow[]) => {
-    const prepared = rows
+    const prepared: BarcodeImportRow[] = rows
       .map((row) => ({
         sku: String(row.sku ?? "").trim(),
         handle: row.handle ? String(row.handle).trim() : null,
@@ -386,9 +392,58 @@ export const supportService = {
       throw new Error("No valid barcode rows were found in the CSV.");
     }
 
-    const inserted = await insertTable<ProductBarcode>("product_barcodes", prepared);
+    const supabase = assertSupabase();
+    const skus = [...new Set(prepared.map((row) => row.sku))];
+    const existing: Array<ProductBarcode & { product_barcode_links?: Array<{ product_id: string }> | null }> = [];
+    for (let index = 0; index < skus.length; index += 150) {
+      const { data, error } = await supabase
+        .from("product_barcodes")
+        .select("*, product_barcode_links(product_id)")
+        .in("sku", skus.slice(index, index + 150))
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      existing.push(...((data ?? []) as typeof existing));
+    }
+    const catalog: Array<Pick<Product, "id" | "sku" | "ignored" | "shopify_status" | "shopify_removed_at">> = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, sku, ignored, shopify_status, shopify_removed_at")
+        .range(from, from + 999);
+      if (error) throw error;
+      catalog.push(...((data ?? []) as typeof catalog));
+      if (!data || data.length < 1000) break;
+    }
+
+    const plan = planBarcodeImport(prepared, existing, catalog);
+    const updated = plan.updates.length
+      ? ((await upsertTable<ProductBarcode>(
+          "product_barcodes",
+          plan.updates.map((row) => ({ ...row, updated_at: new Date().toISOString() })),
+        )) as ProductBarcode[])
+      : [];
+    const inserted = plan.inserts.length
+      ? ((await insertTable<ProductBarcode>("product_barcodes", plan.inserts)) as ProductBarcode[])
+      : [];
+
+    const barcodeIdBySku = new Map([...updated, ...inserted].map((barcode) => [barcode.sku, barcode.id]));
+    const links = [...plan.linksBySku.entries()].flatMap(([sku, productIds]) => {
+      const barcodeId = barcodeIdBySku.get(sku);
+      return barcodeId ? productIds.map((productId) => ({ barcode_id: barcodeId, product_id: productId })) : [];
+    });
+    if (links.length) {
+      const { error } = await supabase
+        .from("product_barcode_links")
+        .upsert(links, { onConflict: "barcode_id,product_id", ignoreDuplicates: true });
+      if (error) throw new Error(`Barcodes saved, but linking them to products failed. ${getErrorMessage(error)}`);
+    }
+
     return {
-      importedCount: (inserted ?? []).length,
+      importedCount: inserted.length,
+      updatedCount: updated.length,
+      linkedCount: links.length,
+      unmatchedSkus: plan.unmatchedSkus,
+      repeatedSkus: plan.repeatedSkus,
     };
   },
   listSops: () => listTable<Sop>("sops"),
