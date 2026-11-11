@@ -38,6 +38,7 @@ import {
   getManufacturingOrderTitle,
   getOversoldLabel,
   getPaymentStatusLabel,
+  getPoTargetDate,
 } from "@/utils/operations";
 import { printPurchaseOrderDocument } from "@/utils/purchaseOrderActions";
 import { buildPurchaseOrderDocumentHtml } from "@/utils/purchaseOrderDocument";
@@ -473,8 +474,8 @@ export function PurchaseOrderDetailPage() {
                 { label: "Total", value: formatCurrency(data.purchaseOrder.total_cost) },
                 { label: "Units", value: formatNumber(data.purchaseOrder.total_units) },
                 {
-                  label: "Needed by",
-                  value: formatDate(data.purchaseOrder.eta_date ?? data.purchaseOrder.expected_delivery_date),
+                  label: getPoTargetDate(data.purchaseOrder)?.label === "ETA" ? "Needed by" : "Ship by",
+                  value: formatDate(getPoTargetDate(data.purchaseOrder)?.date),
                 },
                 { label: "Payment", value: <StatusBadge label={data.purchaseOrder.invoice_status ?? "Open"} /> },
               ]

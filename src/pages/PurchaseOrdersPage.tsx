@@ -24,6 +24,7 @@ import type {
   PurchaseOrderType,
 } from "@/types/domain";
 import { formatCurrency, formatDate, formatDateOnly } from "@/utils/format";
+import { getPoTargetDate } from "@/utils/operations";
 import { DEFAULT_LEAD_TIME_SETTINGS } from "@/utils/leadTime";
 import { nextStepLabel, type StageContext } from "@/utils/productionStage";
 
@@ -68,6 +69,9 @@ const purchaseOrderTypes: PurchaseOrderType[] = [
 function closeActionsMenu(event: { currentTarget: HTMLElement }) {
   event.currentTarget.closest("details")?.removeAttribute("open");
 }
+
+// Nothing left to do on these, so the Next column says so instead of showing a dash.
+const DONE_STATUSES = new Set<PurchaseOrder["status"]>(["Fulfilled", "Received", "Closed", "Cancelled"]);
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -354,7 +358,10 @@ export function PurchaseOrdersPage() {
             render: (row) => (
               <div className="cell-stack">
                 <strong>
-                  {formatDate(row.eta_date ?? row.expected_delivery_date)}
+                  {(() => {
+                    const target = getPoTargetDate(row);
+                    return target ? `${target.label} ${formatDate(target.date)}` : "No date set";
+                  })()}
                 </strong>
                 <span className="helper-text">
                   Ordered {formatDate(row.order_date)}
@@ -373,7 +380,15 @@ export function PurchaseOrdersPage() {
             title: "Next",
             render: (row) => {
               const next = row.po_type === "Manufacturer PO" ? nextStepLabel(row, data.stageContext) : null;
-              if (!next) return <span className="helper-text">—</span>;
+              if (!next) {
+                if (DONE_STATUSES.has(row.status)) return <span className="helper-text">No action needed</span>;
+                if (row.po_type === "Manufacturer PO") return <span className="helper-text">—</span>;
+                return (
+                  <strong>
+                    {row.approval_status === "Pending Approval" ? "Needs approval" : "Ship, then mark fulfilled"}
+                  </strong>
+                );
+              }
               return (
                 <div className="cell-stack">
                   {next.tone === "neutral" ? (
@@ -396,9 +411,11 @@ export function PurchaseOrdersPage() {
             render: (row) => (
               <div className="cell-stack">
                 <strong>{row.source_channel ?? "Manual"}</strong>
-                <span className="helper-text">
-                  {row.vendors?.name ?? "Unassigned vendor"}
-                </span>
+                {row.po_type === "Manufacturer PO" ? (
+                  <span className="helper-text">
+                    {row.vendors?.name ?? "Unassigned vendor"}
+                  </span>
+                ) : null}
               </div>
             ),
           },

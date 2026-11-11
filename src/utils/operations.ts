@@ -117,6 +117,19 @@ export function getMarginMetrics(unitCost: number, unitPrice: number) {
   };
 }
 
+/**
+ * The date a PO is working toward: the ETA when one is set, otherwise (retailer POs) the end of
+ * the ship window from the PO. Null when neither exists.
+ */
+export function getPoTargetDate(
+  po: Pick<PurchaseOrder, "eta_date" | "expected_delivery_date" | "ship_complete_date" | "start_ship_date">,
+): { label: "ETA" | "Ship by"; date: string } | null {
+  const eta = po.eta_date ?? po.expected_delivery_date;
+  if (eta) return { label: "ETA", date: eta };
+  const shipBy = po.ship_complete_date ?? po.start_ship_date;
+  return shipBy ? { label: "Ship by", date: shipBy } : null;
+}
+
 export function getInvoiceStatus(po: PurchaseOrder) {
   if (po.invoice_status) return po.invoice_status;
   if (po.actual_delivery_date) return "Shipped";

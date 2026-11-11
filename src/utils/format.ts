@@ -28,7 +28,7 @@ export function formatDate(value: string | null | undefined) {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(parseDisplayDate(value));
 }
 
 /** Formats a date-only (YYYY-MM-DD) value without shifting it a day in US time zones. */
