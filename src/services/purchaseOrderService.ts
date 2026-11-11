@@ -180,7 +180,12 @@ async function upsertGeneratedDocument(
   return savedDoc;
 }
 
-async function upsertReservationLedger(
+/** Units this line holds in inventory_allocated. Lines from before allocated_units hold their full quantity. */
+export function heldUnits(item: Pick<PoLineItem, "allocated_units" | "unit_quantity" | "quantity_ordered">) {
+  return Number(item.allocated_units ?? item.unit_quantity ?? item.quantity_ordered ?? 0);
+}
+
+export async function upsertReservationLedger(
   purchaseOrderId: string,
   lineItems: PoLineItem[],
   actor: DashboardActor,
@@ -203,7 +208,7 @@ async function upsertReservationLedger(
       purchase_order_id: purchaseOrderId,
       po_line_item_id: item.id,
       product_id: item.product_id,
-      reserved_units: Number(item.unit_quantity ?? item.quantity_ordered ?? 0),
+      reserved_units: heldUnits(item),
       status: nextStatus,
       action_type: actionType,
       actor_user_id: actor.actorUserId,
@@ -211,6 +216,13 @@ async function upsertReservationLedger(
       notes: note ?? null,
     });
   }
+}
+
+async function zeroAllocatedUnits(lineItems: PoLineItem[]) {
+  const ids = lineItems.map((item) => item.id).filter(Boolean);
+  if (!ids.length) return;
+  const { error } = await assertSupabase().from("po_line_items").update({ allocated_units: 0 }).in("id", ids);
+  if (error) throw error;
 }
 
 export const purchaseOrderService = {
@@ -588,19 +600,7 @@ export const purchaseOrderService = {
   async reject(id: string, reason?: string) {
     const actor = await getDashboardActor();
     const detail = await this.getById(id);
-    await inventoryService.releaseProducts(
-      detail.lineItems.reduce<Array<{ productId: string; units: number }>>((accumulator, item) => {
-        if (item.product_id) {
-          accumulator.push({
-            productId: item.product_id,
-            units: Number(item.unit_quantity ?? item.quantity_ordered ?? 0),
-          });
-        }
-        return accumulator;
-      }, []),
-    );
-
-    await upsertReservationLedger(id, detail.lineItems, actor, "Released", "reject", reason ?? null);
+    await this.releaseAllocations(id, "reject", reason ?? null, detail.lineItems, actor);
     const supabase = assertSupabase();
     await supabase
       .from("purchase_orders")
@@ -622,6 +622,28 @@ export const purchaseOrderService = {
       description: reason ?? "Purchase order rejected.",
       metadata: { purchaseOrderId: id },
     });
+  },
+
+  /**
+   * Gives back every unit this PO holds and records it. Lines end with allocated_units = 0, so
+   * calling this twice releases nothing the second time.
+   */
+  async releaseAllocations(
+    id: string,
+    actionType: InventoryReservation["action_type"],
+    note: string | null,
+    lineItems?: PoLineItem[],
+    actor?: DashboardActor,
+  ) {
+    const lines = lineItems ?? (await this.getById(id)).lineItems;
+    const resolvedActor = actor ?? (await getDashboardActor());
+    await inventoryService.releaseProducts(
+      lines
+        .filter((item) => item.product_id && heldUnits(item) > 0)
+        .map((item) => ({ productId: item.product_id as string, units: heldUnits(item) })),
+    );
+    await upsertReservationLedger(id, lines, resolvedActor, "Released", actionType, note);
+    await zeroAllocatedUnits(lines);
   },
 
   async counter(id: string, notes: string) {
@@ -677,11 +699,12 @@ export const purchaseOrderService = {
     const actor = await getDashboardActor();
     const detail = await this.getById(id);
     await inventoryService.fulfillProducts(
-      detail.lineItems.reduce<Array<{ productId: string; units: number; locationId?: string | null; relatedPoId?: string | null }>>((accumulator, item) => {
+      detail.lineItems.reduce<Array<{ productId: string; units: number; allocatedUnits?: number; locationId?: string | null; relatedPoId?: string | null }>>((accumulator, item) => {
         if (item.product_id) {
           accumulator.push({
             productId: item.product_id,
             units: Number(item.unit_quantity ?? item.quantity_ordered ?? 0),
+            allocatedUnits: heldUnits(item),
             locationId: detail.purchaseOrder.location_id,
             relatedPoId: id,
           });
@@ -691,6 +714,7 @@ export const purchaseOrderService = {
     );
 
     await upsertReservationLedger(id, detail.lineItems, actor, "Committed", "fulfill", "Inventory committed on fulfillment.");
+    await zeroAllocatedUnits(detail.lineItems);
     const supabase = assertSupabase();
     await supabase
       .from("purchase_orders")

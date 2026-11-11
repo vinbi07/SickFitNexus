@@ -7042,3 +7042,87 @@ textarea {
   border-color: var(--nx-ink);
   box-shadow: 0 0 0 1px var(--nx-ink), var(--nx-shadow-card);
 }
+
+/* PO PDF import */
+.po-import-include {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.po-import-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  margin-bottom: 16px;
+}
+
+.po-import-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.po-import-meta .muted {
+  font-size: 0.78rem;
+}
+
+.po-import-unmatched {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.po-import-warnings {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.86rem;
+}
+
+.po-import-warning-stock,
+.po-import-warning-unmatched,
+.po-import-warning-totals {
+  color: #b42318;
+}
+
+.po-import-warning-price {
+  color: #8a5a00;
+}
+
+.catalog-picker-trigger {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  overflow: hidden;
+}
+
+/* Review table: fixed layout, so give the product columns the room and keep numbers narrow. */
+.po-import-lines col.col-item { width: 8%; }
+.po-import-lines col.col-po { width: 18%; }
+.po-import-lines col.col-upc { width: 11%; }
+.po-import-lines col.col-product { width: 27%; }
+.po-import-lines col.col-num { width: 6%; }
+.po-import-lines col.col-money { width: 8%; }
+
+.catalog-picker-tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-border);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #8a5a00;
+}
+
+.catalog-picker-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

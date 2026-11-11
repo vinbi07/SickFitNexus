@@ -1,6 +1,6 @@
 import type { Invoice, InvoiceLineItem, PoLineItem, PurchaseOrder } from "@/types/domain";
 import {
-  buildInvoiceDocumentModel,
+  buildInvoiceDocumentHtml,
   buildPurchaseOrderDocumentModel,
   formatPoCurrency,
   formatPoRetail,
@@ -155,11 +155,12 @@ export function InvoiceDocumentView({
   invoice: Invoice;
   lineItems: InvoiceLineItem[];
 }) {
-  const documentModel = buildInvoiceDocumentModel(
-    invoice,
-    lineItems,
-    invoice.buyers ?? null,
-    invoice.retailers ?? null,
+  // The markup is built from escaped values, and sharing it keeps the screen and the printout identical.
+  const html = buildInvoiceDocumentHtml(invoice, lineItems, invoice.buyers ?? null, invoice.retailers ?? null);
+  return (
+    <>
+      <style>{getPurchaseOrderDocumentStyles()}</style>
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </>
   );
-  return <DocumentModelRenderer documentModel={documentModel} />;
 }

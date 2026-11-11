@@ -321,6 +321,8 @@ export interface PoLineItem {
   extended_cost: number;
   extended_retail: number;
   sort_order: number;
+  retailer_item_number?: string | null;
+  allocated_units?: number | null;
   created_at: string;
   updated_at: string;
   products?: Product | null;
@@ -392,12 +394,46 @@ export interface Invoice {
   buyer_notes: string | null;
   internal_notes: string | null;
   source_channel: string | null;
+  invoice_date: string | null;
+  due_date: string | null;
+  customer_po_number: string | null;
+  stock_warnings: InvoiceWarning[];
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
   retailers?: Retailer | null;
   buyers?: Buyer | null;
   locations?: Location | null;
+}
+
+export interface InvoiceWarning {
+  kind: "stock" | "price" | "unmatched" | "totals";
+  message: string;
+  product_id?: string | null;
+  sku?: string | null;
+}
+
+export interface RetailerProductAlias {
+  id: string;
+  retailer_id: string;
+  retailer_item_number: string;
+  vendor_style: string | null;
+  upc: string | null;
+  product_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PoPdfImport {
+  id: string;
+  file_name: string;
+  status: "Extracted" | "Committed" | "Failed";
+  extracted: Record<string, unknown>;
+  created_purchase_order_ids: string[];
+  created_invoice_ids: string[];
+  created_by_label: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface InvoiceLineItem {
@@ -421,6 +457,7 @@ export interface InvoiceLineItem {
   extended_cost: number;
   extended_retail: number;
   sort_order: number;
+  retailer_item_number: string | null;
   created_at: string;
   updated_at: string;
   products?: Product | null;

@@ -33,16 +33,16 @@ export function DocumentTypeSelector() {
       <div className="card">
         <h3>Invoice</h3>
         <p>
-          A bill sent to a customer — normally based on an existing Purchase
-          Order, with an option to create one manually.
+          A bill sent to a customer. Import a retailer's PO PDF to create the
+          POs and invoices together, or convert a Purchase Order already in Nexus.
         </p>
         {invoiceExpanded ? (
           <div className="btn-row">
-            <Link className="btn btn-primary" to="/invoices/new/wizard">
-              From Purchase Order
+            <Link className="btn btn-primary" to="/purchase-orders/import-pdf">
+              From PO PDF
             </Link>
-            <Link className="btn btn-secondary" to="/invoices/new/wizard?mode=manual">
-              Create Manually
+            <Link className="btn btn-secondary" to="/purchase-orders">
+              From existing Purchase Order
             </Link>
           </div>
         ) : (

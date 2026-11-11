@@ -227,6 +227,33 @@ export const inventoryService = {
     }
   },
 
+  /**
+   * Holds up to the requested units, capped at what is available right now (read fresh, so stock
+   * that changed since a review screen loaded is respected). Returns the units actually held.
+   */
+  async allocateAvailable(lines: Array<{ productId: string; units: number }>) {
+    const supabase = assertSupabase();
+    const allocated: Array<{ productId: string; units: number }> = [];
+    for (const line of lines) {
+      const { data, error } = await supabase.from("products").select("*").eq("id", line.productId).single();
+      if (error) throw error;
+      const product = data as Product;
+      const units = Math.min(Math.max(Number(line.units ?? 0), 0), deriveInventoryAvailable(product));
+      if (units > 0) {
+        const nextAllocated = Number(product.inventory_allocated ?? 0) + units;
+        await updateTable<Product>("products", product.id, {
+          inventory_allocated: nextAllocated,
+          inventory_available: deriveInventoryAvailable({
+            current_inventory: Number(product.current_inventory ?? 0),
+            inventory_allocated: nextAllocated,
+          }),
+        });
+      }
+      allocated.push({ productId: line.productId, units });
+    }
+    return allocated;
+  },
+
   async releaseProducts(lines: Array<{ productId: string; units: number }>) {
     const supabase = assertSupabase();
     for (const line of lines) {
@@ -244,14 +271,15 @@ export const inventoryService = {
     }
   },
 
-  async fulfillProducts(lines: Array<{ productId: string; units: number; locationId?: string | null; relatedPoId?: string | null }>) {
+  /** `allocatedUnits` is how much of the shipment was held; it defaults to the full `units`. */
+  async fulfillProducts(lines: Array<{ productId: string; units: number; allocatedUnits?: number; locationId?: string | null; relatedPoId?: string | null }>) {
     const supabase = assertSupabase();
     for (const line of lines) {
       const { data, error } = await supabase.from("products").select("*").eq("id", line.productId).single();
       if (error) throw error;
       const product = data as Product;
       const nextInventory = Math.max(Number(product.current_inventory ?? 0) - Number(line.units ?? 0), 0);
-      const nextAllocated = Math.max(Number(product.inventory_allocated ?? 0) - Number(line.units ?? 0), 0);
+      const nextAllocated = Math.max(Number(product.inventory_allocated ?? 0) - Number(line.allocatedUnits ?? line.units ?? 0), 0);
       await updateTable<Product>("products", product.id, {
         current_inventory: nextInventory,
         inventory_allocated: nextAllocated,
