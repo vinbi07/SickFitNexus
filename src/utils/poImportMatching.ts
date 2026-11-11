@@ -23,6 +23,8 @@ export interface ReviewPurchaseOrder {
   retailerId: string | null;
   duplicateOfPoId: string | null;
   include: boolean;
+  /** Already shipped and counted in stock elsewhere: create the PO and invoice, but leave inventory alone. */
+  alreadyProcessed: boolean;
   lines: ReviewLine[];
   warnings: InvoiceWarning[];
 }
@@ -189,7 +191,7 @@ export function computeBatchWarnings(
 
     for (const line of po.lines) {
       const label = line.extracted.description ?? line.extracted.vendor_style ?? "line";
-      if (!line.productId && line.barcodeId) {
+      if (!line.productId && line.barcodeId && !po.alreadyProcessed) {
         warnings.push({
           kind: "stock",
           message: `${label} (UPC ${line.extracted.upc ?? "none"}) is in the barcode book but not linked to a Nexus product, so no stock is held. Link it on the Barcodes page to track stock.`,
@@ -197,7 +199,7 @@ export function computeBatchWarnings(
         });
         continue;
       }
-      if (!line.productId) {
+      if (!line.productId && !line.barcodeId) {
         warnings.push({
           kind: "unmatched",
           message: `${label} (UPC ${line.extracted.upc ?? "none"}) is not matched to a product.`,
@@ -205,6 +207,7 @@ export function computeBatchWarnings(
         });
         continue;
       }
+      if (!line.productId) continue;
       const product = productsById.get(line.productId);
       const wholesale = Number(product?.wholesale_price ?? 0);
       if (product && wholesale > 0 && Math.abs(wholesale - line.extracted.unit_cost) > MONEY_TOLERANCE) {
@@ -247,7 +250,9 @@ export function computeBatchWarnings(
   // stock. The invoice still bills the full quantity; only the hold is capped.
   const remaining = new Map<string, number>();
   const allocationByLine = new Map<string, { available: number; allocateUnits: number }>();
-  const included = purchaseOrders.filter((po) => po.include).sort((a, b) => shipSortKey(a).localeCompare(shipSortKey(b)));
+  const included = purchaseOrders
+    .filter((po) => po.include && !po.alreadyProcessed)
+    .sort((a, b) => shipSortKey(a).localeCompare(shipSortKey(b)));
   for (const po of included) {
     const shortByProduct = new Map<string, number>();
     po.lines.forEach((line, lineIndex) => {
@@ -304,6 +309,7 @@ export function buildReview(input: {
       retailerId,
       duplicateOfPoId: duplicate?.id ?? null,
       include: !duplicate,
+      alreadyProcessed: false,
       lines: extracted.lines.map((line) => ({
         extracted: line,
         ...matchLine(line, retailerId, input.index),

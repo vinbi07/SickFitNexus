@@ -34,6 +34,7 @@ export interface PoImportCommitResult {
   invoiceNumber: string | null;
   unitsOrdered: number;
   unitsHeld: number;
+  alreadyProcessed: boolean;
   error: string | null;
 }
 
@@ -271,7 +272,10 @@ export const poPdfImportService = {
         const purchaseOrder: Partial<PurchaseOrder> = {
           po_number: extracted.po_number,
           po_type: "Retailer PO",
-          status: "Pending",
+          // Already-processed POs are recorded as fulfilled, so nobody fulfills them again and
+          // takes the units out of stock a second time.
+          status: po.alreadyProcessed ? "Fulfilled" : "Pending",
+          allocation_status: po.alreadyProcessed ? "Fulfilled" : "Not Allocated",
           approval_status: "Approved",
           approved_at: new Date().toISOString(),
           approved_by: actor.actorLabel,
@@ -295,7 +299,12 @@ export const poPdfImportService = {
           ship_to_zip: extracted.ship_to.zip,
           source_channel: "PDF Import",
           source_file_name: input.fileName,
-          notes: extracted.additional_ship_to ? `Additional ship to: ${extracted.additional_ship_to}` : null,
+          notes: [
+            extracted.additional_ship_to ? `Additional ship to: ${extracted.additional_ship_to}` : null,
+            po.alreadyProcessed ? "Imported as already processed: inventory was not changed." : null,
+          ]
+            .filter(Boolean)
+            .join(" ") || null,
         };
 
         const savedPo = await purchaseOrderService.savePurchaseOrder({ purchaseOrder, lineItems });
@@ -319,7 +328,7 @@ export const poPdfImportService = {
         }
 
         const invoice = await invoiceService.convertFromPo(savedPo.id, { warnings: po.warnings });
-        const unitsHeld = await holdStock(savedPo.id, po, actor);
+        const unitsHeld = po.alreadyProcessed ? 0 : await holdStock(savedPo.id, po, actor);
         results.push({
           poNumber: extracted.po_number,
           purchaseOrderId: savedPo.id,
@@ -327,6 +336,7 @@ export const poPdfImportService = {
           invoiceNumber: invoice.invoice_number,
           unitsOrdered: po.lines.reduce((sum, line) => sum + Number(line.extracted.quantity ?? 0), 0),
           unitsHeld,
+          alreadyProcessed: po.alreadyProcessed,
           error: null,
         });
       } catch (error) {
@@ -337,6 +347,7 @@ export const poPdfImportService = {
           invoiceNumber: null,
           unitsOrdered: 0,
           unitsHeld: 0,
+          alreadyProcessed: po.alreadyProcessed,
           error: error instanceof Error ? error.message : "Unexpected error.",
         });
       }

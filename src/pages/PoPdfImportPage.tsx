@@ -92,6 +92,10 @@ export function PoPdfImportPage() {
     updateReview(review.map((po) => (po.key === key ? { ...po, include } : po)));
   }
 
+  function setAlreadyProcessed(key: string | "all", alreadyProcessed: boolean) {
+    updateReview(review.map((po) => (key === "all" || po.key === key ? { ...po, alreadyProcessed } : po)));
+  }
+
   function setLineProduct(key: string, lineIndex: number, option: CatalogOption | null) {
     const productId = option?.kind === "product" ? option.product.id : null;
     const barcodeId = option?.kind === "barcode" ? option.barcode.id : null;
@@ -221,8 +225,19 @@ export function PoPdfImportPage() {
                   ? "Creating..."
                   : `Create ${toCreate.length} PO${toCreate.length === 1 ? "" : "s"} + invoice${toCreate.length === 1 ? "" : "s"}`}
               </button>
+              <button
+                className="btn btn-secondary"
+                disabled={stage === "committing"}
+                onClick={() => setAlreadyProcessed("all", !review.every((po) => po.alreadyProcessed))}
+              >
+                {review.every((po) => po.alreadyProcessed) ? "Unmark all as processed" : "Mark all as already processed"}
+              </button>
               <button className="btn btn-ghost" disabled={stage === "committing"} onClick={reset}>Start over</button>
             </div>
+            <p className="helper-text">
+              Mark a PO as already processed when it has already shipped and your stock already reflects it. Its PO and
+              invoice are still created, but inventory is not touched and the PO is recorded as fulfilled.
+            </p>
             {blocked.length ? (
               <p className="helper-text">
                 {blocked.length} PO{blocked.length === 1 ? " has" : "s have"} lines that still need a product. Map them below to include them.
@@ -248,6 +263,15 @@ export function PoPdfImportPage() {
                     </label>
                   </h3>
                   <div className="btn-row">
+                    <label className="po-import-include">
+                      <input
+                        type="checkbox"
+                        checked={po.alreadyProcessed}
+                        disabled={stage === "committing" || !po.include}
+                        onChange={(event) => setAlreadyProcessed(po.key, event.target.checked)}
+                      />
+                      Already processed (don't touch inventory)
+                    </label>
                     {po.duplicateOfPoId ? (
                       <Link className="btn btn-ghost btn-small" to={`/purchase-orders/${po.duplicateOfPoId}`}>
                         Already imported
@@ -341,8 +365,14 @@ export function PoPdfImportPage() {
                           </td>
                           <td>{line.extracted.quantity}</td>
                           <td>{line.available ?? ""}</td>
-                          <td className={line.productId && line.allocateUnits < line.extracted.quantity ? "po-import-unmatched" : ""}>
-                            {line.productId && po.include ? line.allocateUnits : ""}
+                          <td
+                            className={
+                              line.productId && po.include && !po.alreadyProcessed && line.allocateUnits < line.extracted.quantity
+                                ? "po-import-unmatched"
+                                : ""
+                            }
+                          >
+                            {po.alreadyProcessed ? "None" : line.productId && po.include ? line.allocateUnits : ""}
                           </td>
                           <td>{formatPoCurrency(line.extracted.unit_cost)}</td>
                           <td>{formatPoCurrency(line.extracted.quantity * line.extracted.unit_cost)}</td>
@@ -403,7 +433,9 @@ export function PoPdfImportPage() {
                       ) : ""}
                     </td>
                     <td>
-                      {result.error ? "" : (
+                      {result.error ? "" : result.alreadyProcessed ? (
+                        "Inventory not changed"
+                      ) : (
                         <span className={result.unitsHeld < result.unitsOrdered ? "po-import-unmatched" : ""}>
                           {result.unitsHeld} of {result.unitsOrdered}
                         </span>

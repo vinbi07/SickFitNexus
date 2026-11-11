@@ -264,6 +264,32 @@ describe("buildReview", () => {
     expect(recomputed[1].warnings.filter((warning) => warning.kind === "stock")).toHaveLength(0);
   });
 
+  it("leaves stock alone for POs marked as already processed", () => {
+    const review = buildReview({
+      extracted: [
+        texasPo("4500894138", "2026-10-09"),
+        texasPo("4500894139", "2026-10-09"),
+        texasPo("4500894140", "2026-10-09"),
+        texasPo("4500894141", "2026-10-12"),
+      ],
+      index,
+      retailers: [paradies],
+      existingPurchaseOrders: [],
+    });
+    // The three earliest already shipped: the last PO gets all 80 pink and no shortage.
+    const processed = computeBatchWarnings(
+      review.map((po) => (po.extracted.po_number === "4500894141" ? po : { ...po, alreadyProcessed: true })),
+      index.productsById,
+    );
+    for (const po of processed.slice(0, 3)) {
+      expect(po.lines.every((line) => line.allocateUnits === 0 && line.available === null)).toBe(true);
+      expect(po.warnings.filter((warning) => warning.kind === "stock")).toHaveLength(0);
+    }
+    expect(processed[3].lines[0].available).toBe(80);
+    expect(processed[3].lines[0].allocateUnits).toBe(24);
+    expect(processed[3].warnings.filter((warning) => warning.kind === "stock")).toHaveLength(0);
+  });
+
   it("warns when different UPCs land on the same product", () => {
     const creme = line({ vendor_style: "Texas Creme Socks", upc: "850065635026" });
     const mislinked: ProductBarcode = {
