@@ -42,15 +42,14 @@ function variantOrder(left: Product, right: Product) {
 }
 
 /**
- * Groups SKUs into products the way Shopify lists them: children under their
- * parent style, and synced variants that share a Shopify product together.
- * A parent that only exists to hold variants (no stock of its own) is not
- * counted as a variant.
+ * Which product family each SKU belongs to: children go under their parent
+ * style, and synced variants that share a Shopify product go together.
+ * Returns product id → family key (the key is a product id in that family).
  */
-export function groupProductFamilies(products: Product[], inputs: FamilyInputs): ProductFamily[] {
+export function familyKeyIndex(products: Product[]): Map<string, string> {
   const byId = new Map(products.map((product) => [product.id, product]));
-  const groups = new Map<string, Product[]>();
   const keyOfShopifyProduct = new Map<string, string>();
+  const index = new Map<string, string>();
 
   for (const product of products) {
     const parent = product.parent_product_id ? byId.get(product.parent_product_id) : null;
@@ -62,6 +61,23 @@ export function groupProductFamilies(products: Product[], inputs: FamilyInputs):
       if (existing) key = existing;
       else keyOfShopifyProduct.set(shopifyId, key);
     }
+    index.set(product.id, key);
+  }
+  return index;
+}
+
+/**
+ * Groups SKUs into products the way Shopify lists them (see familyKeyIndex).
+ * A parent that only exists to hold variants (no stock of its own) is not
+ * counted as a variant.
+ */
+export function groupProductFamilies(products: Product[], inputs: FamilyInputs): ProductFamily[] {
+  const byId = new Map(products.map((product) => [product.id, product]));
+  const groups = new Map<string, Product[]>();
+  const index = familyKeyIndex(products);
+
+  for (const product of products) {
+    const key = index.get(product.id)!;
     groups.set(key, [...(groups.get(key) ?? []), product]);
   }
 

@@ -616,6 +616,37 @@
   margin: 0 -16px;
 }
 
+/* Grouped lists: a product row that opens to its variants (inventory, barcodes). */
+.rt-group-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rt-variant td {
+  background: var(--nx-surface-muted);
+}
+
+.rt-variant-cell {
+  padding-left: 38px;
+}
+
+.rt-variant-cell .pf-variant-name {
+  padding-left: 0;
+}
+
+.rt-group-sub {
+  color: var(--nx-muted);
+  font-size: var(--nx-text-caption);
+}
+
+@media (max-width: 900px) {
+  .rt-variant-cell {
+    padding-left: 16px;
+  }
+}
+
 .rt-code {
   color: var(--nx-ink);
   font-variant-numeric: tabular-nums;
@@ -980,6 +1011,67 @@
   gap: var(--nx-gap-region);
 }
 
+.pd-variant-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.pd-variant-detail-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pd-variant-edit {
+  display: grid;
+  gap: 14px;
+}
+
+.pd-variant-edit .form-error {
+  margin: 0;
+}
+
+.pd-variant-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px 16px;
+}
+
+.pd-variant-edit-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pd-variant-edit-field span {
+  color: var(--nx-text-soft);
+  font-size: var(--nx-text-caption);
+  font-weight: 600;
+}
+
+.pd-variant-edit-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--nx-border-strong);
+  border-radius: var(--nx-radius-control);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: inherit;
+}
+
+.pd-variant-edit-field input:focus-visible {
+  outline: 2px solid var(--nx-focus);
+  outline-offset: 1px;
+}
+
+.pd-variant-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .pd-variant-detail h4 {
   margin: 0 0 6px;
   color: var(--nx-text-soft);
@@ -1207,5 +1299,101 @@
 @media (prefers-reduced-motion: reduce) {
   .pd-fix-tag {
     transition: none;
+  }
+}
+
+/* ── Barcode row editor: details on the left, linked products on the right ── */
+.modal-shell.modal-wide {
+  width: min(1120px, 100%);
+}
+
+.barcode-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.barcode-editor-fields .field {
+  grid-column: span 6;
+}
+
+.barcode-editor-fields .field-wide {
+  grid-column: span 12;
+}
+
+.barcode-editor-links {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-left: 28px;
+  border-left: 1px solid var(--nx-border);
+}
+
+.barcode-editor-links-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.barcode-editor-links-head h4 {
+  margin: 0;
+  font-size: var(--nx-text-small);
+  font-weight: 600;
+}
+
+.barcode-editor-links .helper-text {
+  margin: 0;
+}
+
+.barcode-editor-linked {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.barcode-editor-linked li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius-control);
+}
+
+.barcode-editor-linked .cell-stack {
+  min-width: 0;
+}
+
+.barcode-editor-search {
+  width: 100%;
+}
+
+.barcode-editor-links .table-shell {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .barcode-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .barcode-editor-links {
+    padding-top: 20px;
+    padding-left: 0;
+    border-top: 1px solid var(--nx-border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .barcode-editor-fields .field {
+    grid-column: span 12;
   }
 }

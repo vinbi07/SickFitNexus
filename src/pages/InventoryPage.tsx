@@ -39,6 +39,7 @@ import {
   SOCK_TYPES,
 } from "@/utils/operations";
 import { getProductFamilyName, getProductVariantLabel, getUnitsPerPack } from "@/utils/lookbook";
+import { familyKeyIndex } from "@/utils/productFamilies";
 
 const NON_SOCK_FILTER_VALUE = "__non_sock__";
 
@@ -221,6 +222,29 @@ export function InventoryPage() {
   const visibleItems = filteredItems.filter((item) =>
     tab === "reorder" ? needsReorder(item) : tab === "incoming" ? incomingOf(item) > 0 : true,
   );
+
+  // Fold records under their product like the Products list: variants (and locations) open from one row.
+  const familyIndex = familyKeyIndex(data.products);
+  const productById = new Map(data.products.map((product) => [product.id, product]));
+  const familyOf = (item: InventoryItem) => familyIndex.get(item.product_id) ?? item.product_id;
+  const familyNameOf = (rows: InventoryItem[]) => {
+    const root = productById.get(familyOf(rows[0])) ?? rows[0].products;
+    return root ? getProductFamilyName(root) : "Unknown product";
+  };
+  /** One entry per SKU, so per-SKU numbers (incoming, holds) aren't counted once per location. */
+  const distinctSkus = (rows: InventoryItem[]) => [...new Map(rows.map((row) => [row.product_id, row])).values()];
+  const groupAvailable = (rows: InventoryItem[]) =>
+    rows.reduce((sum, row) => sum + availableOf(row), 0) +
+    distinctSkus(rows).reduce((sum, row) => sum + incomingOf(row) - Number(row.products?.inventory_allocated ?? 0), 0);
+  const STATUS_RANK = { danger: 0, warning: 1, info: 2 } as const;
+  const groupStatus = (rows: InventoryItem[]) => {
+    const statuses = rows.map(statusOf).filter((status): status is NonNullable<typeof status> => Boolean(status));
+    if (!statuses.length) return null;
+    const worst = statuses.reduce((best, status) => (STATUS_RANK[status.tone] < STATUS_RANK[best.tone] ? status : best));
+    const count = statuses.filter((status) => status.label === worst.label).length;
+    return { ...worst, label: count > 1 ? `${worst.label} · ${count}` : worst.label };
+  };
+  const plural = (count: number, word: string) => `${formatNumber(count)} ${word}${count === 1 ? "" : "s"}`;
 
   const activeFilters: Array<{
     key: string;
@@ -532,6 +556,14 @@ export function InventoryPage() {
           }
           onRowClick={(row) => setAdjusting(row)}
           rowClassName={(row) => (Number(row.quantity_on_hand) < 0 ? "is-alert" : undefined)}
+          groupBy={familyOf}
+          groupLabel={familyNameOf}
+          // Opening everything while narrowing down saves a click per product.
+          defaultExpanded={tab !== "all" || activeFilters.length > 0}
+          groupActionsFor={(rows) => [
+            { label: "Open product", onClick: () => navigate(`/products/${rows[0].product_id}`) },
+            { label: "Create manufacturing PO", onClick: () => navigate("/purchase-orders/new?type=manufacturer") },
+          ]}
           actionsFor={(row) => [
             { label: "Adjust stock", onClick: () => setAdjusting(row) },
             { label: "Transfer", onClick: () => setTransferring(row) },
@@ -563,12 +595,47 @@ export function InventoryPage() {
                   </div>
                 </div>
               ),
+              renderGroup: (rows) => {
+                const root = productById.get(familyOf(rows[0])) ?? rows[0].products;
+                const name = familyNameOf(rows);
+                const skus = distinctSkus(rows).length;
+                const locations = new Set(rows.map((row) => row.location_id)).size;
+                return (
+                  <div className="pf-product">
+                    {root?.image_url ? (
+                      <img className="pf-thumb" src={root.image_url} alt="" loading="lazy" />
+                    ) : (
+                      <span className="pf-thumb pf-thumb-empty" aria-hidden="true">
+                        {name.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="pf-name">
+                      <strong className="rt-title">{name}</strong>
+                      <span>
+                        {[skus > 1 ? plural(skus, "variant") : null, locations > 1 ? plural(locations, "location") : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </div>
+                  </div>
+                );
+              },
+              renderVariant: (row) => (
+                <div className="pf-variant-name">
+                  <strong>{row.products ? getProductVariantLabel(row.products) : "Unknown product"}</strong>
+                  <span>{row.products?.sku}</span>
+                </div>
+              ),
             },
             {
               key: "location",
               title: "Location",
               hideOnMobile: true,
               render: (row) => row.locations?.name ?? <span className="pf-muted">—</span>,
+              renderGroup: (rows) => {
+                const names = [...new Set(rows.map((row) => row.locations?.name ?? "Unknown"))];
+                return names.length === 1 ? names[0] : <span className="pf-muted">{plural(names.length, "location")}</span>;
+              },
             },
             {
               key: "on_hand",
@@ -578,6 +645,10 @@ export function InventoryPage() {
                 const qty = Number(row.quantity_on_hand ?? 0);
                 return <strong className={qty < 0 ? "rt-alert" : undefined}>{formatNumber(qty)}</strong>;
               },
+              renderGroup: (rows) => {
+                const qty = rows.reduce((sum, row) => sum + Number(row.quantity_on_hand ?? 0), 0);
+                return <strong className={qty < 0 ? "rt-alert" : undefined}>{formatNumber(qty)}</strong>;
+              },
             },
             {
               key: "committed",
@@ -585,6 +656,11 @@ export function InventoryPage() {
               align: "right",
               hideOnMobile: true,
               render: (row) => formatNumber(committedOf(row)),
+              renderGroup: (rows) =>
+                formatNumber(
+                  rows.reduce((sum, row) => sum + Number(row.quantity_committed ?? 0), 0) +
+                    distinctSkus(rows).reduce((sum, row) => sum + Number(row.products?.inventory_allocated ?? 0), 0),
+                ),
             },
             {
               key: "incoming",
@@ -593,6 +669,10 @@ export function InventoryPage() {
               hideOnMobile: true,
               render: (row) => {
                 const incoming = incomingOf(row);
+                return incoming ? formatNumber(incoming) : <span className="pf-muted">—</span>;
+              },
+              renderGroup: (rows) => {
+                const incoming = distinctSkus(rows).reduce((sum, row) => sum + incomingOf(row), 0);
                 return incoming ? formatNumber(incoming) : <span className="pf-muted">—</span>;
               },
             },
@@ -608,6 +688,16 @@ export function InventoryPage() {
                   Number(row.products?.inventory_allocated ?? 0),
                 );
                 const status = statusOf(row);
+                return (
+                  <span className="rt-available">
+                    <strong className={available < 0 ? "rt-alert" : undefined}>{formatNumber(available)}</strong>
+                    {status ? <em className={`rt-status is-${status.tone}`}>{status.label}</em> : null}
+                  </span>
+                );
+              },
+              renderGroup: (rows) => {
+                const available = groupAvailable(rows);
+                const status = groupStatus(rows);
                 return (
                   <span className="rt-available">
                     <strong className={available < 0 ? "rt-alert" : undefined}>{formatNumber(available)}</strong>

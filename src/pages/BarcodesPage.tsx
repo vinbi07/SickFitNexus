@@ -13,6 +13,8 @@ import { supportService } from "@/services/supportService";
 import { getUiErrorLog } from "@/utils/errors";
 import type { Product, ProductBarcode, ProductBarcodeLink } from "@/types/domain";
 import { checkBarcode, findDuplicateBarcodes, normalizeBarcode } from "@/utils/barcode";
+import { getProductFamilyName } from "@/utils/lookbook";
+import { familyKeyIndex } from "@/utils/productFamilies";
 
 type BookRowCheck = { tone: "success" | "warning" | "danger" | "neutral"; label: string; detail: string; isProblem: boolean };
 
@@ -109,6 +111,26 @@ export function BarcodesPage() {
   const filteredBarcodes = searchedBarcodes.filter((barcode) =>
     tab === "problems" ? checks.get(barcode.id)?.isProblem : tab === "unlinked" ? isUnlinked(barcode) : true,
   );
+
+  // Fold book rows under the product their linked variants belong to (like the Products list);
+  // rows not linked yet fall back to their Shopify handle.
+  const familyIndex = familyKeyIndex(data.products);
+  const productById = new Map(data.products.map((product) => [product.id, product]));
+  const linkedFamilyOf = (row: ProductBarcode) => {
+    const productId = row.product_barcode_links?.find((link) => familyIndex.has(link.product_id))?.product_id;
+    return productId ? familyIndex.get(productId)! : null;
+  };
+  const groupOf = (row: ProductBarcode) => {
+    const family = linkedFamilyOf(row);
+    if (family) return `product:${family}`;
+    return row.handle?.trim() ? `handle:${row.handle.trim().toLowerCase()}` : `row:${row.id}`;
+  };
+  const groupNameOf = (rows: ProductBarcode[]) => {
+    const family = linkedFamilyOf(rows[0]);
+    const root = family ? productById.get(family) : null;
+    return root ? getProductFamilyName(root) : rows[0].product_name;
+  };
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
   async function handleImportFile(file: File) {
     setImporting(true);
@@ -250,6 +272,10 @@ export function BarcodesPage() {
             { label: "Edit", onClick: () => setEditing(row) },
             { label: "Delete", danger: true, onClick: () => setDeleting(row) },
           ]}
+          groupBy={groupOf}
+          groupLabel={groupNameOf}
+          // Opening everything while searching or on a filtered tab saves a click per product.
+          defaultExpanded={tab !== "all" || Boolean(query.trim())}
           columns={[
             {
               key: "product",
@@ -260,6 +286,27 @@ export function BarcodesPage() {
                   <span>
                     {row.sku}
                     {row.collection ? ` · ${row.collection}` : ""}
+                  </span>
+                </div>
+              ),
+              renderGroup: (rows) => {
+                const collections = [...new Set(rows.map((row) => row.collection).filter(Boolean))];
+                return (
+                  <div className="pf-name">
+                    <strong className="rt-title">{groupNameOf(rows)}</strong>
+                    <span>
+                      {plural(rows.length, "barcode")}
+                      {collections.length === 1 ? ` · ${collections[0]}` : ""}
+                    </span>
+                  </div>
+                );
+              },
+              renderVariant: (row) => (
+                <div className="pf-variant-name">
+                  <strong>{row.product_name}</strong>
+                  <span>
+                    {row.sku}
+                    {row.size ? ` · ${row.size}` : ""}
                   </span>
                 </div>
               ),
@@ -279,6 +326,21 @@ export function BarcodesPage() {
                     ) : null}
                   </div>
                 );
+              },
+              renderGroup: (rows) => {
+                const results = rows.map((row) => checks.get(row.id)!);
+                const problems = results.filter((check) => check.isProblem);
+                const pending = results.filter((check) => check.tone === "neutral").length;
+                if (problems.length) {
+                  const danger = problems.some((check) => check.tone === "danger");
+                  return (
+                    <span className={danger ? "rt-status is-danger" : "rt-status is-warning"}>
+                      {problems.length === rows.length ? "All need a fix" : `${plural(problems.length, "barcode")} need a fix`}
+                    </span>
+                  );
+                }
+                if (pending) return <span className="rt-group-sub">{pending} pending UPC</span>;
+                return <span className="rt-group-sub">All valid</span>;
               },
             },
             {
@@ -308,6 +370,16 @@ export function BarcodesPage() {
                         .join(", ")}
                       {links.length > 2 ? ` +${links.length - 2}` : ""}
                     </span>
+                  </div>
+                );
+              },
+              renderGroup: (rows) => {
+                const linked = new Set(rows.flatMap((row) => (row.product_barcode_links ?? []).map((link) => link.product_id))).size;
+                const unlinked = rows.filter(isUnlinked).length;
+                return (
+                  <div className="rt-links">
+                    <strong>{linked ? plural(linked, "product") : "Not linked"}</strong>
+                    {unlinked && linked ? <span>{unlinked} not linked</span> : null}
                   </div>
                 );
               },
@@ -409,9 +481,17 @@ function BarcodeEditorModal({
         .includes(query);
     })
     .slice(0, 12);
+  const toggleLink = (productId: string) =>
+    setValues((current) => {
+      const selected = new Set(current.linked_product_ids ?? []);
+      if (selected.has(productId)) selected.delete(productId);
+      else selected.add(productId);
+      return { ...current, linked_product_ids: [...selected] };
+    });
 
   return (
     <Modal
+      className="modal-wide"
       title={initialValue.id ? "Edit Barcode Row" : "Add Barcode Row"}
       onClose={onClose}
       actions={(
@@ -449,7 +529,8 @@ function BarcodeEditorModal({
         </>
       )}
     >
-      <div className="form-grid">
+      <div className="barcode-editor">
+        <div className="form-grid barcode-editor-fields">
         {error ? (
           <div className="form-error field-wide">
             <div>{error.message}</div>
@@ -515,91 +596,102 @@ function BarcodeEditorModal({
               })()
             : null}
         </div>
-        <div className="field field-wide">
-          <label>Linked Products</label>
-          <div className="panel" style={{ padding: 14 }}>
-            <div className="cell-stack">
-              <strong>{selectedProducts.length ? `${selectedProducts.length} products linked` : "No products linked yet"}</strong>
-              <span className="helper-text">
-                {selectedProducts.length
-                  ? selectedProducts
-                      .slice(0, 4)
-                      .map((product) => `${product.sku}${product.variant_title ? ` | ${product.variant_title}` : ""}`)
-                      .join(", ")
-                  : "Search below and attach one or more product variants."}
-              </span>
-            </div>
-            <div className="filter-row" style={{ marginTop: 12 }}>
-              <input
-                placeholder="Search product name, SKU, variant, or UPC"
-                value={productQuery}
-                onChange={(event) => setProductQuery(event.target.value)}
-              />
+        </div>
+
+        <section className="barcode-editor-links" aria-labelledby="barcode-links-title">
+          <div className="barcode-editor-links-head">
+            <h4 id="barcode-links-title">
+              Linked products{selectedProducts.length ? ` (${selectedProducts.length})` : ""}
+            </h4>
+            {selectedProducts.length ? (
               <button
                 className="btn btn-ghost btn-small"
                 type="button"
                 onClick={() => setValues((current) => ({ ...current, linked_product_ids: [] }))}
               >
-                Clear Links
+                Clear all
               </button>
-            </div>
-            <div className="table-shell" style={{ marginTop: 12 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Product</th>
-                    <th>SKU</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProducts.map((product) => {
-                    const isLinked = (values.linked_product_ids ?? []).includes(product.id);
-                    return (
-                      <tr key={product.id}>
-                        <td>
-                          <button
-                            className={`btn btn-small ${isLinked ? "btn-secondary" : "btn-ghost"}`}
-                            type="button"
-                            onClick={() =>
-                              setValues((current) => {
-                                const selected = new Set(current.linked_product_ids ?? []);
-                                if (selected.has(product.id)) {
-                                  selected.delete(product.id);
-                                } else {
-                                  selected.add(product.id);
-                                }
-                                return { ...current, linked_product_ids: [...selected] };
-                              })
-                            }
-                          >
-                            {isLinked ? "Linked" : "Link Product"}
-                          </button>
-                        </td>
-                        <td>
-                          <div className="cell-stack">
-                            <strong>{product.name}</strong>
-                            <span className="helper-text">{product.variant_title ?? product.category ?? "Base product"}</span>
-                          </div>
-                        </td>
-                        <td><span className="product-sku-cell">{product.sku}</span></td>
-                      </tr>
-                    );
-                  })}
-                  {!filteredProducts.length ? (
-                    <tr>
-                      <td colSpan={3}>
-                        <div className="empty-state" style={{ padding: 18 }}>
-                          No products match that search yet.
+            ) : null}
+          </div>
+          {selectedProducts.length ? (
+            <ul className="barcode-editor-linked">
+              {selectedProducts.map((product) => (
+                <li key={product.id}>
+                  <div className="cell-stack">
+                    <strong>{product.name}</strong>
+                    <span className="helper-text">
+                      {product.sku}
+                      {product.variant_title ? ` · ${product.variant_title}` : ""}
+                      {product.upc ? ` · UPC ${product.upc}` : " · No UPC in Shopify"}
+                    </span>
+                  </div>
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => toggleLink(product.id)}>
+                    Unlink
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="helper-text">No products linked yet. Search below to attach one or more variants.</p>
+          )}
+
+          <input
+            className="barcode-editor-search"
+            type="search"
+            aria-label="Search products to link"
+            placeholder="Search product name, SKU, variant, or UPC"
+            value={productQuery}
+            onChange={(event) => setProductQuery(event.target.value)}
+          />
+          <div className="table-shell">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>SKU</th>
+                  <th>
+                    <span className="visually-hidden">Action</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map((product) => {
+                  const isLinked = (values.linked_product_ids ?? []).includes(product.id);
+                  return (
+                    <tr key={product.id}>
+                      <td>
+                        <div className="cell-stack">
+                          <strong>{product.name}</strong>
+                          <span className="helper-text">{product.variant_title ?? product.category ?? "Base product"}</span>
                         </div>
                       </td>
+                      <td><span className="product-sku-cell">{product.sku}</span></td>
+                      <td>
+                        <button
+                          className={`btn btn-small ${isLinked ? "btn-secondary" : "btn-ghost"}`}
+                          type="button"
+                          aria-pressed={isLinked}
+                          onClick={() => toggleLink(product.id)}
+                        >
+                          {isLinked ? "Linked" : "Link"}
+                        </button>
+                      </td>
                     </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+                {!filteredProducts.length ? (
+                  <tr>
+                    <td colSpan={3}>
+                      <div className="empty-state" style={{ padding: 18 }}>
+                        No products match that search yet.
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
       </div>
     </Modal>
   );

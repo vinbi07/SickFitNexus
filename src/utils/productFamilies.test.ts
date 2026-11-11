@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/types/domain";
-import { groupProductFamilies, isLowStockFamily, needsAttention } from "@/utils/productFamilies";
+import { familyKeyIndex, groupProductFamilies, isLowStockFamily, needsAttention } from "@/utils/productFamilies";
 
 let seq = 0;
 const product = (overrides: Partial<Product>): Product =>
@@ -80,5 +80,20 @@ describe("groupProductFamilies", () => {
     expect(withBarcodeIssue.barcodeProblemCount).toBe(1);
     expect(isLowStockFamily(withBarcodeIssue)).toBe(false);
     expect(needsAttention(withBarcodeIssue)).toBe(true);
+  });
+});
+
+describe("familyKeyIndex", () => {
+  it("maps children to their parent, Shopify siblings together, and loners to themselves", () => {
+    const parent = product({ id: "style" });
+    const child = product({ id: "child", parent_product_id: "style" });
+    const syncedA = product({ id: "syncA", shopify_product_id: "gid-9" });
+    const syncedB = product({ id: "syncB", shopify_product_id: "gid-9" });
+    const loner = product({ id: "solo" });
+    const index = familyKeyIndex([parent, child, syncedA, syncedB, loner]);
+    expect(index.get("child")).toBe("style");
+    expect(index.get("style")).toBe("style");
+    expect(index.get("syncB")).toBe(index.get("syncA"));
+    expect(index.get("solo")).toBe("solo");
   });
 });

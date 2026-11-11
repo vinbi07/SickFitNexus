@@ -189,6 +189,13 @@ export function ProductDetailPage() {
     }
   };
 
+  // Inline variant edits patch only the fields on the form; stock stays with inventory records.
+  const saveVariant = async (variant: Product, patch: Partial<Product>) => {
+    await supportService.bulkUpdateProducts([variant.id], patch);
+    await reload();
+    setNotice({ tone: "success", message: `${getProductVariantLabel({ ...variant, ...patch })} saved.` });
+  };
+
   const syncWithShopify = async () => {
     setSyncing(true);
     try {
@@ -298,14 +305,15 @@ export function ProductDetailPage() {
 
           <Section title={isFamily ? `Variants (${variants.length})` : "Stock"} hint={
               fixItems.length
-                ? "Select a row for stock by location and latest sales. Press a red barcode tag to see how to fix it."
-                : "Select a row for stock by location and its latest sales."
+                ? "Select a row for stock by location, latest sales, or to edit it. Press a red barcode tag to see how to fix it."
+                : "Select a row for stock by location, latest sales, or to edit it."
             }
           >
             <VariantStockTable rows={rows} soldLabel={`Sold ${salesWindow}d`} showPrice={showVariantPrice} focusId={focusId}
               fixOf={(productId) => fixItems.find((item) => item.variant.id === productId)}
               recheckingId={recheckingId}
               onRecheck={(variant) => void recheck(variant)}
+              onSaveVariant={saveVariant}
             />
           </Section>
 

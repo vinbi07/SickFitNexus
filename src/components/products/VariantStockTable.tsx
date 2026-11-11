@@ -1,7 +1,8 @@
 import { Fragment, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pencil } from "lucide-react";
 import type { InventoryEvent, Product } from "@/types/domain";
 import { BarcodeFix, type BarcodeFixItem } from "@/components/products/BarcodeFixPanel";
+import { VariantEditForm } from "@/components/products/VariantEditForm";
 import type { BarcodeAssessment } from "@/utils/barcode";
 import { formatCurrency, formatDateOnly, formatNumber } from "@/utils/format";
 import { getProductVariantLabel } from "@/utils/lookbook";
@@ -85,7 +86,8 @@ function Upc({
 
 /**
  * Every variant of the product on one table: stock, sales pace and UPC.
- * A row opens in place to show stock by location and its latest sales.
+ * A row opens in place to show stock by location and its latest sales,
+ * and can switch to an inline form to edit that variant.
  */
 export function VariantStockTable({
   rows,
@@ -95,6 +97,7 @@ export function VariantStockTable({
   fixOf,
   recheckingId,
   onRecheck,
+  onSaveVariant,
 }: {
   rows: VariantRow[];
   soldLabel: string;
@@ -103,7 +106,10 @@ export function VariantStockTable({
   fixOf: (productId: string) => BarcodeFixItem | undefined;
   recheckingId: string | null;
   onRecheck: (product: Product) => void;
+  /** Saves edits to one variant; omit to hide editing. */
+  onSaveVariant?: (product: Product, patch: Partial<Product>) => Promise<void>;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [fixOpen, setFixOpen] = useState<Set<string>>(new Set());
   const toggleFix = (id: string) =>
     setFixOpen((current) => {
@@ -204,9 +210,31 @@ export function VariantStockTable({
                     </td>
                   </tr>
                 ) : null}
-                {isOpen ? (
+                {isOpen && editingId === row.product.id && onSaveVariant ? (
                   <tr className="pd-variant-detail">
                     <td colSpan={columns}>
+                      <h4>Edit {label}</h4>
+                      <VariantEditForm
+                        product={row.product}
+                        onCancel={() => setEditingId(null)}
+                        onSave={async (patch) => {
+                          await onSaveVariant(row.product, patch);
+                          setEditingId(null);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ) : isOpen ? (
+                  <tr className="pd-variant-detail">
+                    <td colSpan={columns}>
+                      {onSaveVariant ? (
+                        <div className="pd-variant-detail-actions">
+                          <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditingId(row.product.id)}>
+                            <Pencil size={14} aria-hidden="true" />
+                            Edit variant
+                          </button>
+                        </div>
+                      ) : null}
                       <div className="pd-variant-detail-grid">
                         <div>
                           <h4>Stock by location</h4>
