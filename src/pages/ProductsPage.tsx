@@ -625,6 +625,7 @@ export function ProductsPage() {
       {editing ? (
         <EntityFormModal<ProductFormValues>
           title={editing.id ? "Edit Product" : "Add Product"}
+          className="modal-product-form"
           saveLabel={editing.id ? "Save Changes" : "Create Product"}
           initialValues={{
             sku: editing.sku ?? "",
@@ -659,10 +660,10 @@ export function ProductsPage() {
             starting_inventory: editing.id ? undefined : 0,
           }}
           fields={[
-            { key: "sku", label: "SKU", required: true },
-            { key: "name", label: "Name", required: true },
+            { key: "sku", section: "Product", label: "SKU", required: true },
+            { key: "name", section: "Product", label: "Name", required: true },
             {
-              key: "parent_product_id",
+              key: "parent_product_id", section: "Product",
               label: "Parent Style",
               type: "select",
               options: parentCandidates
@@ -672,17 +673,17 @@ export function ProductsPage() {
                   value: product.id,
                 })),
             },
-            { key: "variant_title", label: "Variant Title" },
+            { key: "variant_title", section: "Product", label: "Variant Title" },
             {
-              key: "variant_sort_order",
+              key: "variant_sort_order", section: "Product",
               label: "Variant Sort Order",
               type: "number",
               min: 0,
               step: 1,
             },
-            { key: "category", label: "Category" },
+            { key: "category", section: "Product", label: "Category" },
             {
-              key: "vendor_id",
+              key: "vendor_id", section: "Product",
               label: "Primary Vendor",
               type: "select",
               options: data.vendors.map((vendor) => ({
@@ -691,45 +692,45 @@ export function ProductsPage() {
               })),
             },
             {
-              key: "unit_cost",
+              key: "unit_cost", section: "Pricing & packaging",
               label: "COGS",
               type: "number",
               min: 0,
               step: 0.01,
             },
             {
-              key: "unit_price",
+              key: "unit_price", section: "Pricing & packaging",
               label: "Unit Price",
               type: "number",
               min: 0,
               step: 0.01,
             },
             {
-              key: "wholesale_price",
+              key: "wholesale_price", section: "Pricing & packaging",
               label: "Wholesale Price",
               type: "number",
               min: 0,
               step: 0.01,
             },
-            { key: "msrp", label: "MSRP", type: "number", min: 0, step: 0.01 },
-            { key: "upc", label: "UPC" },
-            { key: "pack_size", label: "Pack Size" },
+            { key: "msrp", section: "Pricing & packaging", label: "MSRP", type: "number", min: 0, step: 0.01 },
+            { key: "upc", section: "Pricing & packaging", label: "UPC" },
+            { key: "pack_size", section: "Pricing & packaging", label: "Pack Size" },
             {
-              key: "case_pack_quantity",
+              key: "case_pack_quantity", section: "Pricing & packaging",
               label: "Case Pack Quantity",
               type: "number",
               min: 1,
               step: 1,
             },
-            { key: "weight", label: "Weight" },
-            { key: "dimensions", label: "Dimensions" },
+            { key: "weight", section: "Pricing & packaging", label: "Weight" },
+            { key: "dimensions", section: "Pricing & packaging", label: "Dimensions" },
             {
-              key: "compliance_docs_required_input",
+              key: "compliance_docs_required_input", section: "Media, compliance & Shopify",
               label: "Compliance Docs",
               type: "textarea",
             },
             {
-              key: "compliance_docs_status",
+              key: "compliance_docs_status", section: "Media, compliance & Shopify",
               label: "Compliance Status",
               type: "select",
               options: [
@@ -738,23 +739,23 @@ export function ProductsPage() {
                 { label: "Pending", value: "Pending" },
               ],
             },
-            { key: "image_url", label: "Product Image", type: "image" },
-            { key: "no_bundles", label: "No Bundles", type: "checkbox" },
-            { key: "ignored", label: "Ignore Product", type: "checkbox" },
-            { key: "shopify_handle", label: "Shopify Handle" },
-            { key: "shopify_storefront_url", label: "Shopify Storefront URL" },
-            { key: "shopify_admin_url", label: "Shopify Admin URL" },
+            { key: "image_url", section: "Media, compliance & Shopify", label: "Product Image", type: "image" },
+            { key: "no_bundles", section: "Media, compliance & Shopify", label: "No Bundles", type: "checkbox" },
+            { key: "ignored", section: "Media, compliance & Shopify", label: "Ignore Product", type: "checkbox" },
+            { key: "shopify_handle", section: "Media, compliance & Shopify", label: "Shopify Handle" },
+            { key: "shopify_storefront_url", section: "Media, compliance & Shopify", label: "Shopify Storefront URL" },
+            { key: "shopify_admin_url", section: "Media, compliance & Shopify", label: "Shopify Admin URL" },
             ...(editing.id
               ? []
               : [
                   {
-                    key: "starting_inventory" as const,
+                    key: "starting_inventory" as const, section: "Pricing & packaging",
                     label: "Starting Inventory",
                     type: "number" as const,
                     step: 1,
                   },
                 ]),
-            { key: "description", label: "Description", type: "textarea" },
+            { key: "description", section: "Product", label: "Description", type: "textarea" },
           ]}
           onSave={async (values) => {
             if (!String(values.sku ?? "").trim())

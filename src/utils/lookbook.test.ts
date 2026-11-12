@@ -10,6 +10,7 @@ import {
   getLookbookRetailPrice,
   getLookbookWholesalePrice,
   getUnitsPerPack,
+  groupLookbookFamilies,
   resolveCasePackQuantity,
   sortProductsByFamily,
   validateLookbookSelection,
@@ -234,5 +235,44 @@ describe("lookbook utilities", () => {
     expect(getProductVariantLabel(childVariant)).toBe("3 Pack");
     expect(getProductVariantLabel(baseProduct)).toBe("Base style");
     expect(sortProductsByFamily([childVariant, baseProduct]).map((product) => product.sku)).toEqual(["SKU-1", "SKU-3PK"]);
+  });
+});
+
+describe("groupLookbookFamilies", () => {
+  const variant = (overrides: Partial<Product>): Product => ({ ...baseProduct, ...overrides });
+
+  it("puts variants under their parent style, in variant order", () => {
+    const families = groupLookbookFamilies([
+      variant({ id: "v-l", parent_product_id: "p", parent_products: variant({ id: "p", name: "Crew Sock" }), name: "Crew Sock L", sku: "CS-L", variant_title: "L", variant_sort_order: 2 }),
+      variant({ id: "v-s", parent_product_id: "p", parent_products: variant({ id: "p", name: "Crew Sock" }), name: "Crew Sock S", sku: "CS-S", variant_title: "S", variant_sort_order: 1 }),
+      variant({ id: "other", name: "Ankle Sock", sku: "AS-1" }),
+    ]);
+
+    expect(families.map((family) => family.name)).toEqual(["Ankle Sock", "Crew Sock"]);
+    expect(families[1].variants.map((product) => product.sku)).toEqual(["CS-S", "CS-L"]);
+  });
+
+  it("groups synced variants that share a Shopify product", () => {
+    const families = groupLookbookFamilies([
+      variant({ id: "a", name: "Tee", sku: "T-1", shopify_product_id: "gid-1", variant_title: "Black" }),
+      variant({ id: "b", name: "Tee", sku: "T-2", shopify_product_id: "gid-1", variant_title: "White", image_url: "white.png" }),
+    ]);
+
+    expect(families).toHaveLength(1);
+    expect(families[0].variants).toHaveLength(2);
+    expect(families[0].imageUrl).toBe("white.png");
+  });
+
+  it("drops a parent row with nothing available when it only holds variants", () => {
+    const parent = variant({ id: "p", name: "Crew Sock", sku: "CS", current_inventory: 0, inventory_allocated: 0, image_url: "crew.png" });
+    const families = groupLookbookFamilies([
+      parent,
+      variant({ id: "v", parent_product_id: "p", parent_products: parent, name: "Crew Sock S", sku: "CS-S" }),
+    ]);
+
+    expect(families).toHaveLength(1);
+    expect(families[0].name).toBe("Crew Sock");
+    expect(families[0].imageUrl).toBe("crew.png");
+    expect(families[0].variants.map((product) => product.sku)).toEqual(["CS-S"]);
   });
 });

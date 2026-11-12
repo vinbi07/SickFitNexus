@@ -21,9 +21,212 @@ import {
   getUnitsPerPack,
   getProductFamilyName,
   getProductVariantLabel,
+  groupLookbookFamilies,
   resolveCasePackQuantity,
   sortProductsByFamily,
+  type LookbookFamily,
 } from "@/utils/lookbook";
+
+function formatRange(values: number[]) {
+  const priced = values.filter((value) => value > 0);
+  if (!priced.length) return formatCurrency(0);
+  const min = Math.min(...priced);
+  const max = Math.max(...priced);
+  return min === max
+    ? formatCurrency(min)
+    : `${formatCurrency(min)}–${formatCurrency(max)}`;
+}
+
+function singular(unitLabel: string) {
+  return unitLabel.replace(/s$/, "");
+}
+
+/** One style in the catalog: shared image and pricing, one order row per variant. */
+function LookbookFamilyCard({
+  family,
+  quantities,
+  quantityWarnings,
+  onChangeQuantity,
+}: {
+  family: LookbookFamily;
+  quantities: Record<string, number>;
+  quantityWarnings: Record<string, string>;
+  onChangeQuantity: (product: Product, cases: number) => void;
+}) {
+  const { variants } = family;
+  const root = variants[0];
+  const selectedCount = variants.filter(
+    (variant) => Number(quantities[variant.id] ?? 0) > 0,
+  ).length;
+  const totalAvailable = variants.reduce(
+    (sum, variant) => sum + deriveInventoryAvailable(variant),
+    0,
+  );
+  const missingDocs = variants.some(
+    (variant) => variant.compliance_docs_status === "Missing",
+  );
+  const singleVariant = variants.length === 1;
+
+  return (
+    <article
+      className={`lookbook-card${selectedCount ? " lookbook-card-selected" : ""}`}
+    >
+      <div className="lookbook-card-media">
+        {family.imageUrl ? (
+          <img src={family.imageUrl} alt={family.name} />
+        ) : (
+          <span>{getDisplaySku(root).slice(0, 2)}</span>
+        )}
+        {selectedCount ? (
+          <span className="lookbook-card-flag">
+            {selectedCount} in order
+          </span>
+        ) : null}
+      </div>
+      <div className="lookbook-card-body">
+        <div className="lookbook-card-topline">
+          <strong className="lookbook-card-title">{family.name}</strong>
+          <span className="lookbook-card-sku">
+            {singleVariant
+              ? getDisplaySku(root)
+              : `${variants.length} variants`}
+            {" · "}
+            {totalAvailable > 0 ? "In stock" : "Out of stock"}
+            {missingDocs ? " · Compliance docs missing" : ""}
+          </span>
+        </div>
+        <div className="lookbook-price-row">
+          <div>
+            <span>Wholesale</span>
+            <strong>
+              {formatRange(variants.map(getLookbookWholesalePrice))}
+            </strong>
+          </div>
+          <div>
+            <span>MSRP</span>
+            <strong>{formatRange(variants.map(getLookbookRetailPrice))}</strong>
+          </div>
+        </div>
+
+        <ul className="lookbook-variant-list">
+          {variants.map((variant) => {
+            const caseQty = Number(quantities[variant.id] ?? 0);
+            const packsPerCase = resolveCasePackQuantity(variant);
+            const unitLabel = getOrderUnitLabel(variant);
+            const available = deriveInventoryAvailable(variant);
+            const maxCases = Math.floor(available / packsPerCase);
+            const wholesale = getLookbookWholesalePrice(variant);
+            const orderedUnits = caseQty * packsPerCase;
+            const label = singleVariant
+              ? `Case of ${packsPerCase} ${unitLabel}`
+              : getProductVariantLabel(variant);
+            const warning = quantityWarnings[variant.id];
+
+            return (
+              <li
+                key={variant.id}
+                className={`lookbook-variant-row${caseQty > 0 ? " is-selected" : ""}${maxCases <= 0 ? " is-out" : ""}`}
+              >
+                <div className="lookbook-variant-info">
+                  <strong>{label}</strong>
+                  <span>
+                    {formatCurrency(wholesale)}/{singular(unitLabel)}
+                    {" · "}
+                    {maxCases > 0
+                      ? `${available} ${unitLabel} available`
+                      : "Out of stock"}
+                  </span>
+                </div>
+                <div className="lookbook-variant-stepper">
+                  <button
+                    type="button"
+                    aria-label={`Remove one case of ${family.name} ${label}`}
+                    disabled={caseQty <= 0}
+                    onClick={() => onChangeQuantity(variant, caseQty - 1)}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    className="lookbook-qty-input"
+                    aria-label={`Cases of ${family.name} ${label}`}
+                    min={0}
+                    max={Math.max(maxCases, 0)}
+                    value={caseQty}
+                    disabled={maxCases <= 0}
+                    onChange={(event) =>
+                      onChangeQuantity(variant, Number(event.target.value))
+                    }
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Add one case of ${family.name} ${label}`}
+                    disabled={maxCases <= 0}
+                    onClick={() => onChangeQuantity(variant, caseQty + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="lookbook-variant-total">
+                  {caseQty > 0
+                    ? `${orderedUnits} ${unitLabel} | ${formatCurrency(orderedUnits * wholesale)}`
+                    : singleVariant
+                      ? "Cases"
+                      : `Case of ${packsPerCase}`}
+                </div>
+                {warning ? (
+                  <p className="lookbook-variant-warning">{warning}</p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+
+        <details className="lookbook-specs">
+          <summary>Product details</summary>
+          <table className="lookbook-spec-table">
+            <thead>
+              <tr>
+                {singleVariant ? null : <th>Variant</th>}
+                <th>SKU</th>
+                <th>Barcode</th>
+                <th>Case pack</th>
+              </tr>
+            </thead>
+            <tbody>
+              {variants.map((variant) => {
+                const unitsPerPack = getUnitsPerPack(variant) ?? 1;
+                return (
+                  <tr key={variant.id}>
+                    {singleVariant ? null : (
+                      <td>{getProductVariantLabel(variant)}</td>
+                    )}
+                    <td>{getDisplaySku(variant)}</td>
+                    <td>{getDisplayBarcode(variant)}</td>
+                    <td>
+                      {resolveCasePackQuantity(variant)} ×{" "}
+                      {unitsPerPack > 1 ? `${unitsPerPack}-pack` : "single"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <dl className="lookbook-spec-list">
+            <div className="lookbook-spec-row">
+              <dt>Weight</dt>
+              <dd>{root.weight ?? "Weight TBD"}</dd>
+            </div>
+            <div className="lookbook-spec-row">
+              <dt>Dimensions</dt>
+              <dd>{root.dimensions ?? "15 × 10 × 0.2 in"}</dd>
+            </div>
+          </dl>
+        </details>
+      </div>
+    </article>
+  );
+}
 
 type LookbookExperienceRetailer = Pick<
   Retailer,
@@ -109,7 +312,35 @@ export function LookbookExperience({
     activeOrderState === "Countered"
       ? "Submit Revised PO"
       : "Submit PO to SickFit";
-  const displayProducts = sortProductsByFamily(products);
+  const families = groupLookbookFamilies(products);
+
+  const clearWarning = (productId: string) =>
+    setQuantityWarnings((current) => {
+      if (!current[productId]) return current;
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
+
+  /** Sets a SKU's case count, clamped to what's available, and flags the cap. */
+  const changeQuantity = (product: Product, requested: number) => {
+    const maxCases = Math.floor(
+      deriveInventoryAvailable(product) / resolveCasePackQuantity(product),
+    );
+    const next = Math.min(Math.max(0, Math.floor(requested) || 0), Math.max(maxCases, 0));
+    setQuantities((current) => ({ ...current, [product.id]: next }));
+    if (requested > next || (next >= maxCases && requested > 0)) {
+      setQuantityWarnings((current) => ({
+        ...current,
+        [product.id]:
+          maxCases > 0
+            ? `Only ${maxCases} case${maxCases === 1 ? "" : "s"} available right now.`
+            : "This item is currently out of stock.",
+      }));
+    } else {
+      clearWarning(product.id);
+    }
+  };
 
   const selectedProducts = sortProductsByFamily(products)
     .filter((product) => Number(quantities[product.id] ?? 0) > 0)
@@ -210,193 +441,15 @@ export function LookbookExperience({
         ) : (
           <div className="lookbook-layout">
             <div className="lookbook-grid">
-              {displayProducts.map((product: Product) => {
-                const caseQty = Number(quantities[product.id] ?? 0);
-                const selected = caseQty > 0;
-                const packsPerCase = resolveCasePackQuantity(product);
-                const orderUnitLabel = getOrderUnitLabel(product);
-                const orderedUnits = caseQty * packsPerCase;
-                const wholesalePrice = getLookbookWholesalePrice(product);
-                const lineTotal = orderedUnits * wholesalePrice;
-                const availableUnits = deriveInventoryAvailable(product);
-                const maxCaseQuantity = Math.floor(
-                  availableUnits / packsPerCase,
-                );
-                const limitMessage =
-                  maxCaseQuantity > 0
-                    ? `Only ${maxCaseQuantity} case${maxCaseQuantity === 1 ? "" : "s"} available right now.`
-                    : "This item is currently out of stock.";
-                const displaySku = getDisplaySku(product);
-                const displayBarcode = getDisplayBarcode(product);
-                const quantityWarning = quantityWarnings[product.id];
-                const unitsPerPack = getUnitsPerPack(product) ?? 1;
-                const packTypeLabel =
-                  unitsPerPack > 1 ? `${unitsPerPack}-Pack` : "Single Pack";
-
-                return (
-                  <article
-                    key={product.id}
-                    className={`lookbook-card${selected ? " lookbook-card-selected" : ""}`}
-                  >
-                    <div className="lookbook-card-media">
-                      {product.image_url ? (
-                        <img src={product.image_url} alt={product.name} />
-                      ) : (
-                        <span>{displaySku.slice(0, 2)}</span>
-                      )}
-                    </div>
-                    <div className="lookbook-card-body">
-                      <div className="lookbook-card-topline">
-                        <strong className="lookbook-card-title">
-                          {getProductFamilyName(product)}
-                        </strong>
-                      </div>
-                      <div className="lookbook-price-row">
-                        <div>
-                          <span>Wholesale</span>
-                          <strong>{formatCurrency(wholesalePrice)}</strong>
-                        </div>
-                        <div>
-                          <span>MSRP</span>
-                          <strong>
-                            {formatCurrency(getLookbookRetailPrice(product))}
-                          </strong>
-                        </div>
-                      </div>
-                      <div className="lookbook-stepper">
-                        <button
-                          className="btn btn-secondary btn-small"
-                          onClick={() => {
-                            setQuantities((current) => ({
-                              ...current,
-                              [product.id]: Math.max(caseQty - 1, 0),
-                            }));
-                            setQuantityWarnings((current) => {
-                              if (!current[product.id]) return current;
-                              const next = { ...current };
-                              delete next[product.id];
-                              return next;
-                            });
-                          }}
-                        >
-                          −1 Case
-                        </button>
-                        <div>
-                          <input
-                            type="number"
-                            className="lookbook-qty-input"
-                            min={0}
-                            max={maxCaseQuantity > 0 ? maxCaseQuantity : 0}
-                            value={caseQty}
-                            disabled={maxCaseQuantity <= 0}
-                            onChange={(e) => {
-                              const val = Math.min(
-                                Math.max(
-                                  0,
-                                  Math.floor(Number(e.target.value) || 0),
-                                ),
-                                maxCaseQuantity > 0 ? maxCaseQuantity : 0,
-                              );
-                              setQuantities((current) => ({
-                                ...current,
-                                [product.id]: val,
-                              }));
-                              if (
-                                val >= maxCaseQuantity &&
-                                maxCaseQuantity > 0
-                              ) {
-                                setQuantityWarnings((current) => ({
-                                  ...current,
-                                  [product.id]: limitMessage,
-                                }));
-                              } else {
-                                setQuantityWarnings((current) => {
-                                  if (!current[product.id]) return current;
-                                  const next = { ...current };
-                                  delete next[product.id];
-                                  return next;
-                                });
-                              }
-                            }}
-                          />
-                          <span style={{ textAlign: "center" }}>
-                            {orderedUnits} {orderUnitLabel}
-                            <br />
-                            <strong>{formatCurrency(lineTotal)}</strong>
-                          </span>
-                        </div>
-                        <button
-                          className="btn btn-primary btn-small"
-                          disabled={maxCaseQuantity <= 0}
-                          onClick={() => {
-                            if (caseQty >= maxCaseQuantity) {
-                              setQuantityWarnings((current) => ({
-                                ...current,
-                                [product.id]: limitMessage,
-                              }));
-                              return;
-                            }
-
-                            setQuantities((current) => ({
-                              ...current,
-                              [product.id]: caseQty + 1,
-                            }));
-                            setQuantityWarnings((current) => {
-                              if (!current[product.id]) return current;
-                              const next = { ...current };
-                              delete next[product.id];
-                              return next;
-                            });
-                          }}
-                        >
-                          +1 Case
-                        </button>
-                      </div>
-                      {quantityWarning ? (
-                        <p className="helper-text danger-text">
-                          {quantityWarning}
-                        </p>
-                      ) : null}
-                      <div className="lookbook-card-footer">
-                        <span>
-                          {availableUnits} {orderUnitLabel} available
-                        </span>
-                        {product.compliance_docs_status === "Missing" ? (
-                          <span>Compliance docs missing</span>
-                        ) : null}
-                      </div>
-                      <dl className="lookbook-spec-list">
-                        <div className="lookbook-spec-row">
-                          <dt>SKU</dt>
-                          <dd>{displaySku}</dd>
-                        </div>
-                        <div className="lookbook-spec-row">
-                          <dt>Case Pack</dt>
-                          <dd>
-                            {packsPerCase} {orderUnitLabel}/case
-                          </dd>
-                        </div>
-                        <div className="lookbook-spec-row">
-                          <dt>Pack Type</dt>
-                          <dd>{packTypeLabel}</dd>
-                        </div>
-                        <div className="lookbook-spec-row">
-                          <dt>Weight</dt>
-                          <dd>{product.weight ?? "Weight TBD"}</dd>
-                        </div>
-                        <div className="lookbook-spec-row">
-                          <dt>Dimensions</dt>
-                          <dd>{product.dimensions ?? "15 × 10 × 0.2 in"}</dd>
-                        </div>
-                        <div className="lookbook-spec-row">
-                          <dt>Barcode</dt>
-                          <dd>{displayBarcode}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </article>
-                );
-              })}
+              {families.map((family) => (
+                <LookbookFamilyCard
+                  key={family.key}
+                  family={family}
+                  quantities={quantities}
+                  quantityWarnings={quantityWarnings}
+                  onChangeQuantity={changeQuantity}
+                />
+              ))}
             </div>
             <aside className="lookbook-summary panel">
               <div className="lookbook-summary-header">
@@ -510,13 +563,7 @@ export function LookbookExperience({
                                     ...current,
                                     [String(line.product_id)]: 0,
                                   }));
-                                  setQuantityWarnings((current) => {
-                                    if (!current[String(line.product_id)])
-                                      return current;
-                                    const next = { ...current };
-                                    delete next[String(line.product_id)];
-                                    return next;
-                                  });
+                                  clearWarning(String(line.product_id));
                                 }}
                               >
                                 ×

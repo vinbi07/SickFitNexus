@@ -122,6 +122,53 @@ export function sortProductsByFamily(products: Product[]) {
   });
 }
 
+export interface LookbookFamily {
+  key: string;
+  name: string;
+  imageUrl: string | null;
+  /** Orderable SKUs in the style, in variant order. */
+  variants: Product[];
+}
+
+/**
+ * Groups a lookbook assortment into styles: variants go under their parent,
+ * and synced variants that share a Shopify product go together. A parent row
+ * that only holds variants (nothing available of its own) isn't listed as a
+ * variant.
+ */
+export function groupLookbookFamilies(products: Product[]): LookbookFamily[] {
+  const parentIds = new Set(products.map((product) => product.parent_product_id).filter(Boolean));
+  const keyOfShopifyProduct = new Map<string, string>();
+  const groups = new Map<string, Product[]>();
+
+  for (const product of sortProductsByFamily(products)) {
+    let key = product.parent_product_id ?? product.id;
+    const shopifyId = product.shopify_product_id;
+    if (shopifyId) {
+      const existing = keyOfShopifyProduct.get(shopifyId);
+      if (existing) key = existing;
+      else keyOfShopifyProduct.set(shopifyId, key);
+    }
+    groups.set(key, [...(groups.get(key) ?? []), product]);
+  }
+
+  return [...groups.entries()]
+    .map(([key, members]) => {
+      const container = members.find((member) => parentIds.has(member.id)) ?? null;
+      const orderable = members.filter(
+        (member) => member !== container || deriveInventoryAvailable(member) > 0,
+      );
+      const variants = orderable.length ? orderable : members;
+      return {
+        key,
+        name: container?.name ?? getProductFamilyName(variants[0]),
+        imageUrl: container?.image_url ?? members.find((member) => member.image_url)?.image_url ?? null,
+        variants,
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export function isCaseQuantityValid(product: Pick<Product, "case_pack_quantity">, caseQuantity: number) {
   return Number.isInteger(caseQuantity) && caseQuantity >= 0 && Number(product.case_pack_quantity ?? 1) > 0;
 }
