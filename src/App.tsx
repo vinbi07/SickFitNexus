@@ -27,6 +27,7 @@ import { LocationsPage } from "@/pages/LocationsPage";
 import { ProductsPage } from "@/pages/ProductsPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
 import { BarcodesPage } from "@/pages/BarcodesPage";
+import { PRODUCTS_SECTION, RedirectKeepingQuery } from "@/components/products/ProductsSectionNav";
 import { RetailersPage } from "@/pages/RetailersPage";
 import { RetailerDetailPage } from "@/pages/RetailerDetailPage";
 import { CompliancePage } from "@/pages/CompliancePage";
@@ -89,7 +90,7 @@ export default function App() {
               <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
               <Route path="/invoices/:id/preview" element={<InvoicePreviewPage />} />
               <Route path="/pending-queue" element={<PendingQueuePage />} />
-              <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/inventory" element={<RedirectKeepingQuery to={PRODUCTS_SECTION.inventory} />} />
               <Route path="/retailers" element={<RetailersPage />} />
               <Route path="/retailers/:id" element={<RetailerDetailPage />} />
               <Route path="/compliance" element={<CompliancePage />} />
@@ -99,8 +100,10 @@ export default function App() {
               <Route path="/production/templates" element={<ProductionTemplatesPage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/products" element={<ProductsPage />} />
+              <Route path={PRODUCTS_SECTION.inventory} element={<InventoryPage />} />
+              <Route path={PRODUCTS_SECTION.barcodes} element={<BarcodesPage />} />
               <Route path="/products/:id" element={<ProductDetailPage />} />
-              <Route path="/barcodes" element={<BarcodesPage />} />
+              <Route path="/barcodes" element={<RedirectKeepingQuery to={PRODUCTS_SECTION.barcodes} />} />
               <Route path="/lookbook-templates" element={<LookbookTemplatesPage />} />
               <Route path="/lookbook-templates/new" element={<LookbookTemplateEditorPage />} />
               <Route path="/lookbook-templates/:id/edit" element={<LookbookTemplateEditorPage />} />

@@ -9,6 +9,7 @@ import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader, type PageHeaderAction } from "@/components/PageHeader";
 import { FilterPopover } from "@/components/products/FilterPopover";
 import { ProductFamilyTable } from "@/components/products/ProductFamilyTable";
+import { ProductsSectionNav } from "@/components/products/ProductsSectionNav";
 import { latestShopifySync, ShopifySyncStatus } from "@/components/products/ShopifySyncStatus";
 import { useReloadOnShopifySync, useShopifySync } from "@/context/ShopifySyncContext";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -431,6 +432,7 @@ export function ProductsPage() {
           { label: "Refresh list", onClick: () => void reload() },
         ]}
       />
+      <ProductsSectionNav />
       {notice ? (
         <NotificationBanner
           tone={notice.tone}

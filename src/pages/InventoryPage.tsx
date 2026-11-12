@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { Disclosure } from "@/components/Disclosure";
 import { FilterChips, ListTabs, ResourceTable } from "@/components/lists/ResourceTable";
 import { FilterPopover } from "@/components/products/FilterPopover";
+import { ProductsSectionNav } from "@/components/products/ProductsSectionNav";
 import { latestShopifySync, ShopifySyncStatus } from "@/components/products/ShopifySyncStatus";
 import { useReloadOnShopifySync, useShopifySync } from "@/context/ShopifySyncContext";
 import { EntityFormModal } from "@/components/EntityFormModal";
@@ -66,7 +67,9 @@ export function InventoryPage() {
     event_date: new Date().toISOString().slice(0, 10),
     notes: "",
   });
-  const [search, setSearch] = useState("");
+  // ?q= lets other pages (e.g. a product's "Manage inventory") open this list already searched.
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [locationId, setLocationId] = useState("");
   const [category, setCategory] = useState("");
   const [bundlesOnly, setBundlesOnly] = useState(false);
@@ -378,7 +381,7 @@ export function InventoryPage() {
   return (
     <div className="section-stack">
       <PageHeader
-        title="Inventory"
+        title="Products"
         primaryAction={
           <button
             className="btn btn-primary"
@@ -403,6 +406,7 @@ export function InventoryPage() {
           { label: "Refresh list", onClick: () => void reload() },
         ]}
       />
+      <ProductsSectionNav />
       {notice ? (
         <NotificationBanner
           tone={notice.tone}

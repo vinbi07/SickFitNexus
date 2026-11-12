@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { Modal } from "@/components/Modal";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PageHeader } from "@/components/PageHeader";
+import { ProductsSectionNav } from "@/components/products/ProductsSectionNav";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { supportService } from "@/services/supportService";
 import { getUiErrorLog } from "@/utils/errors";
@@ -15,6 +16,9 @@ import type { Product, ProductBarcode, ProductBarcodeLink } from "@/types/domain
 import { checkBarcode, findDuplicateBarcodes, normalizeBarcode } from "@/utils/barcode";
 import { getProductFamilyName } from "@/utils/lookbook";
 import { familyKeyIndex } from "@/utils/productFamilies";
+
+/** The GS1 barcode book as printed. Swap this when a new edition is exported. */
+const BARCODE_BOOK_PDF = "/docs/SickFitBarcodeBook10-23.pdf";
 
 type BookRowCheck = { tone: "success" | "warning" | "danger" | "neutral"; label: string; detail: string; isProblem: boolean };
 
@@ -64,6 +68,7 @@ export function BarcodesPage() {
   const [deleting, setDeleting] = useState<ProductBarcode | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab");
@@ -201,9 +206,12 @@ export function BarcodesPage() {
         }}
       />
       <PageHeader
-        title="Barcodes"
-        description="Your GS1 barcode book. Products and factory orders are checked against it."
+        title="Products"
         primaryAction={
+          <>
+          <button type="button" className="btn btn-secondary" onClick={() => setBookOpen(true)}>
+            Open barcode book
+          </button>
           <button
             className="btn btn-primary"
             onClick={() =>
@@ -222,6 +230,7 @@ export function BarcodesPage() {
           >
             Add barcode
           </button>
+          </>
         }
         secondaryActions={[
           {
@@ -232,6 +241,7 @@ export function BarcodesPage() {
           { label: "Refresh list", onClick: () => void reload() },
         ]}
       />
+      <ProductsSectionNav />
       {notice ? <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} /> : null}
       <section className="product-list">
         <ListTabs
@@ -416,6 +426,28 @@ export function BarcodesPage() {
             });
           }}
         />
+      ) : null}
+      {bookOpen ? (
+        <Modal
+          className="modal-pdf"
+          title="Barcode book"
+          onClose={() => setBookOpen(false)}
+          actions={
+            <>
+              <a className="btn btn-ghost" href={BARCODE_BOOK_PDF} target="_blank" rel="noreferrer">
+                Open in new tab
+              </a>
+              <a className="btn btn-ghost" href={BARCODE_BOOK_PDF} download>
+                Download
+              </a>
+              <button type="button" className="btn btn-primary" onClick={() => setBookOpen(false)}>
+                Close
+              </button>
+            </>
+          }
+        >
+          <iframe className="pdf-preview" src={`${BARCODE_BOOK_PDF}#view=FitH`} title="SickFit barcode book PDF" />
+        </Modal>
       ) : null}
       {deleting ? (
         <ConfirmDialog

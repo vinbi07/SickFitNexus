@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Section";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { BarcodeFixItem } from "@/components/products/BarcodeFixPanel";
+import { PRODUCTS_SECTION } from "@/components/products/ProductsSectionNav";
 import { SalesChart } from "@/components/products/SalesChart";
 import { VariantStockTable, type VariantRow } from "@/components/products/VariantStockTable";
 import { useReloadOnShopifySync } from "@/context/ShopifySyncContext";
@@ -211,7 +212,7 @@ export function ProductDetailPage() {
 
   return (
     <div className="section-stack pd-page">
-      <Link className="pd-back" to="/products">
+      <Link className="pd-back" to={PRODUCTS_SECTION.products}>
         <ArrowLeft size={16} aria-hidden="true" />
         Products
       </Link>
@@ -232,6 +233,11 @@ export function ProductDetailPage() {
         secondaryActions={[
           ...(adminUrl ? [{ label: "Edit product", onClick: () => navigate(`/products?edit=${editTarget.id}`) }] : []),
           { label: syncing ? "Syncing…" : "Sync with Shopify", disabled: syncing, onClick: () => void syncWithShopify() },
+          // A family's variants share its name; a single SKU is searched exactly.
+          {
+            label: "Manage inventory",
+            onClick: () => navigate(`${PRODUCTS_SECTION.inventory}?q=${encodeURIComponent(isFamily ? family.name : variants[0].sku)}`),
+          },
           ...(storefrontUrl ? [{ label: "View in store", onClick: () => window.open(storefrontUrl, "_blank", "noreferrer") }] : []),
         ]}
       />

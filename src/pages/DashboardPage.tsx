@@ -1228,7 +1228,7 @@ export function DashboardPage() {
       <PurchaserVelocityPanel data={data} />
 
       <div className="dashboard-action-grid">
-        <DashboardActionLane title="Reorder Now" to="/inventory">
+        <DashboardActionLane title="Reorder Now" to="/products/inventory">
           {reorderNowRows.length ? (
             reorderNowRows.map((item) => (
               <div
@@ -1259,7 +1259,7 @@ export function DashboardPage() {
                   >
                     Create Manufacturing PO
                   </Link>
-                  <Link className="btn btn-ghost btn-small" to="/inventory">
+                  <Link className="btn btn-ghost btn-small" to="/products/inventory">
                     View Inventory
                   </Link>
                 </div>
@@ -1270,7 +1270,7 @@ export function DashboardPage() {
           )}
         </DashboardActionLane>
 
-        <DashboardSummaryPanel title="Inventory Risk" to="/inventory">
+        <DashboardSummaryPanel title="Inventory Risk" to="/products/inventory">
           {inventoryRiskRows.length ? (
             inventoryRiskRows.map((item) => (
               <div

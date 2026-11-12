@@ -51,7 +51,7 @@ function FixSteps({ item }: { item: BarcodeFixItem }) {
   const { plan, variant, shopifyUrl } = item;
   const inShopify = <ShopifyLink url={shopifyUrl}>open this variant in Shopify</ShopifyLink>;
   const finish = <li>Come back here and press <strong>Re-check</strong>. Nexus pulls the barcode from Shopify and checks it again.</li>;
-  const bookLink = <Link className="table-link" to="/barcodes?tab=unlinked">barcode book</Link>;
+  const bookLink = <Link className="table-link" to="/products/barcodes?tab=unlinked">barcode book</Link>;
 
   if (plan.status === "duplicate") {
     const others = plan.conflicts;
@@ -169,7 +169,7 @@ function FixSteps({ item }: { item: BarcodeFixItem }) {
         </li>
         <li>
           If Shopify is right, the book row is linked to the wrong SKU. Fix the link on the{" "}
-          <Link className="table-link" to="/barcodes?tab=problems">Barcodes</Link> page.
+          <Link className="table-link" to="/products/barcodes?tab=problems">Barcodes</Link> page.
         </li>
         {finish}
       </ol>
