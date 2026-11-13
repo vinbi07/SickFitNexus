@@ -5,6 +5,7 @@ import { fanOut, orderMapPosition, stageTone, type SupplyChainMapOrder } from "@
 const base: SupplyChainMapOrder = {
   poId: "po-1",
   poNumber: "MO-1",
+  account: "MO-1",
   manufacturer: "Factory",
   units: 2400,
   shipMode: "Sea",

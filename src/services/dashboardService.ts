@@ -321,17 +321,19 @@ export const dashboardService = {
 
     // Retail POs for the map's milestone bar: late ones first, then by ship-by date.
     const timelinePos = mapWholesaleOrders;
-    const fulfilledHistory = timelinePos.length
-      ? await supabase
-          .from("purchase_order_status_history")
-          .select("*")
-          .eq("to_status", "Fulfilled")
-          .in(
-            "purchase_order_id",
-            timelinePos.map((po) => po.id),
-          )
-          .then(({ data, error }) => (error ? [] : ((data ?? []) as PurchaseOrderStatusHistory[])))
-      : [];
+    let fulfilledHistory: PurchaseOrderStatusHistory[] = [];
+    if (timelinePos.length) {
+      const historyResponse = await supabase
+        .from("purchase_order_status_history")
+        .select("*")
+        .eq("to_status", "Fulfilled")
+        .in(
+          "purchase_order_id",
+          timelinePos.map((po) => po.id),
+        );
+      // A failed lookup only costs the Fulfilled dates; the bar still renders.
+      if (!historyResponse.error) fulfilledHistory = (historyResponse.data ?? []) as PurchaseOrderStatusHistory[];
+    }
     const historyByPo = new Map<string, PurchaseOrderStatusHistory[]>();
     fulfilledHistory.forEach((entry) => {
       historyByPo.set(entry.purchase_order_id, [...(historyByPo.get(entry.purchase_order_id) ?? []), entry]);
