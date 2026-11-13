@@ -714,6 +714,12 @@
   font-size: var(--nx-text-body);
 }
 
+.order-chain-po {
+  color: var(--nx-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .order-chain-meta {
   color: var(--nx-muted);
   font-size: var(--nx-text-caption);
@@ -722,19 +728,20 @@
 .order-chain-track {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  /* Factory orders have 8 steps; the retail bar sets --chain-steps to 7. */
+  grid-template-columns: repeat(var(--chain-steps, 8), minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* The line every step hangs from. */
+/* The line every step hangs from, running between the first and last dot. */
 .order-chain-track::before {
   content: "";
   position: absolute;
   top: 6px;
-  left: 6.25%;
-  right: 6.25%;
+  left: calc(50% / var(--chain-steps, 8));
+  right: calc(50% / var(--chain-steps, 8));
   height: 2px;
   border-radius: var(--nx-radius-pill);
   background: var(--nx-divider);

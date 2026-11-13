@@ -1122,6 +1122,18 @@ export interface DashboardSnapshot {
     /** Every milestone, order placed to delivered, with actual or expected dates. */
     chain: OrderChainMilestone[];
   }>;
+  /** Open retail POs with their order-received → paid steps, for the map's milestone bar. */
+  retailTimelineOrders: Array<{
+    poId: string;
+    poNumber: string;
+    account: string;
+    units: number;
+    value: number;
+    shipStart: string | null;
+    shipEnd: string | null;
+    steps: import("@/utils/retailPoTimeline").RetailTimelineStep[];
+    alert: import("@/utils/retailPoTimeline").RetailTimeline["alert"];
+  }>;
   /** Average days between each pair of consecutive milestones, across past factory orders. */
   supplyChainStepAverages: Array<number | null>;
   latePurchaseOrders: Array<{

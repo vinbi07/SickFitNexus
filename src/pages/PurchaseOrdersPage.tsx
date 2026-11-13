@@ -138,6 +138,24 @@ export function PurchaseOrdersPage() {
     }
   };
 
+  const handleArchive = async (row: PurchaseOrder, archived: boolean) => {
+    try {
+      await purchaseOrderService.setArchived(row.id, archived);
+      await reload();
+      setNotice({
+        tone: "success",
+        message: archived
+          ? `PO ${row.po_number} archived. Find it under "Archived".`
+          : `PO ${row.po_number} restored.`,
+      });
+    } catch (err) {
+      setNotice({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Unable to update archive status.",
+      });
+    }
+  };
+
   // Archived POs live behind the "Archived" toggle; the cards always count active ones.
   const activePurchaseOrders = data.purchaseOrders.filter((po) => !po.archived_at);
   const archivedCount = data.purchaseOrders.length - activePurchaseOrders.length;
@@ -333,6 +351,7 @@ export function PurchaseOrdersPage() {
             ? "No archived purchase orders match these filters."
             : "No purchase orders found. Create a PO to start tracking line items, document previews, and delivery movement."
         }
+        className="table-shell-menus"
         onRowClick={(row) => openDrawer(row.id, "view")}
         columns={[
           {
@@ -505,6 +524,15 @@ export function PurchaseOrdersPage() {
                       }}
                     >
                       To Invoice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        closeActionsMenu(event);
+                        void handleArchive(row, !row.archived_at);
+                      }}
+                    >
+                      {row.archived_at ? "Unarchive" : "Archive"}
                     </button>
                   </div>
                 </details>

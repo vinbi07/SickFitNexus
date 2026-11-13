@@ -4,6 +4,7 @@ import { supplyChainService } from "@/services/supplyChainService";
 import { DEFAULT_LEAD_TIME_SETTINGS } from "@/utils/leadTime";
 import { currentStage, expectedStageDates, nextStage, shipModeOf, stageAlert, stageDates } from "@/utils/productionStage";
 import { buildOrderChain, chainStepAverages } from "@/utils/orderChain";
+import { retailPoTimeline } from "@/utils/retailPoTimeline";
 import type {
   ActivityEvent,
   Alert,
@@ -14,6 +15,7 @@ import type {
   PoLineItem,
   Product,
   PurchaseOrder,
+  PurchaseOrderStatusHistory,
   Retailer,
   ShopifyOrder,
   ShopifyOrderLineItem,
@@ -300,7 +302,9 @@ export const dashboardService = {
         return sum + price * Number(item.quantity_ordered ?? 0);
       }, 0);
 
-    const poMapPoints = activeWholesalePipelineOrders
+    // The retail map and its overlays leave archived POs out.
+    const mapWholesaleOrders = activeWholesalePipelineOrders.filter((po) => !po.archived_at);
+    const poMapPoints = mapWholesaleOrders
       .map((po) => ({
         poId: po.id,
         poNumber: po.po_number,
@@ -315,6 +319,45 @@ export const dashboardService = {
       .sort((left, right) => right.value - left.value)
       .slice(0, 24);
 
+    // Retail POs for the map's milestone bar: late ones first, then by ship-by date.
+    const timelinePos = mapWholesaleOrders;
+    const fulfilledHistory = timelinePos.length
+      ? await supabase
+          .from("purchase_order_status_history")
+          .select("*")
+          .eq("to_status", "Fulfilled")
+          .in(
+            "purchase_order_id",
+            timelinePos.map((po) => po.id),
+          )
+          .then(({ data, error }) => (error ? [] : ((data ?? []) as PurchaseOrderStatusHistory[])))
+      : [];
+    const historyByPo = new Map<string, PurchaseOrderStatusHistory[]>();
+    fulfilledHistory.forEach((entry) => {
+      historyByPo.set(entry.purchase_order_id, [...(historyByPo.get(entry.purchase_order_id) ?? []), entry]);
+    });
+    const alertRank = { late: 0, soon: 1, hold: 2 } as const;
+    const retailTimelineOrders: DashboardSnapshot["retailTimelineOrders"] = timelinePos
+      .map((po) => {
+        const timeline = retailPoTimeline(po, historyByPo.get(po.id) ?? [], today);
+        return {
+          poId: po.id,
+          poNumber: po.po_number,
+          account: retailerById.get(po.retailer_id ?? "")?.name ?? po.ship_to_company_name ?? po.po_number,
+          units: Number(po.total_units ?? 0),
+          value: getRetailRevenue(po),
+          shipStart: po.start_ship_date,
+          shipEnd: po.ship_complete_date,
+          steps: timeline.steps,
+          alert: timeline.alert,
+        };
+      })
+      .sort(
+        (left, right) =>
+          (left.alert ? alertRank[left.alert.severity] : 3) - (right.alert ? alertRank[right.alert.severity] : 3) ||
+          (left.shipEnd ?? "9999-12-31").localeCompare(right.shipEnd ?? "9999-12-31"),
+      );
+
     const openWholesalePipelineLedger = activeWholesalePipelineOrders
       .map((po) => ({
         poId: po.id,
@@ -325,13 +368,13 @@ export const dashboardService = {
       }))
       .sort((left, right) => right.value - left.value);
 
-    const poStatusCounts = activeWholesalePipelineOrders
+    const poStatusCounts = mapWholesaleOrders
       .reduce<Map<string, number>>((acc, po) => {
         acc.set(po.status, (acc.get(po.status) ?? 0) + 1);
         return acc;
       }, new Map<string, number>());
 
-    const missingPoLocationCount = activeWholesalePipelineOrders.filter((po) => !(po.ship_to_state ?? po.bill_to_state)).length;
+    const missingPoLocationCount = mapWholesaleOrders.filter((po) => !(po.ship_to_state ?? po.bill_to_state)).length;
 
     const latePurchaseOrders = [...activeWholesalePipelineOrders, ...activeManufacturerOrders]
       .filter((po) => {
@@ -559,7 +602,8 @@ export const dashboardService = {
 
     const wholesaleAccounts = retailers
       .map((retailer) => {
-        const accountOrders = wholesaleOrders.filter((po) => po.retailer_id === retailer.id);
+        // Shown on the retail map's Accounts card, so archived POs stay out.
+        const accountOrders = wholesaleOrders.filter((po) => po.retailer_id === retailer.id && !po.archived_at);
         return {
           retailerId: retailer.id,
           retailer: retailer.name,
@@ -974,6 +1018,7 @@ export const dashboardService = {
         .sort((left, right) => right.count - left.count),
       missingPoLocationCount,
       supplyChainOrders,
+      retailTimelineOrders,
       supplyChainStepAverages,
       latePurchaseOrders,
       behindPaceAccounts,

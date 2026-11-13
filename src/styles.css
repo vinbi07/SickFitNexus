@@ -796,6 +796,17 @@ textarea {
   position: relative;
 }
 
+/* Lift the row holding an open menu above the rows below it. */
+.data-table tr:has(.actions-dropdown[open]) {
+  position: relative;
+  z-index: 50;
+}
+
+/* Tables with row menus let the menu spill past the bottom edge instead of clipping it. */
+.table-shell.table-shell-menus {
+  overflow: visible;
+}
+
 .actions-dropdown > summary {
   list-style: none;
   cursor: pointer;
@@ -820,7 +831,7 @@ textarea {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 2;
+  z-index: 50;
   min-width: 200px;
   display: flex;
   flex-direction: column;

@@ -15,6 +15,8 @@ import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
 import { RetailPoMap } from "@/components/dashboard/map/RetailPoMap";
 import { SupplyChainMap } from "@/components/dashboard/map/SupplyChainMap";
 import { OrderChainBar } from "@/components/dashboard/map/OrderChainBar";
+import { RetailOrderChainBar } from "@/components/dashboard/map/RetailOrderChainBar";
+import { retailPoTimeline } from "@/utils/retailPoTimeline";
 import { stageTone } from "@/utils/supplyChainMap";
 import { STATE_COORDINATES, STATE_NAMES } from "@/lib/usStates";
 import { PRODUCTION_STAGES } from "@/utils/productionStage";
@@ -159,6 +161,57 @@ function previewSupplyOrder(
     chain,
   };
 }
+
+function previewRetailOrder(
+  poId: string,
+  poNumber: string,
+  account: string,
+  units: number,
+  value: number,
+  dates: Partial<Record<"submitted" | "approved" | "queued" | "shipped" | "delivered" | "paid" | "shipEnd", number>>,
+  status: "Ordered" | "In Transit" | "Fulfilled" = "Ordered",
+): DashboardSnapshot["retailTimelineOrders"][number] {
+  const at = (key: keyof typeof dates) => (dates[key] != null ? previewDay(dates[key]!) : null);
+  const shipEnd = at("shipEnd");
+  const timeline = retailPoTimeline(
+    {
+      status,
+      approval_status: dates.approved != null ? "Approved" : "Pending Approval",
+      allocation_status: dates.queued != null ? "Queued for Fulfillment" : "Allocated",
+      submitted_at: at("submitted"),
+      order_date: null,
+      created_at: at("submitted") ?? previewDay(0),
+      approved_at: at("approved"),
+      queued_for_fulfillment_at: at("queued"),
+      ship_date: at("shipped"),
+      actual_delivery_date: at("delivered"),
+      invoice_paid_at: at("paid"),
+      cancelled_at: null,
+      start_ship_date: null,
+      ship_complete_date: shipEnd,
+      eta_date: null,
+      expected_delivery_date: null,
+    },
+    [],
+    previewDay(0),
+  );
+  return { poId, poNumber, account, units, value, shipStart: null, shipEnd, steps: timeline.steps, alert: timeline.alert };
+}
+
+const PREVIEW_RETAIL_ORDERS: DashboardSnapshot["retailTimelineOrders"] = [
+  previewRetailOrder("preview-po-2", "DEMO-1062", "Sample Campus Bookstore", 900, 28000, {
+    submitted: -30, approved: -27, queued: -20, shipEnd: -4,
+  }),
+  previewRetailOrder("preview-po-1", "DEMO-1048", "Preview Northeast Account", 1800, 42000, {
+    submitted: -24, approved: -22, queued: -15, shipped: -6, shipEnd: -3,
+  }, "In Transit"),
+  previewRetailOrder("preview-po-3", "DEMO-1080", "Demo Health Retailer", 600, 15000, {
+    submitted: -5, shipEnd: 21,
+  }),
+  previewRetailOrder("preview-po-4", "DEMO-1091", "Sample Western Chain", 1200, 31000, {
+    submitted: -40, approved: -38, queued: -30, shipped: -22, delivered: -15, paid: -2, shipEnd: -20,
+  }, "Fulfilled"),
+];
 
 const PREVIEW_SUPPLY_ORDERS: DashboardSnapshot["supplyChainOrders"] = [
   previewSupplyOrder(
@@ -719,6 +772,11 @@ function PoCommandMap({ data }: { data: DashboardSnapshot }) {
   const selectedOrderId = supplyOrders.some((order) => order.poId === pickedOrderId)
     ? pickedOrderId
     : (supplyOrders[0]?.poId ?? null);
+  const retailOrders = previewMode ? PREVIEW_RETAIL_ORDERS : data.retailTimelineOrders;
+  const [pickedRetailId, setPickedRetailId] = useState<string | null>(null);
+  const selectedRetailId = retailOrders.some((order) => order.poId === pickedRetailId)
+    ? pickedRetailId
+    : (retailOrders[0]?.poId ?? null);
   const accounts = previewMode ? PREVIEW_ACCOUNTS : data.wholesaleAccounts;
   const channels = previewMode ? PREVIEW_CHANNELS : data.wholesaleChannelRows;
   const retailStatuses = previewMode ? PREVIEW_STATUSES : data.poStatusCounts;
@@ -960,7 +1018,16 @@ function PoCommandMap({ data }: { data: DashboardSnapshot }) {
               onSelect={setPickedOrderId}
               onOpen={(poId) => navigate(previewMode ? "/purchase-orders" : `/purchase-orders/${poId}`)}
             />
-          ) : null}
+          ) : (
+            <RetailOrderChainBar
+              orders={retailOrders}
+              selectedId={selectedRetailId}
+              today={today}
+              onSelect={setPickedRetailId}
+              onOpen={(poId) => navigate(previewMode ? "/purchase-orders" : `/purchase-orders/${poId}`)}
+              onShowAll={() => navigate("/purchase-orders")}
+            />
+          )}
         </div>
       </div>
     </section>
