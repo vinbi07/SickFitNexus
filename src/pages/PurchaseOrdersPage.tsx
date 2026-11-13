@@ -90,6 +90,7 @@ export function PurchaseOrdersPage() {
   const [poType, setPoType] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("eta");
+  const [showArchived, setShowArchived] = useState(false);
   const [deleting, setDeleting] = useState<PurchaseOrder | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
   const [notice, setNotice] = useState<{
@@ -137,7 +138,14 @@ export function PurchaseOrdersPage() {
     }
   };
 
-  const sortedPurchaseOrders = [...data.purchaseOrders].sort((left, right) => {
+  // Archived POs live behind the "Archived" toggle; the cards always count active ones.
+  const activePurchaseOrders = data.purchaseOrders.filter((po) => !po.archived_at);
+  const archivedCount = data.purchaseOrders.length - activePurchaseOrders.length;
+  const visiblePurchaseOrders = showArchived
+    ? data.purchaseOrders.filter((po) => po.archived_at)
+    : activePurchaseOrders;
+
+  const sortedPurchaseOrders = [...visiblePurchaseOrders].sort((left, right) => {
     if (sort === "cost") return right.total_cost - left.total_cost;
     if (sort === "status") return left.status.localeCompare(right.status);
     return (
@@ -146,20 +154,20 @@ export function PurchaseOrdersPage() {
     );
   });
 
-  const openOrders = data.purchaseOrders.filter(
+  const openOrders = activePurchaseOrders.filter(
     (po) =>
       !["Received", "Closed", "Cancelled", "Fulfilled"].includes(po.status),
   );
-  const pendingOrders = data.purchaseOrders.filter(
+  const pendingOrders = activePurchaseOrders.filter(
     (po) => po.status === "Pending",
   );
-  const pendingApprovalOrders = data.purchaseOrders.filter(
+  const pendingApprovalOrders = activePurchaseOrders.filter(
     (po) => po.approval_status === "Pending Approval",
   );
-  const inTransitOrders = data.purchaseOrders.filter(
+  const inTransitOrders = activePurchaseOrders.filter(
     (po) => po.status === "In Transit",
   );
-  const deliveredRecent = data.purchaseOrders.filter((po) =>
+  const deliveredRecent = activePurchaseOrders.filter((po) =>
     ["Received", "Closed", "Fulfilled"].includes(po.status),
   );
 
@@ -260,6 +268,13 @@ export function PurchaseOrdersPage() {
           >
             Shipped
           </button>
+          <button
+            className={`btn ${showArchived ? "btn-primary" : "btn-secondary"}`}
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            Archived{archivedCount ? ` (${archivedCount})` : ""}
+          </button>
         </div>
       </div>
       <div className="panel">
@@ -313,7 +328,11 @@ export function PurchaseOrdersPage() {
         </div>
       </div>
       <DataTable
-        emptyMessage="No purchase orders found. Create a PO to start tracking line items, document previews, and delivery movement."
+        emptyMessage={
+          showArchived
+            ? "No archived purchase orders match these filters."
+            : "No purchase orders found. Create a PO to start tracking line items, document previews, and delivery movement."
+        }
         onRowClick={(row) => openDrawer(row.id, "view")}
         columns={[
           {

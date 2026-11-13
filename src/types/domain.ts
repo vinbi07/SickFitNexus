@@ -292,6 +292,8 @@ export interface PurchaseOrder {
   freight_cost?: number | null;
   production_stage?: string | null;
   stage_dates?: Record<string, string> | null;
+  /** Set when the PO is archived: hidden from the PO list and supply-chain map. */
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor | null;
@@ -1106,6 +1108,8 @@ export interface DashboardSnapshot {
   supplyChainOrders: Array<{
     poId: string;
     poNumber: string;
+    /** The account (retailer) the order is for; falls back to the PO number. */
+    account: string;
     manufacturer: string;
     units: number;
     shipMode: "Sea" | "Air";

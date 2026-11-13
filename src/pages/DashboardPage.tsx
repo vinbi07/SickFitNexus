@@ -146,6 +146,7 @@ function previewSupplyOrder(
   return {
     poId,
     poNumber,
+    account: poNumber,
     manufacturer: "Sample Factory",
     units,
     shipMode,

@@ -119,13 +119,16 @@ export function getMarginMetrics(unitCost: number, unitPrice: number) {
 
 /**
  * The date a PO is working toward: the ETA when one is set, otherwise (retailer POs) the end of
- * the ship window from the PO. Null when neither exists.
+ * the ship window from the PO. Once the order has shipped, the ship-by date gives way to the
+ * actual ship date. Null when none exist.
  */
 export function getPoTargetDate(
-  po: Pick<PurchaseOrder, "eta_date" | "expected_delivery_date" | "ship_complete_date" | "start_ship_date">,
-): { label: "ETA" | "Ship by"; date: string } | null {
+  po: Pick<PurchaseOrder, "eta_date" | "expected_delivery_date" | "ship_complete_date" | "start_ship_date"> &
+    Partial<Pick<PurchaseOrder, "ship_date">>,
+): { label: "ETA" | "Ship by" | "Shipped"; date: string } | null {
   const eta = po.eta_date ?? po.expected_delivery_date;
   if (eta) return { label: "ETA", date: eta };
+  if (po.ship_date) return { label: "Shipped", date: po.ship_date };
   const shipBy = po.ship_complete_date ?? po.start_ship_date;
   return shipBy ? { label: "Ship by", date: shipBy } : null;
 }

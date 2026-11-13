@@ -18,6 +18,7 @@ import {
   stageAlert,
   stageDates,
   stageLabel,
+  type ProductionStage,
 } from "@/utils/productionStage";
 
 function todayIso() {
@@ -55,13 +56,24 @@ export function ProductionStageTimeline({
   const [freight, setFreight] = useState(purchaseOrder.freight_cost != null ? String(purchaseOrder.freight_cost) : "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  // A stage the order has already passed, opened for a date correction.
+  const [editing, setEditing] = useState<{ stage: ProductionStage; date: string } | null>(null);
 
   useEffect(() => {
     setShipMode(shipModeOf(purchaseOrder));
     setFreight(purchaseOrder.freight_cost != null ? String(purchaseOrder.freight_cost) : "");
+    setEditing(null);
   }, [purchaseOrder]);
 
   const dates = stageDates(purchaseOrder);
+  // Keep a corrected date between the recorded stages on either side of it.
+  const editBounds = (stage: ProductionStage) => {
+    const i = PRODUCTION_STAGES.indexOf(stage);
+    const before = PRODUCTION_STAGES.slice(0, i).map((s) => dates[s]).filter(Boolean).pop() ?? null;
+    const after = PRODUCTION_STAGES.slice(i + 1).map((s) => dates[s]).find(Boolean) ?? null;
+    const today = todayIso();
+    return { min: before, max: after && after < today ? after : today };
+  };
   const index = currentStageIndex(purchaseOrder);
   // The next stage, plus the one after it when the next can be skipped (US labels).
   const [next = null, skipTo = null] = nextStageOptions(purchaseOrder);
@@ -111,23 +123,81 @@ export function ProductionStageTimeline({
           const expected = projection?.expected[stage] ?? null;
           const state = i <= index ? "done" : i === index + 1 ? "next" : "todo";
           const late = state !== "done" && alert?.stage === stage && alert.severity === "late";
-          return (
-            <li key={stage} className={`stage-step stage-step--${state}${late ? " stage-step--late" : ""}`}>
+          const content = (
+            <>
               <span className="stage-dot" aria-hidden="true" />
-              <div className="stage-text">
+              <span className="stage-text">
                 <strong>{stageLabel(stage)}</strong>
                 <span className="helper-text">
                   {actual
                     ? formatDateOnly(actual)
                     : expected
                       ? `Expected ${formatDateOnly(expected)}`
-                      : "Not yet"}
+                      : state === "done"
+                        ? "Skipped"
+                        : "Not yet"}
                 </span>
-              </div>
+              </span>
+            </>
+          );
+          const className = `stage-step stage-step--${state}${late ? " stage-step--late" : ""}${
+            editing?.stage === stage ? " stage-step--editing" : ""
+          }`;
+          // Stages already reached (with a date) can be clicked to correct their date.
+          return actual ? (
+            <li key={stage} className="stage-step-item">
+              <button
+                type="button"
+                className={`${className} stage-step--clickable`}
+                aria-pressed={editing?.stage === stage}
+                title={`Change the ${stageLabel(stage)} date`}
+                onClick={() => {
+                  setMessage(null);
+                  setEditing(editing?.stage === stage ? null : { stage, date: actual });
+                }}
+              >
+                {content}
+              </button>
+            </li>
+          ) : (
+            <li key={stage} className={className}>
+              {content}
             </li>
           );
         })}
       </ol>
+
+      {editing ? (
+        <div className="form-grid stage-edit">
+          <div className="field field-half">
+            <DatePickerField
+              label={`${stageLabel(editing.stage)} date`}
+              value={editing.date}
+              minDate={editBounds(editing.stage).min}
+              maxDate={editBounds(editing.stage).max}
+              onChange={(value) => setEditing({ ...editing, date: value ?? editing.date })}
+            />
+          </div>
+          <div className="field field-half stage-mark-action">
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={busy || !editing.date || editing.date === dates[editing.stage]}
+              onClick={() =>
+                run(
+                  () => purchaseOrderService.editStageDate(purchaseOrder.id, editing.stage, editing.date),
+                  `${stageLabel(editing.stage)} date updated.`,
+                )
+              }
+            >
+              {busy ? "Saving..." : "Save date"}
+            </button>
+            <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {next ? (
         <div className="form-grid">

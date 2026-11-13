@@ -7192,6 +7192,47 @@ textarea {
   justify-content: flex-end;
 }
 
+.stage-step--cancelled {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+/* Passed stages are buttons that open a date correction */
+.stage-step-item {
+  display: flex;
+}
+
+.stage-step--clickable {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.stage-step--clickable:hover {
+  border-color: var(--success);
+}
+
+.stage-step--clickable:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+.stage-step--editing {
+  border-color: var(--success);
+  box-shadow: 0 0 0 1px var(--success);
+}
+
+.archived-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 /* New PO type chooser */
 .po-type-grid {
   display: grid;

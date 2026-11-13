@@ -38,10 +38,12 @@ export function OrderChainBar({
               role="tab"
               aria-selected={item.poId === order.poId}
               className={`order-chain-chip${item.poId === order.poId ? " is-on" : ""}`}
+              title={item.poNumber}
+              aria-label={item.account === item.poNumber ? item.poNumber : `${item.account} (${item.poNumber})`}
               onClick={() => onSelect(item.poId)}
             >
               <i className={`map-tone-dot-${item.late ? "late" : stageTone(item.stage)}`} aria-hidden="true" />
-              {item.poNumber}
+              {item.account}
             </button>
           ))}
         </div>

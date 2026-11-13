@@ -238,7 +238,12 @@ export const dashboardService = {
     );
     const supplyChainStepAverages = chainStepAverages([...chainByPo.values()]);
     const supplyChainOrders: DashboardSnapshot["supplyChainOrders"] = manufacturerOrders
-      .filter((po) => po.status !== "Cancelled" && (!po.actual_delivery_date || po.actual_delivery_date >= recentReceiptCutoff))
+      .filter(
+        (po) =>
+          po.status !== "Cancelled" &&
+          !po.archived_at &&
+          (!po.actual_delivery_date || po.actual_delivery_date >= recentReceiptCutoff),
+      )
       .map((po) => {
         const dates = stageDates(po);
         const projection = expectedStageDates(po, stageContext);
@@ -246,6 +251,7 @@ export const dashboardService = {
         return {
           poId: po.id,
           poNumber: po.po_number,
+          account: retailerById.get(po.retailer_id ?? "")?.name ?? po.ship_to_company_name ?? po.po_number,
           manufacturer: getManufacturerDisplayName(po, vendorById.get(po.vendor_id ?? "")),
           units: Number(po.total_units ?? 0),
           shipMode: shipModeOf(po),
@@ -329,6 +335,8 @@ export const dashboardService = {
 
     const latePurchaseOrders = [...activeWholesalePipelineOrders, ...activeManufacturerOrders]
       .filter((po) => {
+        // Archived POs are set aside on purpose, so they never need urgent action.
+        if (po.archived_at) return false;
         const dueDate = po.eta_date ?? po.expected_delivery_date;
         return po.status === "Delayed" || (!!dueDate && dueDate < today);
       })

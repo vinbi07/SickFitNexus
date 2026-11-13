@@ -14,6 +14,7 @@ import { PurchaseOrderDocumentView } from "@/components/PurchaseOrderDocumentVie
 import { PurchaseOrderDrawer } from "@/components/PurchaseOrderDrawer";
 import { ManufacturerPoDocumentView } from "@/components/orders/ManufacturerPoDocumentView";
 import { ProductionStageTimeline } from "@/components/orders/ProductionStageTimeline";
+import { RetailPoTimeline } from "@/components/orders/RetailPoTimeline";
 import { ReceiveInventoryModal } from "@/components/ReceiveInventoryModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/context/AuthContext";
@@ -28,7 +29,7 @@ import type {
   PurchaseOrderStatus,
 } from "@/types/domain";
 import { daysBetween } from "@/utils/date";
-import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
+import { formatCurrency, formatDate, formatDateOnly, formatNumber } from "@/utils/format";
 import {
   getAvailableAfterIncoming,
   getInventoryHealthTone,
@@ -361,6 +362,25 @@ export function PurchaseOrderDetailPage() {
     }
   };
 
+  const isArchived = Boolean(data.purchaseOrder.archived_at);
+  const handleArchive = async (archived: boolean) => {
+    try {
+      await purchaseOrderService.setArchived(poId, archived);
+      await reload();
+      setNotice({
+        tone: "success",
+        message: archived
+          ? "PO archived. It's hidden from the PO list and the supply-chain map."
+          : "PO restored to the PO list.",
+      });
+    } catch (err) {
+      setNotice({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Unable to update archive status.",
+      });
+    }
+  };
+
   // One obvious next step in the header; everything else lives under "More actions".
   const allActions: PageHeaderAction[] = [
     { label: "Edit general info", onClick: () => openDrawer(poId, "edit") },
@@ -396,6 +416,9 @@ export function PurchaseOrderDetailPage() {
             : []),
           { label: "Reject / cancel", onClick: () => void handleReject(), danger: true },
         ]),
+    isArchived
+      ? { label: "Unarchive PO", onClick: () => void handleArchive(false) }
+      : { label: "Archive PO", onClick: () => void handleArchive(true) },
   ];
   const primaryLabel = isManufacturerPo
     ? paymentStatus !== "Paid"
@@ -420,6 +443,17 @@ export function PurchaseOrderDetailPage() {
           message={notice.message}
           onClose={() => setNotice(null)}
         />
+      ) : null}
+      {isArchived ? (
+        <div className="panel archived-banner">
+          <span className="helper-text">
+            Archived {formatDateOnly(data.purchaseOrder.archived_at!.slice(0, 10))}. This PO is hidden from the PO
+            list and the supply-chain map.
+          </span>
+          <button className="btn btn-secondary btn-small" type="button" onClick={() => void handleArchive(false)}>
+            Unarchive
+          </button>
+        </div>
       ) : null}
       <PageHeader
         title={
@@ -474,7 +508,10 @@ export function PurchaseOrderDetailPage() {
                 { label: "Total", value: formatCurrency(data.purchaseOrder.total_cost) },
                 { label: "Units", value: formatNumber(data.purchaseOrder.total_units) },
                 {
-                  label: getPoTargetDate(data.purchaseOrder)?.label === "ETA" ? "Needed by" : "Ship by",
+                  label: (() => {
+                    const target = getPoTargetDate(data.purchaseOrder)?.label;
+                    return target === "ETA" ? "Needed by" : target === "Shipped" ? "Shipped" : "Ship by";
+                  })(),
                   value: formatDate(getPoTargetDate(data.purchaseOrder)?.date),
                 },
                 { label: "Payment", value: <StatusBadge label={data.purchaseOrder.invoice_status ?? "Open"} /> },
@@ -593,7 +630,9 @@ export function PurchaseOrderDetailPage() {
           onChanged={reload}
           onReceive={() => setReceiving(true)}
         />
-      ) : null}
+      ) : (
+        <RetailPoTimeline purchaseOrder={data.purchaseOrder} statusHistory={data.statusHistory} onChanged={reload} />
+      )}
       <div className="panel section-stack">
         <div className="panel-header">
           <h3>Line items</h3>

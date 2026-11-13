@@ -12,6 +12,8 @@ import {
 import { PurchaseOrderDrawerFooter } from "@/components/PurchaseOrderDrawerFooter";
 import { PurchaseOrderDrawerHeader } from "@/components/PurchaseOrderDrawerHeader";
 import { PurchaseOrderSummary } from "@/components/PurchaseOrderSummary";
+import { ProductionStageTimeline } from "@/components/orders/ProductionStageTimeline";
+import { RetailPoTimeline } from "@/components/orders/RetailPoTimeline";
 import type { PurchaseOrderDrawerMode } from "@/hooks/usePurchaseOrderDrawer";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import type { PurchaseOrder } from "@/types/domain";
@@ -297,6 +299,24 @@ export function PurchaseOrderDrawer({
               {notice ? (
                 <NotificationBanner tone={notice.tone} message={notice.message} onClose={() => setNotice(null)} />
               ) : null}
+              {isManufacturerPo ? (
+                <ProductionStageTimeline
+                  purchaseOrder={po}
+                  onChanged={async () => {
+                    await reload();
+                    onSaved?.(po);
+                  }}
+                />
+              ) : (
+                <RetailPoTimeline
+                  purchaseOrder={po}
+                  statusHistory={data.statusHistory}
+                  onChanged={async () => {
+                    await reload();
+                    onSaved?.(po);
+                  }}
+                />
+              )}
               {formState ? (
                 <PurchaseOrderDetailsForm
                   purchaseOrder={po}

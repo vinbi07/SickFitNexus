@@ -8,8 +8,10 @@ import { supplyChainService } from "@/services/supplyChainService";
 import {
   currentStage,
   expectedStageDates,
+  stageDates,
   type ProductionStage,
 } from "@/utils/productionStage";
+import { RETAIL_STEP_COLUMNS, type RetailPoStep } from "@/utils/retailPoTimeline";
 import {
   buildPurchaseOrderDocumentHtml,
   buildPurchaseOrderDocumentModel,
@@ -883,6 +885,149 @@ export const purchaseOrderService = {
       title: `PO ${updated.po_number}: ${stage}`,
       description: `${stage} recorded for ${date}.`,
       metadata: { purchaseOrderId: id, stage, date },
+    });
+    return updated;
+  },
+
+  /**
+   * Correct the date on a stage the order has already reached. Unlike
+   * setProductionStage this overwrites the columns that mirror a stage
+   * (paid / ship / delivery dates), and never touches stock.
+   */
+  async editStageDate(id: string, stage: ProductionStage, date: string) {
+    const supabase = assertSupabase();
+    const { data: current, error } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    const before = current as PurchaseOrder;
+    const previous = stageDates(before)[stage];
+    if (!previous) throw new Error(`${stage} hasn't been recorded yet, so there's no date to change.`);
+
+    const patch: Partial<PurchaseOrder> = {
+      stage_dates: { ...(before.stage_dates ?? {}), [stage]: date },
+    };
+    if (stage === "Sent to vendor") patch.order_date = date;
+    if (stage === "Paid") patch.invoice_paid_at = `${date}T12:00:00Z`;
+    if (stage === "Shipped") patch.ship_date = date;
+    if (stage === "Received") patch.actual_delivery_date = date;
+
+    const { data, error: updateError } = await supabase
+      .from("purchase_orders")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+    const updated = data as PurchaseOrder;
+
+    await activityService.create({
+      event_type: "purchase_order_production_stage",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number}: ${stage} date changed`,
+      description: `${stage} moved from ${previous} to ${date}.`,
+      metadata: { purchaseOrderId: id, stage, date, previous },
+    });
+    return updated;
+  },
+
+  /**
+   * Move a retail PO to Shipped, Delivered or Paid from its timeline. These
+   * steps don't touch stock (Approve / Queue / Fulfill do, and keep their own actions).
+   */
+  async markRetailStep(id: string, step: "Shipped" | "Delivered" | "Paid", date: string) {
+    if (step === "Shipped") return this.markAsShipped(id, date);
+    const supabase = assertSupabase();
+    const { data: current, error } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    const before = current as PurchaseOrder;
+
+    const patch: Partial<PurchaseOrder> = {};
+    if (step === "Paid") patch.invoice_paid_at = `${date}T12:00:00Z`;
+    if (step === "Delivered") {
+      patch.actual_delivery_date = date;
+      // Delivering means it shipped; keep the chain's dates in order.
+      if (!before.ship_date) patch.ship_date = date;
+      // Fulfilled / Closed already read as finished; anything still open becomes Received.
+      if (!["Fulfilled", "Closed", "Received", "Cancelled"].includes(before.status)) patch.status = "Received";
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("purchase_orders")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+    const updated = data as PurchaseOrder;
+
+    if (patch.status) {
+      const actor = await getDashboardActor().catch(() => null);
+      if (actor) await recordStatusHistory(id, before.status, patch.status, actor, `Delivered on ${date}.`);
+    }
+    await activityService.create({
+      event_type: step === "Paid" ? "purchase_order_marked_paid" : "purchase_order_marked_delivered",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number} marked ${step.toLowerCase()}`,
+      description: `${step} on ${date}.`,
+      metadata: { purchaseOrderId: id, step, date },
+    });
+    return updated;
+  },
+
+  /** Correct the date on a retail PO timeline step that already happened. */
+  async editRetailStepDate(id: string, step: RetailPoStep, date: string) {
+    const column = RETAIL_STEP_COLUMNS[step];
+    if (!column) throw new Error(`The ${step} date comes from the status history and can't be edited here.`);
+    const supabase = assertSupabase();
+    const { data: current, error } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    const before = current as PurchaseOrder;
+    const previous = (before[column] as string | null)?.slice(0, 10) ?? null;
+    // Timestamp columns keep a time; noon UTC keeps the day stable across time zones.
+    const value = column === "ship_date" || column === "actual_delivery_date" ? date : `${date}T12:00:00Z`;
+
+    const { data, error: updateError } = await supabase
+      .from("purchase_orders")
+      .update({ [column]: value })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (updateError) throw updateError;
+    const updated = data as PurchaseOrder;
+    await activityService.create({
+      event_type: "purchase_order_timeline_date",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number}: ${step} date ${previous ? "changed" : "set"}`,
+      description: previous ? `${step} moved from ${previous} to ${date}.` : `${step} set to ${date}.`,
+      metadata: { purchaseOrderId: id, step, date, previous },
+    });
+    return updated;
+  },
+
+  async setArchived(id: string, archived: boolean) {
+    const supabase = assertSupabase();
+    const { data, error } = await supabase
+      .from("purchase_orders")
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) {
+      if (/archived_at/.test(error.message)) {
+        throw new Error("Archiving needs database migration 036 (036_po_archive.sql) to be run first.");
+      }
+      throw error;
+    }
+    const updated = data as PurchaseOrder;
+    await activityService.create({
+      event_type: archived ? "purchase_order_archived" : "purchase_order_unarchived",
+      entity_type: "purchase_order",
+      entity_id: id,
+      title: `PO ${updated.po_number} ${archived ? "archived" : "restored"}`,
+      description: archived ? "Hidden from the PO list and supply-chain map." : "Back in the PO list.",
+      metadata: { purchaseOrderId: id },
     });
     return updated;
   },
